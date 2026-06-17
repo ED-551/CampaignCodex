@@ -130,3 +130,30 @@ CREATE OR REPLACE TRIGGER trg_characters_updated
 CREATE OR REPLACE TRIGGER trg_combat_updated
   BEFORE UPDATE ON combat_sessions
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ─── RAVEN MESSAGES (internal mail system) ────────────────────────────────────
+CREATE TABLE IF NOT EXISTS raven_messages (
+  id                   UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  sender_id            UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recipient_id         UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  subject              VARCHAR(120) NOT NULL,
+  body                 TEXT         NOT NULL,
+  character_id         UUID         REFERENCES characters(id) ON DELETE SET NULL,
+  read_at              TIMESTAMP,
+  deleted_by_sender    BOOLEAN      NOT NULL DEFAULT false,
+  deleted_by_recipient BOOLEAN      NOT NULL DEFAULT false,
+  created_at           TIMESTAMP    NOT NULL DEFAULT NOW()
+);
+
+-- Fast inbox lookups (recipient + recency)
+CREATE INDEX IF NOT EXISTS idx_ravens_recipient
+  ON raven_messages(recipient_id, created_at DESC);
+
+-- Fast sent-box lookups (sender + recency)
+CREATE INDEX IF NOT EXISTS idx_ravens_sender
+  ON raven_messages(sender_id, created_at DESC);
+
+-- Lightweight unread-count query (partial index — only unread, non-deleted rows)
+CREATE INDEX IF NOT EXISTS idx_ravens_unread
+  ON raven_messages(recipient_id)
+  WHERE read_at IS NULL AND deleted_by_recipient = false;

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Plus, LogOut, Scroll, Users, Shield, BookOpen, Settings } from 'lucide-react'
+import { Plus, LogOut, Scroll, Users, Shield, BookOpen, Settings, Feather } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../utils/api'
 import CreateCampaignModal from '../components/campaign/CreateCampaignModal'
@@ -29,6 +29,7 @@ export default function Dashboard() {
   const [showCreate, setShowCreate]         = useState(false)
   const [showCreateChar, setShowCreateChar] = useState(false)
   const [joinCode, setJoinCode]       = useState('')
+  const [unreadRavens, setUnreadRavens] = useState(0)
   const [joinError, setJoinError]     = useState('')
   const [joinLoading, setJoinLoading] = useState(false)
 
@@ -48,6 +49,13 @@ export default function Dashboard() {
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
+
+  // Fetch unread raven count for the nav badge (lightweight — uses partial index)
+  useEffect(() => {
+    api.get('/ravens/unread-count')
+      .then(({ count }) => setUnreadRavens(count))
+      .catch(() => {})
+  }, [])
 
   async function handleJoin(e) {
     e.preventDefault()
@@ -109,6 +117,22 @@ export default function Dashboard() {
                 {tier.label}
               </span>
             )}
+            {/* Raven Post nav link with unread badge */}
+            <Link
+              to="/ravens"
+              className="relative flex items-center gap-1.5 text-xs text-codex-subtext hover:text-codex-gold transition-colors"
+              title="The Raven Post"
+            >
+              <Feather size={14} />
+              <span className="hidden sm:block">Ravens</span>
+              {unreadRavens > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-0.5
+                  rounded-full bg-codex-gold text-codex-bg text-[10px] font-bold
+                  flex items-center justify-center leading-none">
+                  {unreadRavens > 99 ? '99+' : unreadRavens}
+                </span>
+              )}
+            </Link>
             <Link
               to="/settings"
               className="flex items-center gap-1.5 text-sm text-codex-subtext hover:text-codex-gold transition-colors group"

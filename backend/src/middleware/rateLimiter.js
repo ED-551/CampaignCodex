@@ -27,4 +27,18 @@ const apiLimiter = rateLimit({
   },
 })
 
-module.exports = { authLimiter, apiLimiter }
+/**
+ * Ravens send limiter — 20 outgoing messages per hour per IP.
+ * Prevents automated spam via the internal mail system.
+ */
+const ravensLimiter = rateLimit({
+  windowMs:        60 * 60 * 1000, // 1 hour
+  max:             20,
+  standardHeaders: true,
+  legacyHeaders:   false,
+  message: {
+    error: 'You can only send 20 ravens per hour. Even the ravens need rest.',
+  },
+})
+
+module.exports = { authLimiter, apiLimiter, ravensLimiter }

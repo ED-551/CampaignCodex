@@ -9,6 +9,7 @@ import CombatPage       from './pages/CombatPage'
 import AdminDashboard   from './pages/AdminDashboard'
 import TermsPage        from './pages/TermsPage'
 import SettingsPage     from './pages/SettingsPage'
+import RavenPost        from './pages/RavenPost'
 
 export default function App() {
   return (
@@ -29,6 +30,9 @@ export default function App() {
           } />
           <Route path="/settings" element={
             <ProtectedRoute><SettingsPage /></ProtectedRoute>
+          } />
+          <Route path="/ravens" element={
+            <ProtectedRoute><RavenPost /></ProtectedRoute>
           } />
           <Route path="/campaigns/:id" element={
             <ProtectedRoute><CampaignDetail /></ProtectedRoute>

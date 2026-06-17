@@ -9,6 +9,8 @@ const campaignRoutes   = require('./routes/campaigns')
 const characterRoutes  = require('./routes/characters')
 const adminRoutes      = require('./routes/admin')
 const combatRoutes     = require('./routes/combat')
+const ravensRoutes     = require('./routes/ravens')
+const usersRoutes      = require('./routes/users')
 
 const app  = express()
 const PORT = process.env.PORT || 3001
@@ -34,6 +36,8 @@ app.use('/api/campaigns',  campaignRoutes)
 app.use('/api/characters', characterRoutes)
 app.use('/api/admin',      adminRoutes)
 app.use('/api/combat',     combatRoutes)
+app.use('/api/ravens',     ravensRoutes)
+app.use('/api/users',      usersRoutes)
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
