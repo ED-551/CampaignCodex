@@ -13,6 +13,7 @@ const adminRoutes      = require('./routes/admin')
 const combatRoutes     = require('./routes/combat')
 const ravensRoutes     = require('./routes/ravens')
 const usersRoutes      = require('./routes/users')
+const bestiaryRoutes   = require('./routes/bestiary')
 
 const app        = express()
 const httpServer = http.createServer(app)
@@ -41,6 +42,7 @@ app.use('/api/admin',      adminRoutes)
 app.use('/api/combat',     combatRoutes)
 app.use('/api/ravens',     ravensRoutes)
 app.use('/api/users',      usersRoutes)
+app.use('/api/bestiary',   bestiaryRoutes)
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

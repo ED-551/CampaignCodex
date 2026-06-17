@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Plus, LogOut, Scroll, Users, Shield, BookOpen, Settings, Feather, MessagesSquare } from 'lucide-react'
+import { Plus, LogOut, Scroll, Users, Shield, BookOpen, Settings, Feather, MessagesSquare, Skull } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../utils/api'
 import CreateCampaignModal from '../components/campaign/CreateCampaignModal'
@@ -19,6 +19,33 @@ const TIER_BADGE = {
   gold:     { label: '🥇 Gold',     cls: 'text-yellow-400 border-yellow-400/40' },
   platinum: { label: '🐉 Platinum', cls: 'text-purple-400 border-purple-400/40' },
 }
+
+const BESTIARY_SYSTEMS = [
+  {
+    id:          'shadowdark',
+    label:       'Shadowdark',
+    icon:        '🗡️',
+    tagline:     'Dungeon crawlers, cultists, ancient horrors',
+    color:       'text-amber-500',
+    hoverBorder: 'border-amber-500/30 hover:border-amber-500/60',
+  },
+  {
+    id:          'morkborg',
+    label:       'Mörk Borg',
+    icon:        '💀',
+    tagline:     'Apocalyptic nightmares and flesh-eating filth',
+    color:       'text-yellow-300',
+    hoverBorder: 'border-yellow-300/20 hover:border-yellow-300/50',
+  },
+  {
+    id:          'nimble',
+    label:       'Nimble RPG',
+    icon:        '🛡️',
+    tagline:     'Balanced threats for any tier of play',
+    color:       'text-emerald-400',
+    hoverBorder: 'border-emerald-400/20 hover:border-emerald-400/50',
+  },
+]
 
 export default function Dashboard() {
   const { user, logout }              = useAuth()
@@ -291,6 +318,42 @@ export default function Dashboard() {
                   ))}
                 </div>
               )}
+            </section>
+
+            {/* Bestiary */}
+            <section>
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-base font-semibold text-codex-text flex items-center gap-2">
+                  <Skull size={15} className="text-codex-gold" /> Bestiary
+                </h2>
+                <span className="text-xs text-codex-muted">
+                  — create and manage monsters for each rule set
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {BESTIARY_SYSTEMS.map(sys => (
+                  <button
+                    key={sys.id}
+                    onClick={() => navigate(`/bestiary/${sys.id}`)}
+                    className={`group flex flex-col gap-3 p-5 text-left rounded-xl border
+                      bg-codex-surface transition-all duration-150
+                      hover:bg-codex-card hover:shadow-lg ${sys.hoverBorder}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-2xl">{sys.icon}</span>
+                      <span className={`text-[10px] font-bold uppercase tracking-widest ${sys.color} opacity-0 group-hover:opacity-100 transition-opacity`}>
+                        Open →
+                      </span>
+                    </div>
+                    <div>
+                      <p className={`text-sm font-semibold text-codex-text group-hover:${sys.color} transition-colors`}>
+                        {sys.label}
+                      </p>
+                      <p className="text-xs text-codex-muted mt-0.5">{sys.tagline}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </section>
           </>
         )}

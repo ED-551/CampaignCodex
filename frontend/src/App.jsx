@@ -14,6 +14,7 @@ import TermsPage          from './pages/TermsPage'
 import SettingsPage       from './pages/SettingsPage'
 import RavenPost          from './pages/RavenPost'
 import ChatPage           from './pages/ChatPage'
+import BestiaryPage       from './pages/BestiaryPage'
 
 export default function App() {
   return (
@@ -43,6 +44,9 @@ export default function App() {
               } />
               <Route path="/chat" element={
                 <ProtectedRoute><ChatPage /></ProtectedRoute>
+              } />
+              <Route path="/bestiary/:system" element={
+                <ProtectedRoute><BestiaryPage /></ProtectedRoute>
               } />
               <Route path="/campaigns/:id" element={
                 <ProtectedRoute><CampaignDetail /></ProtectedRoute>

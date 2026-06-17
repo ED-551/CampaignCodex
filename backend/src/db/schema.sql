@@ -193,3 +193,33 @@ CREATE INDEX IF NOT EXISTS idx_dm_sender
   ON dm_messages(sender_id,    created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_dm_recipient
   ON dm_messages(recipient_id, created_at DESC);
+
+-- ─── BESTIARY (user-created monster stat blocks) ──────────────────────────────
+-- Each monster belongs to one user and one game system. The stat_data JSONB
+-- field holds the full system-specific stat block (filled in once the user
+-- researches each system's format). The challenge + tags columns are denormalized
+-- card-display fields so the list page never has to parse JSONB.
+--
+-- challenge : free-text difficulty label — "3" (Shadowdark level), "2d8" (Mörk Borg HD),
+--             "Tier 2" (Nimble), etc.
+-- tags      : comma-delimited type labels — "Undead, Humanoid, Boss"
+CREATE TABLE IF NOT EXISTS monsters (
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  game_system VARCHAR(20) NOT NULL
+              CHECK (game_system IN ('shadowdark','morkborg','nimble')),
+  name        VARCHAR(100) NOT NULL,
+  challenge   VARCHAR(50),
+  tags        VARCHAR(200),
+  stat_data   JSONB       NOT NULL DEFAULT '{}',
+  created_at  TIMESTAMP   NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMP   NOT NULL DEFAULT NOW()
+);
+
+-- Fast listing: all monsters for a user, scoped to a system, newest first
+CREATE INDEX IF NOT EXISTS idx_monsters_user
+  ON monsters(user_id, game_system, created_at DESC);
+
+CREATE OR REPLACE TRIGGER trg_monsters_updated
+  BEFORE UPDATE ON monsters
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
