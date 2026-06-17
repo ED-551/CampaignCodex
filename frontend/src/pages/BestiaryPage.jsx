@@ -2,22 +2,22 @@
  * BestiaryPage — /bestiary/:system
  *
  * Lists a user's custom monsters for one game system. Supports creating,
- * editing basic fields (name / challenge / tags), and deleting monsters.
+ * editing, and deleting monsters.
  *
- * Full stat-block editing is intentionally deferred — the system-specific
- * stat block format will be added once each system's monster structure is
- * researched. The stat_data JSONB column is ready on the backend.
+ * Shadowdark: full-page stat block builder (ShadowdarkMonsterForm)
+ * Mörk Borg / Nimble: lightweight modal (stat block forms deferred)
  *
  * Card display per system:
- *   Shadowdark : "Lv. 3" (numeric challenge gets the prefix; free text shown as-is)
+ *   Shadowdark : "Lv. 3" — numeric challenge gets the prefix; free text shown as-is
  *   Mörk Borg  : challenge shown as-is (e.g. "2d8 HD")
  *   Nimble RPG : challenge shown as-is (e.g. "Tier 2")
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, Link }      from 'react-router-dom'
 import { ArrowLeft, BookOpen, Plus, Trash2, X, Pencil } from 'lucide-react'
-import { api } from '../utils/api'
+import { api }                               from '../utils/api'
+import ShadowdarkMonsterForm                 from '../components/bestiary/ShadowdarkMonsterForm'
 
 // ─── System metadata ──────────────────────────────────────────────────────────
 
@@ -31,7 +31,6 @@ const SYSTEM_META = {
     challengeLabel:       'Level',
     challengePlaceholder: 'e.g. 3',
     tagsPlaceholder:      'e.g. Undead, Humanoid',
-    // Pure numbers → "Lv. N"; anything else shown verbatim
     formatChallenge: c => c ? (/^\d+$/.test(c.trim()) ? `Lv. ${c.trim()}` : c) : null,
   },
   morkborg: {
@@ -66,16 +65,24 @@ const INPUT = `w-full bg-codex-surface border border-codex-border rounded-lg px-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function BestiaryPage() {
-  const { system }   = useParams()
-  const navigate     = useNavigate()
-  const meta         = SYSTEM_META[system]
+  const { system }  = useParams()
+  const navigate    = useNavigate()
+  const meta        = SYSTEM_META[system]
 
   const [monsters,      setMonsters]      = useState([])
   const [loading,       setLoading]       = useState(true)
   const [error,         setError]         = useState('')
-  const [showCreate,    setShowCreate]    = useState(false)
-  const [editTarget,    setEditTarget]    = useState(null)   // monster object to edit
-  const [deleteTarget,  setDeleteTarget]  = useState(null)   // monster id to confirm delete
+
+  // Full-page form (Shadowdark only)
+  const [formView,      setFormView]      = useState(false)
+  const [formTarget,    setFormTarget]    = useState(null)   // null = create, object = edit
+
+  // Modal (non-Shadowdark systems)
+  const [showModal,     setShowModal]     = useState(false)
+  const [editTarget,    setEditTarget]    = useState(null)
+
+  // Delete
+  const [deleteTarget,  setDeleteTarget]  = useState(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
 
   // Redirect unknown system slugs
@@ -99,6 +106,42 @@ export default function BestiaryPage() {
 
   useEffect(() => { loadMonsters() }, [loadMonsters])
 
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
+  function openCreate() {
+    if (system === 'shadowdark') {
+      setFormTarget(null)
+      setFormView(true)
+    } else {
+      setEditTarget(null)
+      setShowModal(true)
+    }
+  }
+
+  function openEdit(monster) {
+    if (system === 'shadowdark') {
+      setFormTarget(monster)
+      setFormView(true)
+    } else {
+      setEditTarget(monster)
+      setShowModal(true)
+    }
+  }
+
+  function handleSaved(updated) {
+    // Upsert into local list
+    setMonsters(prev => {
+      const exists = prev.some(m => m.id === updated.id)
+      return exists
+        ? prev.map(m => m.id === updated.id ? updated : m)
+        : [updated, ...prev]
+    })
+    setFormView(false)
+    setFormTarget(null)
+    setShowModal(false)
+    setEditTarget(null)
+  }
+
   async function handleDelete(monsterId) {
     setDeleteLoading(true)
     try {
@@ -113,6 +156,20 @@ export default function BestiaryPage() {
   }
 
   if (!meta) return null
+
+  // ── Full-page form (Shadowdark) ────────────────────────────────────────────
+
+  if (system === 'shadowdark' && formView) {
+    return (
+      <ShadowdarkMonsterForm
+        existing={formTarget}
+        onBack={() => { setFormView(false); setFormTarget(null) }}
+        onSaved={handleSaved}
+      />
+    )
+  }
+
+  // ── List view ──────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-codex-bg">
@@ -136,7 +193,8 @@ export default function BestiaryPage() {
         {/* ── Back link ── */}
         <Link
           to="/dashboard"
-          className="inline-flex items-center gap-1.5 text-sm text-codex-subtext hover:text-codex-text transition-colors mb-6"
+          className="inline-flex items-center gap-1.5 text-sm text-codex-subtext
+            hover:text-codex-text transition-colors mb-6"
         >
           <ArrowLeft size={14} /> Back to Dashboard
         </Link>
@@ -153,7 +211,7 @@ export default function BestiaryPage() {
             </div>
           </div>
           <button
-            onClick={() => { setEditTarget(null); setShowCreate(true) }}
+            onClick={openCreate}
             className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg
               bg-codex-gold text-codex-bg hover:bg-codex-goldHover transition-all"
           >
@@ -179,7 +237,7 @@ export default function BestiaryPage() {
               No monsters yet. Create your first {meta.label} creature.
             </p>
             <button
-              onClick={() => { setEditTarget(null); setShowCreate(true) }}
+              onClick={openCreate}
               className="text-codex-gold hover:text-codex-goldHover text-sm transition-colors"
             >
               + Create a monster
@@ -194,7 +252,8 @@ export default function BestiaryPage() {
                 key={m.id}
                 monster={m}
                 meta={meta}
-                onEdit={() => { setEditTarget(m); setShowCreate(true) }}
+                system={system}
+                onEdit={() => openEdit(m)}
                 onDelete={() => setDeleteTarget(m)}
               />
             ))}
@@ -202,26 +261,18 @@ export default function BestiaryPage() {
         )}
       </main>
 
-      {/* ── Create / Edit modal ── */}
-      {showCreate && (
+      {/* ── Modal (non-Shadowdark systems) ── */}
+      {showModal && (
         <MonsterFormModal
           system={system}
           meta={meta}
           existing={editTarget}
-          onClose={() => { setShowCreate(false); setEditTarget(null) }}
-          onSaved={updated => {
-            if (editTarget) {
-              setMonsters(prev => prev.map(m => m.id === updated.id ? updated : m))
-            } else {
-              setMonsters(prev => [updated, ...prev])
-            }
-            setShowCreate(false)
-            setEditTarget(null)
-          }}
+          onClose={() => { setShowModal(false); setEditTarget(null) }}
+          onSaved={handleSaved}
         />
       )}
 
-      {/* ── Delete confirmation modal ── */}
+      {/* ── Delete confirmation ── */}
       {deleteTarget && (
         <DeleteModal
           monster={deleteTarget}
@@ -236,11 +287,15 @@ export default function BestiaryPage() {
 
 // ─── Monster Card ─────────────────────────────────────────────────────────────
 
-function MonsterCard({ monster, meta, onEdit, onDelete }) {
+function MonsterCard({ monster, meta, system, onEdit, onDelete }) {
   const challenge = meta.formatChallenge(monster.challenge)
   const tagList   = monster.tags
     ? monster.tags.split(',').map(t => t.trim()).filter(Boolean)
     : []
+
+  // Shadowdark stat block summary from JSONB
+  const sd = system === 'shadowdark' ? (monster.stat_data ?? {}) : null
+  const hasStatBlock = sd && (sd.ac || sd.hp || sd.level != null)
 
   return (
     <div className={`group relative flex flex-col gap-3 p-4
@@ -273,9 +328,12 @@ function MonsterCard({ monster, meta, onEdit, onDelete }) {
         <h3 className="text-sm font-semibold text-codex-text leading-snug">
           {monster.name}
         </h3>
+        {sd?.combatRole && (
+          <p className="text-[10px] text-codex-muted mt-0.5 capitalize">{sd.combatRole}</p>
+        )}
       </div>
 
-      {/* Challenge + tags row */}
+      {/* Challenge + tags */}
       <div className="flex flex-wrap items-center gap-1.5">
         {challenge && (
           <span className={`text-xs font-medium border rounded-full px-2 py-0.5 ${meta.badgeClass}`}>
@@ -284,7 +342,8 @@ function MonsterCard({ monster, meta, onEdit, onDelete }) {
         )}
         {tagList.map(tag => (
           <span key={tag}
-            className="text-[10px] text-codex-muted border border-codex-border rounded-full px-2 py-0.5 bg-codex-bg">
+            className="text-[10px] text-codex-muted border border-codex-border
+              rounded-full px-2 py-0.5 bg-codex-bg">
             {tag}
           </span>
         ))}
@@ -293,19 +352,42 @@ function MonsterCard({ monster, meta, onEdit, onDelete }) {
         )}
       </div>
 
-      {/* Stat block status */}
+      {/* Stat block summary (Shadowdark) */}
       <div className="border-t border-codex-border/60 pt-2 mt-auto">
-        <p className="text-[10px] text-codex-muted">
-          {Object.keys(monster.stat_data ?? {}).length > 0
-            ? '📋 Stat block filled'
-            : '📋 Stat block — coming soon'}
-        </p>
+        {hasStatBlock ? (
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {sd.ac   != null && <StatPip label="AC"  value={sd.ac} />}
+            {sd.hp   != null && <StatPip label="HP"  value={sd.hp} />}
+            {sd.level != null && <StatPip label="LV" value={sd.level} />}
+            {sd.movement     && <StatPip label="MV"  value={sd.movement} />}
+            {sd.attacks?.length > 0 && (
+              <StatPip label="ATK" value={`${sd.attacks.length} type${sd.attacks.length > 1 ? 's' : ''}`} />
+            )}
+            {sd.talents?.length > 0 && (
+              <StatPip label="Talents" value={sd.talents.length} />
+            )}
+          </div>
+        ) : system === 'shadowdark' ? (
+          <p className="text-[10px] text-codex-muted">
+            📋 Click <span className="text-codex-subtext">edit</span> to fill in the full stat block
+          </p>
+        ) : (
+          <p className="text-[10px] text-codex-muted">📋 Stat block form coming soon</p>
+        )}
       </div>
     </div>
   )
 }
 
-// ─── Create / Edit Form Modal ─────────────────────────────────────────────────
+function StatPip({ label, value }) {
+  return (
+    <span className="text-[10px] text-codex-muted">
+      <span className="font-bold text-codex-subtext">{label}</span> {value}
+    </span>
+  )
+}
+
+// ─── Create / Edit Form Modal (non-Shadowdark systems) ────────────────────────
 
 function MonsterFormModal({ system, meta, existing, onClose, onSaved }) {
   const isEdit = Boolean(existing)
@@ -316,7 +398,6 @@ function MonsterFormModal({ system, meta, existing, onClose, onSaved }) {
   const [error,     setError]     = useState('')
   const [loading,   setLoading]   = useState(false)
 
-  // Close on Escape
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape' && !loading) onClose() }
     window.addEventListener('keydown', onKey)
@@ -360,25 +441,22 @@ function MonsterFormModal({ system, meta, existing, onClose, onSaved }) {
       onClick={e => { if (e.target === e.currentTarget && !loading) onClose() }}
     >
       <div className="relative w-full max-w-md bg-codex-card border border-codex-border rounded-2xl overflow-hidden shadow-2xl">
-        {/* Gold top stripe */}
         <div className="h-px w-full bg-gradient-to-r from-transparent via-codex-gold to-transparent opacity-60" />
 
-        {/* Header */}
         <div className="flex items-start justify-between px-6 pt-5 pb-4">
           <div>
             <h2 className="text-base font-semibold text-codex-text">
               {isEdit ? 'Edit Monster' : `New ${meta.label} Monster`}
             </h2>
             <p className="text-xs text-codex-subtext mt-0.5">
-              {isEdit
-                ? 'Update the basic details for this creature.'
-                : 'Fill in what you know now — stat block fields come later.'}
+              {isEdit ? 'Update the details for this creature.' : 'Fill in what you know now — stat block fields coming soon.'}
             </p>
           </div>
           {!loading && (
             <button
               onClick={onClose}
-              className="text-codex-muted hover:text-codex-text transition-colors p-1 rounded-lg hover:bg-codex-surface ml-2"
+              className="text-codex-muted hover:text-codex-text transition-colors p-1
+                rounded-lg hover:bg-codex-surface ml-2"
             >
               <X size={16} />
             </button>
@@ -386,85 +464,51 @@ function MonsterFormModal({ system, meta, existing, onClose, onSaved }) {
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 pb-6 flex flex-col gap-4">
-
-          {/* Name */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-codex-text">
               Monster Name <span className="text-red-400">*</span>
             </label>
-            <input
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="e.g. Goblin Scout, Shadow Wraith, Iron Golem"
-              maxLength={100}
-              disabled={loading}
-              autoFocus
-              className={INPUT}
-            />
+            <input type="text" value={name} onChange={e => setName(e.target.value)}
+              placeholder="e.g. Corpse-Hauler, Ash Revenant, Rotting Warden"
+              maxLength={100} disabled={loading} autoFocus className={INPUT} />
           </div>
 
-          {/* Challenge */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-codex-text">
               {meta.challengeLabel}
               <span className="ml-1 text-xs font-normal text-codex-muted">(optional)</span>
             </label>
-            <input
-              type="text"
-              value={challenge}
-              onChange={e => setChallenge(e.target.value)}
-              placeholder={meta.challengePlaceholder}
-              maxLength={50}
-              disabled={loading}
-              className={INPUT}
-            />
+            <input type="text" value={challenge} onChange={e => setChallenge(e.target.value)}
+              placeholder={meta.challengePlaceholder} maxLength={50}
+              disabled={loading} className={INPUT} />
           </div>
 
-          {/* Tags */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-codex-text">
               Type / Tags
               <span className="ml-1 text-xs font-normal text-codex-muted">(optional, comma-separated)</span>
             </label>
-            <input
-              type="text"
-              value={tags}
-              onChange={e => setTags(e.target.value)}
-              placeholder={meta.tagsPlaceholder}
-              maxLength={200}
-              disabled={loading}
-              className={INPUT}
-            />
+            <input type="text" value={tags} onChange={e => setTags(e.target.value)}
+              placeholder={meta.tagsPlaceholder} maxLength={200}
+              disabled={loading} className={INPUT} />
           </div>
 
-          {error && (
-            <p className="text-sm text-red-400 text-center">{error}</p>
-          )}
+          {error && <p className="text-sm text-red-400 text-center">{error}</p>}
 
-          {/* Actions */}
           <div className="flex gap-3 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              className="flex-1 py-2.5 rounded-xl border border-codex-border text-codex-subtext text-sm
-                hover:border-codex-text hover:text-codex-text transition-colors disabled:opacity-40"
-            >
+            <button type="button" onClick={onClose} disabled={loading}
+              className="flex-1 py-2.5 rounded-xl border border-codex-border text-codex-subtext
+                text-sm hover:border-codex-text hover:text-codex-text transition-colors disabled:opacity-40">
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={loading || !name.trim()}
+            <button type="submit" disabled={loading || !name.trim()}
               className="flex-1 py-2.5 rounded-xl bg-codex-gold hover:bg-codex-goldHover
-                text-codex-bg font-semibold text-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed
-                flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <span className="w-4 h-4 border-2 border-codex-bg/30 border-t-codex-bg rounded-full animate-spin" />
-              ) : (
-                isEdit ? 'Save Changes' : 'Create Monster'
-              )}
+                text-codex-bg font-semibold text-sm transition-all
+                disabled:opacity-30 disabled:cursor-not-allowed
+                flex items-center justify-center gap-2">
+              {loading
+                ? <span className="w-4 h-4 border-2 border-codex-bg/30 border-t-codex-bg rounded-full animate-spin" />
+                : isEdit ? 'Save Changes' : 'Create Monster'}
             </button>
           </div>
         </form>
@@ -491,7 +535,8 @@ function DeleteModal({ monster, loading, onConfirm, onCancel }) {
         <div className="h-px w-full bg-gradient-to-r from-transparent via-red-500 to-transparent opacity-60" />
         <div className="p-6 flex flex-col gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-full bg-red-500/10 border border-red-500/30
+              flex items-center justify-center">
               <Trash2 size={16} className="text-red-400" />
             </div>
             <div>
@@ -504,25 +549,18 @@ function DeleteModal({ monster, loading, onConfirm, onCancel }) {
             permanently removed from your bestiary.
           </p>
           <div className="flex gap-3">
-            <button
-              onClick={onCancel}
-              disabled={loading}
-              className="flex-1 py-2.5 rounded-xl border border-codex-border text-codex-subtext text-sm
-                hover:border-codex-text hover:text-codex-text transition-colors disabled:opacity-40"
-            >
+            <button onClick={onCancel} disabled={loading}
+              className="flex-1 py-2.5 rounded-xl border border-codex-border text-codex-subtext
+                text-sm hover:border-codex-text hover:text-codex-text transition-colors disabled:opacity-40">
               Cancel
             </button>
-            <button
-              onClick={onConfirm}
-              disabled={loading}
-              className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-semibold text-sm
-                transition-all disabled:opacity-40 flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <><Trash2 size={13} /> Delete</>
-              )}
+            <button onClick={onConfirm} disabled={loading}
+              className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white
+                font-semibold text-sm transition-all disabled:opacity-40
+                flex items-center justify-center gap-2">
+              {loading
+                ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                : <><Trash2 size={13} /> Delete</>}
             </button>
           </div>
         </div>
