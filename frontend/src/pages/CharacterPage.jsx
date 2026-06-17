@@ -90,6 +90,8 @@ export default function CharacterPage() {
   const SheetComponent  = SHEETS[character?.game_system || system]
   const WizardComponent = WIZARDS[system]
   const isOwner         = character && user && character.user_id === user.id
+  // Backend includes viewer_is_gm so we don't need a separate campaign fetch
+  const isGM            = character?.viewer_is_gm === true && !isOwner
 
   return (
     <div className="min-h-screen bg-codex-bg">
@@ -160,13 +162,29 @@ export default function CharacterPage() {
           <div className="text-center text-red-400 py-24">{error}</div>
         )}
 
+        {/* ── GM access banner ── */}
+        {isGM && (
+          <div className="mb-6 flex items-start gap-3 px-4 py-3 rounded-xl
+            bg-codex-gold/5 border border-codex-gold/20 text-sm">
+            <span className="text-codex-gold mt-0.5">⚔️</span>
+            <div>
+              <p className="text-codex-text font-medium">Game Master View</p>
+              <p className="text-xs text-codex-subtext mt-0.5">
+                You are editing <span className="text-codex-text font-medium">{character.owner_username}'s</span> sheet
+                as the campaign GM. Changes save immediately and are visible to the player.
+                Portrait changes are restricted to the player.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* ── Existing character sheet ── */}
         {character && SheetComponent && (
           <Suspense fallback={<div className="text-center text-codex-muted animate-pulse py-24">Loading sheet…</div>}>
             <SheetComponent
               character={character}
               onSave={handleSave}
-              readOnly={readOnly || !isOwner}
+              readOnly={readOnly || (!isOwner && !isGM)}
             />
           </Suspense>
         )}

@@ -169,7 +169,7 @@ export default function CampaignDetail() {
                   gameSystem={campaign.game_system}
                   currentUserId={user?.id}
                   onClick={isGM && m.character_id
-                    ? () => navigate(`/characters/${m.character_id}?readOnly=true`)
+                    ? () => navigate(`/characters/${m.character_id}?campaignId=${id}`)
                     : undefined}
                 />
               ))}

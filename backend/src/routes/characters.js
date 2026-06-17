@@ -139,7 +139,15 @@ router.get('/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Access denied.' })
     }
 
-    res.json({ character: char })
+    // Include viewer role flags so the frontend can render edit vs. read-only
+    // without needing a separate campaign fetch.
+    res.json({
+      character: {
+        ...char,
+        viewer_is_owner: isOwner,
+        viewer_is_gm:    isGM || req.user.isAdmin,
+      },
+    })
   } catch (err) {
     console.error('[characters/get]', err)
     res.status(500).json({ error: 'Failed to fetch character.' })
@@ -147,6 +155,11 @@ router.get('/:id', requireAuth, async (req, res) => {
 })
 
 // ─── PATCH /api/characters/:id ────────────────────────────────────────────────
+// Allowed editors: the character owner, the GM of the campaign the character
+// is currently assigned to, or a site admin.
+//
+// Portrait URL updates are owner-only — it's a personal asset. GMs can edit
+// all sheet data and the character name but cannot swap another player's portrait.
 router.patch('/:id', requireAuth, [
   body('characterName').optional().trim().notEmpty().isLength({ max: 100 }),
   body('sheetData').optional().isObject(),
@@ -155,13 +168,37 @@ router.patch('/:id', requireAuth, [
   if (validationErrors(req, res)) return
 
   try {
-    const result = await db.query('SELECT user_id FROM characters WHERE id = $1', [req.params.id])
+    const result = await db.query(
+      'SELECT user_id, campaign_id FROM characters WHERE id = $1',
+      [req.params.id]
+    )
     if (!result.rows[0]) return res.status(404).json({ error: 'Character not found.' })
-    if (result.rows[0].user_id !== req.user.sub) {
-      return res.status(403).json({ error: 'You can only edit your own characters.' })
+
+    const char    = result.rows[0]
+    const isOwner = char.user_id === req.user.sub
+
+    // Check GM access only if not the owner (saves a DB query in the common case)
+    let isGM = false
+    if (!isOwner && char.campaign_id) {
+      const gmCheck = await db.query(
+        `SELECT gm_user_id FROM campaigns
+         WHERE id = $1 AND is_deleted = false`,
+        [char.campaign_id]
+      )
+      isGM = gmCheck.rows[0]?.gm_user_id === req.user.sub
+    }
+
+    if (!isOwner && !isGM && !req.user.isAdmin) {
+      return res.status(403).json({ error: 'Access denied.' })
     }
 
     const { characterName, sheetData, portraitUrl } = req.body
+
+    // GMs cannot change another player's portrait — that's personal
+    if (portraitUrl && !isOwner && !req.user.isAdmin) {
+      return res.status(403).json({ error: 'Only the character owner can change their portrait.' })
+    }
+
     const updated = await db.query(
       `UPDATE characters SET
          character_name = COALESCE($1, character_name),
