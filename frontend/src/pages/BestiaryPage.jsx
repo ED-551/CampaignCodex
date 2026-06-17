@@ -18,6 +18,7 @@ import { useParams, useNavigate, Link }      from 'react-router-dom'
 import { ArrowLeft, BookOpen, Plus, Trash2, X, Pencil } from 'lucide-react'
 import { api }                               from '../utils/api'
 import ShadowdarkMonsterForm                 from '../components/bestiary/ShadowdarkMonsterForm'
+import MorkborgMonsterForm                   from '../components/bestiary/MorkborgMonsterForm'
 
 // ─── System metadata ──────────────────────────────────────────────────────────
 
@@ -39,10 +40,11 @@ const SYSTEM_META = {
     color:                'text-yellow-300',
     badgeClass:           'text-yellow-300 bg-yellow-300/10 border-yellow-300/30',
     cardBorder:           'hover:border-yellow-300/40',
-    challengeLabel:       'Hit Dice / Difficulty',
-    challengePlaceholder: 'e.g. 2d8',
+    challengeLabel:       'HP',
+    challengePlaceholder: 'e.g. 12',
     tagsPlaceholder:      'e.g. Undead, Spectral',
-    formatChallenge: c => c || null,
+    // challenge stores raw HP; prefix it for display
+    formatChallenge: c => c ? (/^\d+$/.test(c.trim()) ? `HP ${c.trim()}` : c) : null,
   },
   nimble: {
     label:                'Nimble RPG',
@@ -56,6 +58,9 @@ const SYSTEM_META = {
     formatChallenge: c => c || null,
   },
 }
+
+// Systems that have a full-page stat block form (vs the lightweight modal)
+const FULL_FORM_SYSTEMS = ['shadowdark', 'morkborg']
 
 const INPUT = `w-full bg-codex-surface border border-codex-border rounded-lg px-4 py-2.5
   text-codex-text placeholder-codex-muted text-sm
@@ -109,7 +114,7 @@ export default function BestiaryPage() {
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   function openCreate() {
-    if (system === 'shadowdark') {
+    if (FULL_FORM_SYSTEMS.includes(system)) {
       setFormTarget(null)
       setFormView(true)
     } else {
@@ -119,7 +124,7 @@ export default function BestiaryPage() {
   }
 
   function openEdit(monster) {
-    if (system === 'shadowdark') {
+    if (FULL_FORM_SYSTEMS.includes(system)) {
       setFormTarget(monster)
       setFormView(true)
     } else {
@@ -157,15 +162,19 @@ export default function BestiaryPage() {
 
   if (!meta) return null
 
-  // ── Full-page form (Shadowdark) ────────────────────────────────────────────
+  // ── Full-page form (system-specific) ──────────────────────────────────────
+
+  const formBack = () => { setFormView(false); setFormTarget(null) }
 
   if (system === 'shadowdark' && formView) {
     return (
-      <ShadowdarkMonsterForm
-        existing={formTarget}
-        onBack={() => { setFormView(false); setFormTarget(null) }}
-        onSaved={handleSaved}
-      />
+      <ShadowdarkMonsterForm existing={formTarget} onBack={formBack} onSaved={handleSaved} />
+    )
+  }
+
+  if (system === 'morkborg' && formView) {
+    return (
+      <MorkborgMonsterForm existing={formTarget} onBack={formBack} onSaved={handleSaved} />
     )
   }
 
@@ -293,9 +302,13 @@ function MonsterCard({ monster, meta, system, onEdit, onDelete }) {
     ? monster.tags.split(',').map(t => t.trim()).filter(Boolean)
     : []
 
-  // Shadowdark stat block summary from JSONB
-  const sd = system === 'shadowdark' ? (monster.stat_data ?? {}) : null
-  const hasStatBlock = sd && (sd.ac || sd.hp || sd.level != null)
+  // Stat block summary from JSONB — per system
+  const sd = monster.stat_data ?? {}
+  const hasStatBlock = system === 'shadowdark'
+    ? (sd.ac || sd.hp || sd.level != null)
+    : system === 'morkborg'
+    ? (sd.hp || sd.morale || sd.armor)
+    : false
 
   return (
     <div className={`group relative flex flex-col gap-3 p-4
@@ -352,24 +365,36 @@ function MonsterCard({ monster, meta, system, onEdit, onDelete }) {
         )}
       </div>
 
-      {/* Stat block summary (Shadowdark) */}
+      {/* Stat block summary */}
       <div className="border-t border-codex-border/60 pt-2 mt-auto">
         {hasStatBlock ? (
           <div className="flex flex-wrap gap-x-3 gap-y-1">
-            {sd.ac   != null && <StatPip label="AC"  value={sd.ac} />}
-            {sd.hp   != null && <StatPip label="HP"  value={sd.hp} />}
-            {sd.level != null && <StatPip label="LV" value={sd.level} />}
-            {sd.movement     && <StatPip label="MV"  value={sd.movement} />}
-            {sd.attacks?.length > 0 && (
-              <StatPip label="ATK" value={`${sd.attacks.length} type${sd.attacks.length > 1 ? 's' : ''}`} />
-            )}
-            {sd.talents?.length > 0 && (
-              <StatPip label="Talents" value={sd.talents.length} />
-            )}
+            {/* Shadowdark */}
+            {system === 'shadowdark' && <>
+              {sd.ac    != null && <StatPip label="AC"  value={sd.ac} />}
+              {sd.hp    != null && <StatPip label="HP"  value={sd.hp} />}
+              {sd.level != null && <StatPip label="LV"  value={sd.level} />}
+              {sd.movement      && <StatPip label="MV"  value={sd.movement} />}
+              {sd.attacks?.length > 0 && (
+                <StatPip label="ATK" value={`${sd.attacks.length}×`} />
+              )}
+              {sd.talents?.length > 0 && (
+                <StatPip label="Talents" value={sd.talents.length} />
+              )}
+            </>}
+            {/* Mörk Borg */}
+            {system === 'morkborg' && <>
+              {sd.hp     != null && <StatPip label="HP"     value={sd.hp} />}
+              {sd.morale          && <StatPip label="Morale" value={sd.morale} />}
+              {sd.armor           && <StatPip label="Armor"  value={sd.armor} />}
+              {sd.attacks?.length > 0 && (
+                <StatPip label="ATK" value={`${sd.attacks.length}×`} />
+              )}
+            </>}
           </div>
-        ) : system === 'shadowdark' ? (
+        ) : FULL_FORM_SYSTEMS.includes(system) ? (
           <p className="text-[10px] text-codex-muted">
-            📋 Click <span className="text-codex-subtext">edit</span> to fill in the full stat block
+            📋 Click <span className="text-codex-subtext">edit</span> to fill in the stat block
           </p>
         ) : (
           <p className="text-[10px] text-codex-muted">📋 Stat block form coming soon</p>
