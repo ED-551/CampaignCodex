@@ -10,6 +10,12 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: true,
       },
+      // WebSocket proxy for Socket.io dev server
+      '/socket.io': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        ws: true,
+      },
     },
   },
 })

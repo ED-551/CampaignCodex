@@ -157,3 +157,19 @@ CREATE INDEX IF NOT EXISTS idx_ravens_sender
 CREATE INDEX IF NOT EXISTS idx_ravens_unread
   ON raven_messages(recipient_id)
   WHERE read_at IS NULL AND deleted_by_recipient = false;
+
+-- ─── CAMPAIGN MESSAGES (real-time campaign chat) ──────────────────────────────
+-- username is denormalized: stores the username at time of send (avoids JOIN on
+-- every history load and correctly reflects username if user later changes it).
+CREATE TABLE IF NOT EXISTS campaign_messages (
+  id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id  UUID        NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  user_id      UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  username     VARCHAR(20) NOT NULL,
+  body         TEXT        NOT NULL,
+  created_at   TIMESTAMP   NOT NULL DEFAULT NOW()
+);
+
+-- Scoped to campaign + time-ordered for history loads
+CREATE INDEX IF NOT EXISTS idx_campaign_messages_room
+  ON campaign_messages(campaign_id, created_at DESC);

@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Copy, Check, Sword, Plus, BookOpen, X, Trash2 } from 'lucide-react'
+import { ArrowLeft, Copy, Check, Sword, Plus, BookOpen, X, Trash2, MessageSquare, Send } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useSocket } from '../context/SocketContext'
 import { api } from '../utils/api'
 
 const GAME_STYLE = {
@@ -193,6 +194,9 @@ export default function CampaignDetail() {
           </div>
         )}
 
+        {/* ── Campaign Chat ── */}
+        <CampaignChat campaignId={id} />
+
         {/* ── Danger Zone (GM only) ── */}
         {isGM && (
           <div className="border border-red-500/20 rounded-xl p-5 bg-red-950/10">
@@ -368,6 +372,238 @@ function FormerMemberCard({ member, onDismiss }) {
 function DefaultPortrait({ system }) {
   const icons = { shadowdark: '⚔️', morkborg: '💀', nimble: '🛡️' }
   return <span className="text-2xl">{icons[system] ?? '🎲'}</span>
+}
+
+// ─── Campaign Chat ────────────────────────────────────────────────────────────
+// Real-time chat panel scoped to a single campaign room.
+// Renders below the party roster on the campaign detail page.
+function CampaignChat({ campaignId }) {
+  const { user }            = useAuth()
+  const { socket, connected } = useSocket()
+  const [messages, setMessages]   = useState([])
+  const [input, setInput]         = useState('')
+  const [chatError, setChatError] = useState('')
+  const [sending, setSending]     = useState(false)
+  const [joined, setJoined]       = useState(false)
+  const bottomRef = useRef(null)
+  const inputRef  = useRef(null)
+
+  // ── Join room + listen for messages ────────────────────────────────────────
+  useEffect(() => {
+    if (!socket || !connected) return
+
+    // Reset on each (re)connect or campaignId change
+    setJoined(false)
+    setMessages([])
+    setChatError('')
+
+    socket.emit('join_campaign', { campaignId }, ({ messages: history, error }) => {
+      if (error) {
+        setChatError(error)
+        return
+      }
+      setMessages(history ?? [])
+      setJoined(true)
+    })
+
+    function handleNewMessage(msg) {
+      setMessages(prev => [...prev, msg])
+    }
+
+    socket.on('new_message', handleNewMessage)
+
+    return () => {
+      socket.off('new_message', handleNewMessage)
+      socket.emit('leave_campaign', { campaignId })
+    }
+  }, [socket, connected, campaignId])
+
+  // ── Auto-scroll to latest message ──────────────────────────────────────────
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  // ── Send message ────────────────────────────────────────────────────────────
+  const handleSend = useCallback((e) => {
+    e.preventDefault()
+    const body = input.trim()
+    if (!body || !socket || !joined || sending) return
+    setSending(true)
+    setChatError('')
+    socket.emit('send_message', { campaignId, body }, ({ ok, error }) => {
+      setSending(false)
+      if (error) {
+        setChatError(error)
+      } else {
+        setInput('')
+        inputRef.current?.focus()
+      }
+    })
+  }, [input, socket, joined, sending, campaignId])
+
+  // ── Enter key sends, Shift+Enter = newline ──────────────────────────────────
+  function handleKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend(e)
+    }
+  }
+
+  // ── Connection / join status banner ────────────────────────────────────────
+  function StatusBanner() {
+    if (!connected) {
+      return (
+        <div className="flex items-center gap-2 px-4 py-2.5 text-xs text-codex-muted bg-codex-bg/40 border-b border-codex-border">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400/60 animate-pulse" />
+          Connecting to campaign chat…
+        </div>
+      )
+    }
+    if (!joined) {
+      return (
+        <div className="flex items-center gap-2 px-4 py-2.5 text-xs text-codex-muted bg-codex-bg/40 border-b border-codex-border">
+          <span className="w-1.5 h-1.5 rounded-full bg-codex-gold animate-pulse" />
+          Joining campaign chat…
+        </div>
+      )
+    }
+    return (
+      <div className="flex items-center gap-2 px-4 py-2.5 text-xs text-codex-muted border-b border-codex-border">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+        Campaign chat — live
+      </div>
+    )
+  }
+
+  return (
+    <div className="border border-codex-border rounded-xl overflow-hidden bg-codex-surface">
+      {/* ── Header ── */}
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-codex-border">
+        <MessageSquare size={14} className="text-codex-gold" />
+        <h2 className="text-sm font-semibold text-codex-text">Campaign Chat</h2>
+      </div>
+
+      {/* ── Connection / join status ── */}
+      <StatusBanner />
+
+      {/* ── Message log ── */}
+      <div className="h-80 overflow-y-auto px-4 py-3 flex flex-col gap-3 scroll-smooth">
+        {joined && messages.length === 0 && (
+          <div className="flex-1 flex items-center justify-center">
+            <p className="text-xs text-codex-muted italic text-center">
+              No messages yet. Be the first to say something.
+            </p>
+          </div>
+        )}
+
+        {messages.map((msg) => {
+          const isMine = msg.user_id === user?.id
+          return (
+            <div
+              key={msg.id}
+              className={`flex gap-2 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}
+            >
+              {/* Avatar */}
+              <div
+                className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold uppercase select-none
+                  ${isMine
+                    ? 'bg-codex-gold/20 text-codex-gold border border-codex-gold/30'
+                    : 'bg-codex-surface text-codex-subtext border border-codex-border'
+                  }`}
+              >
+                {msg.username?.[0] ?? '?'}
+              </div>
+
+              {/* Bubble + meta */}
+              <div className={`max-w-[72%] flex flex-col gap-0.5 ${isMine ? 'items-end' : 'items-start'}`}>
+                <div className="flex items-baseline gap-1.5">
+                  {!isMine && (
+                    <span className="text-[11px] font-medium text-codex-subtext">
+                      {msg.username}
+                    </span>
+                  )}
+                  <span className="text-[10px] text-codex-muted">
+                    {formatChatTime(msg.created_at)}
+                  </span>
+                </div>
+                <div
+                  className={`px-3 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words
+                    ${isMine
+                      ? 'bg-codex-gold/10 border border-codex-gold/20 text-codex-text rounded-tr-sm'
+                      : 'bg-codex-bg border border-codex-border text-codex-text rounded-tl-sm'
+                    }`}
+                >
+                  {msg.body}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+
+        {/* Scroll anchor */}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* ── Error banner ── */}
+      {chatError && (
+        <div className="mx-4 mb-2 text-xs text-red-400 bg-red-400/5 border border-red-400/20 rounded-lg px-3 py-2">
+          {chatError}
+        </div>
+      )}
+
+      {/* ── Input form ── */}
+      <form
+        onSubmit={handleSend}
+        className="flex items-end gap-2 px-4 py-3 border-t border-codex-border"
+      >
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={e => { setInput(e.target.value); setChatError('') }}
+          onKeyDown={handleKeyDown}
+          placeholder={joined ? 'Say something… (Enter to send, Shift+Enter for newline)' : 'Connecting…'}
+          disabled={!joined || sending}
+          rows={1}
+          maxLength={1000}
+          className="flex-1 resize-none bg-codex-bg border border-codex-border rounded-xl px-3 py-2 text-sm text-codex-text placeholder-codex-muted focus:outline-none focus:border-codex-gold/50 focus:ring-1 focus:ring-codex-gold/20 transition-colors disabled:opacity-40 max-h-32 overflow-y-auto"
+          style={{ fieldSizing: 'content' }}
+        />
+        <button
+          type="submit"
+          disabled={!joined || !input.trim() || sending}
+          className="flex-shrink-0 p-2.5 rounded-xl bg-codex-gold text-codex-bg hover:bg-codex-goldHover transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          title="Send message"
+        >
+          {sending
+            ? <span className="w-4 h-4 border-2 border-codex-bg/30 border-t-codex-bg rounded-full animate-spin block" />
+            : <Send size={15} />
+          }
+        </button>
+      </form>
+    </div>
+  )
+}
+
+// ─── Format chat timestamp ────────────────────────────────────────────────────
+// Returns a compact relative or clock time label for message bubbles.
+function formatChatTime(ts) {
+  if (!ts) return ''
+  const d    = new Date(ts)
+  const now  = new Date()
+  const diff = Math.floor((now - d) / 1000) // seconds
+
+  if (diff < 60)  return 'just now'
+  if (diff < 3600) {
+    const m = Math.floor(diff / 60)
+    return `${m}m ago`
+  }
+  // Same calendar day — show time only
+  if (d.toDateString() === now.toDateString()) {
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
+  // Older — show date + time
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
+    ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 function PageShell({ children }) {
