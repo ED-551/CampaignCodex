@@ -1,0 +1,23 @@
+# ─── Secrets — NEVER commit these ────────────────────────────────────────────
+.env
+.env.local
+.env.production
+*.pem
+*.key
+
+# ─── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+
+# ─── Build output ─────────────────────────────────────────────────────────────
+frontend/dist/
+frontend/.vite/
+
+# ─── Uploads (user content — not in git) ─────────────────────────────────────
+backend/uploads/
+
+# ─── OS / Editor ──────────────────────────────────────────────────────────────
+.DS_Store
+.cursor/
+*.swp

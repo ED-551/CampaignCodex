@@ -1,0 +1,28 @@
+{
+  "name": "campaigncodex-backend",
+  "version": "1.0.0",
+  "description": "CampaignCodex backend API",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start":      "node src/index.js",
+    "dev":        "nodemon src/index.js",
+    "seed:admin": "node scripts/seed-admin.js",
+    "db:init":    "node scripts/init-db.js"
+  },
+  "dependencies": {
+    "bcrypt":             "^6.0.0",
+    "cors":               "^2.8.6",
+    "dotenv":             "^17.4.2",
+    "express":            "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "express-validator":  "^7.3.2",
+    "helmet":             "^8.2.0",
+    "jsonwebtoken":       "^9.0.3",
+    "pg":                 "^8.21.0",
+    "uuid":               "^14.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
