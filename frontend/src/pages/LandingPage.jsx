@@ -2,11 +2,13 @@ import { useLocation } from 'react-router-dom'
 import LoginForm from '../components/auth/LoginForm'
 import SignupForm from '../components/auth/SignupForm'
 import ForgotPassword from '../components/auth/ForgotPassword'
+import ResetPassword from '../components/auth/ResetPassword'
 
 const VIEWS = {
   '/':                { title: 'Welcome Back',       subtitle: 'Sign in to your account', form: LoginForm },
   '/signup':          { title: 'Join the Codex',     subtitle: 'Create your account',     form: SignupForm },
   '/forgot-password': { title: 'Recover Access',     subtitle: 'Reset your password',     form: ForgotPassword },
+  '/reset-password':  { title: 'Set New Password',   subtitle: 'Create a new password',   form: ResetPassword },
 }
 
 export default function LandingPage() {

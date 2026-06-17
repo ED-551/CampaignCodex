@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, BookOpen, Plus, X, RefreshCw, ChevronRight,
-  SkipForward, Heart, Shield, Zap, Skull,
+  SkipForward, Heart, Shield, Zap, Skull, Wifi, WifiOff,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useSocket } from '../context/SocketContext'
 import { api } from '../utils/api'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -42,6 +43,7 @@ function newNPC(id) {
 export default function CombatPage() {
   const { id: campaignId }    = useParams()
   const { user }              = useAuth()
+  const { socket, connected } = useSocket()
   const navigate              = useNavigate()
 
   const [campaign, setCampaign]         = useState(null)
@@ -52,11 +54,16 @@ export default function CombatPage() {
   const [saving, setSaving]             = useState(false)
   const [activeIdx, setActiveIdx]       = useState(null)
   const [error, setError]               = useState('')
+  const [liveConnected, setLiveConnected] = useState(false)  // in combat socket room
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const isGM       = campaign?.gm_user_id === user?.id
   const gameSystem = campaign?.game_system ?? 'shadowdark'
   const isNimble   = gameSystem === 'nimble'
+
+  // Keep session ref current so the socket handler can read it without stale closure
+  const sessionRef = useRef(session)
+  useEffect(() => { sessionRef.current = session }, [session])
 
   // ── Load campaign + active session ──────────────────────────────────────────
   useEffect(() => {
@@ -68,6 +75,9 @@ export default function CombatPage() {
           const { session: s } = await api.get(`/combat/${campaignId}/active`)
           setSession(s)
           setCombatants(s.combatants ?? [])
+          // Sync active index from loaded state
+          const ai = (s.combatants ?? []).findIndex(c => c.is_active_turn)
+          setActiveIdx(ai >= 0 ? ai : null)
         } catch { /* no active session yet */ }
       } catch (err) {
         setError(err.message)
@@ -78,18 +88,78 @@ export default function CombatPage() {
     load()
   }, [campaignId])
 
-  // ── Sync to backend (debounce-less — called intentionally) ──────────────────
+  // ── Socket: join combat room for live updates ────────────────────────────────
+  // GM: emits push_combat_update after every change
+  // Players: receive combat_update events and mirror the GM's state
+  useEffect(() => {
+    if (!socket || !connected) return
+
+    socket.emit('join_combat', { campaignId }, ({ ok, error: err }) => {
+      if (err) console.error('[combat socket]', err)
+      else setLiveConnected(true)
+    })
+
+    function handleCombatUpdate({ combatants: updated, roundNumber, eventType }) {
+      if (eventType === 'started') {
+        // GM just started a new session — fetch fresh from API
+        api.get(`/combat/${campaignId}/active`).then(({ session: s }) => {
+          setSession(s)
+          setCombatants(s.combatants ?? [])
+          const ai = (s.combatants ?? []).findIndex(c => c.is_active_turn)
+          setActiveIdx(ai >= 0 ? ai : null)
+        }).catch(() => {})
+        return
+      }
+      if (eventType === 'ended') {
+        setSession(null)
+        setCombatants([])
+        setActiveIdx(null)
+        return
+      }
+      // Normal update — mirror GM state directly
+      setCombatants(updated ?? [])
+      if (roundNumber !== undefined) {
+        setSession(prev => prev ? { ...prev, round_number: roundNumber } : prev)
+      }
+      const ai = (updated ?? []).findIndex(c => c.is_active_turn)
+      setActiveIdx(ai >= 0 ? ai : null)
+    }
+
+    socket.on('combat_update', handleCombatUpdate)
+
+    return () => {
+      socket.off('combat_update', handleCombatUpdate)
+      socket.emit('leave_combat', { campaignId })
+      setLiveConnected(false)
+    }
+  }, [socket, connected, campaignId])
+
+  // ── Helper: push state change to DB + broadcast to players ──────────────────
+  // Returns the saved session on success so callers can use fresh data.
   async function pushUpdate(newCombatants, newRound) {
-    if (!session) return
+    if (!sessionRef.current) return null
     setSaving(true)
     try {
-      const { session: s } = await api.patch(`/combat/${session.id}`, {
+      const { session: s } = await api.patch(`/combat/${sessionRef.current.id}`, {
         combatants:   newCombatants ?? combatants,
-        round_number: newRound      ?? session.round_number,
+        round_number: newRound      ?? sessionRef.current.round_number,
       })
       setSession(s)
+
+      // Relay to players via socket (GM only — non-GMs won't have push_combat_update accepted)
+      if (socket && connected) {
+        socket.emit('push_combat_update', {
+          campaignId,
+          combatants:  s.combatants ?? newCombatants ?? combatants,
+          roundNumber: s.round_number,
+          eventType:   'update',
+        })
+      }
+
+      return s
     } catch (err) {
-      console.error('Sync error:', err)
+      console.error('Combat sync error:', err)
+      return null
     } finally {
       setSaving(false)
     }
@@ -102,6 +172,15 @@ export default function CombatPage() {
       const { session: s } = await api.post('/combat/start', { campaignId })
       setSession(s)
       setCombatants(s.combatants ?? [])
+
+      if (socket && connected) {
+        socket.emit('push_combat_update', {
+          campaignId,
+          combatants:  s.combatants ?? [],
+          roundNumber: s.round_number,
+          eventType:   'started',
+        })
+      }
     } catch (err) {
       setError(err.message)
     } finally {
@@ -113,6 +192,16 @@ export default function CombatPage() {
   async function endCombat() {
     if (!confirm('End this combat session?')) return
     await api.post(`/combat/${session.id}/end`)
+
+    if (socket && connected) {
+      socket.emit('push_combat_update', {
+        campaignId,
+        combatants:  [],
+        roundNumber: 1,
+        eventType:   'ended',
+      })
+    }
+
     navigate(`/campaigns/${campaignId}`)
   }
 
@@ -247,6 +336,13 @@ export default function CombatPage() {
                 </span>
               )}
               {saving && <span className="text-xs text-codex-muted animate-pulse">Syncing…</span>}
+              {!isGM && (
+                <span className={`flex items-center gap-1 text-xs ${liveConnected ? 'text-emerald-400' : 'text-codex-muted'}`}
+                  title={liveConnected ? 'Live updates active' : 'Connecting…'}>
+                  {liveConnected ? <Wifi size={11} /> : <WifiOff size={11} />}
+                  {liveConnected ? 'Live' : 'Connecting…'}
+                </span>
+              )}
             </div>
           </div>
           {isGM && session && (
@@ -284,8 +380,19 @@ export default function CombatPage() {
         )}
 
         {!session && !isGM && (
-          <div className="text-center text-codex-subtext py-24">
-            <p className="text-sm">No combat session active. Waiting for the GM to start one.</p>
+          <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
+            <p className="text-sm text-codex-subtext">No combat session active.</p>
+            {liveConnected ? (
+              <p className="text-xs text-emerald-400 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Watching for GM to start combat…
+              </p>
+            ) : (
+              <p className="text-xs text-codex-muted flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-codex-muted animate-pulse" />
+                Connecting to live updates…
+              </p>
+            )}
           </div>
         )}
 

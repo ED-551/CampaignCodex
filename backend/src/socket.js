@@ -596,6 +596,83 @@ function createSocketServer(httpServer) {
     })
 
     // ────────────────────────────────────────────────────────────────────────
+    // ── COMBAT TRACKER EVENTS ────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────
+    // Live combat state is authored by the GM and relayed to all campaign
+    // members watching the combat page. The canonical state lives in the DB
+    // (combat_sessions.combatants JSONB) — the socket is purely a push channel
+    // so players don't have to poll.
+
+    // ── join_combat ───────────────────────────────────────────────────────────
+    // Both GM and players join this room to receive live combat_update events.
+    // Membership is validated — spectators and anonymous users are excluded.
+    //
+    // Payload : { campaignId: string }
+    // Callback: { ok: true } | { error: string }
+    socket.on('join_combat', async ({ campaignId } = {}, callback) => {
+      if (typeof callback !== 'function') return
+
+      if (!campaignId || !UUID_RE.test(campaignId)) {
+        return callback({ error: 'Invalid campaign ID.' })
+      }
+
+      try {
+        const ok = await isCampaignMember(campaignId, socket.userId)
+        if (!ok) return callback({ error: 'Access denied.' })
+
+        socket.join(`combat:${campaignId}`)
+        socket.currentCombatCampaignId = campaignId
+        callback({ ok: true })
+      } catch {
+        callback({ error: 'Failed to join combat room.' })
+      }
+    })
+
+    // ── leave_combat ──────────────────────────────────────────────────────────
+    // Explicit leave (player navigates away).
+    // Socket.io also handles cleanup automatically on disconnect.
+    socket.on('leave_combat', ({ campaignId } = {}) => {
+      if (!campaignId || !UUID_RE.test(campaignId)) return
+      socket.leave(`combat:${campaignId}`)
+      if (socket.currentCombatCampaignId === campaignId) {
+        socket.currentCombatCampaignId = null
+      }
+    })
+
+    // ── push_combat_update ────────────────────────────────────────────────────
+    // GM-only. Called AFTER the backend has persisted the change (via REST PATCH).
+    // Relays the new state to all players currently on the combat page.
+    //
+    // Payload:
+    //   campaignId  : string
+    //   combatants  : Combatant[]   — full state array
+    //   roundNumber : number
+    //   eventType   : 'update' | 'started' | 'ended'
+    //
+    // Players receive a 'combat_update' event with the same payload.
+    socket.on('push_combat_update', async ({ campaignId, combatants, roundNumber, eventType } = {}) => {
+      if (!campaignId || !UUID_RE.test(campaignId)) return
+
+      // Only validated GMs may push state
+      try {
+        const r = await db.query(
+          'SELECT gm_user_id FROM campaigns WHERE id = $1 AND is_deleted = false',
+          [campaignId]
+        )
+        if (r.rows[0]?.gm_user_id !== socket.userId) return
+
+        // Broadcast to players (not back to GM — they already have it)
+        socket.to(`combat:${campaignId}`).emit('combat_update', {
+          combatants,
+          roundNumber,
+          eventType: eventType ?? 'update',
+        })
+      } catch (err) {
+        console.error('[socket:push_combat_update]', err)
+      }
+    })
+
+    // ────────────────────────────────────────────────────────────────────────
     // ── SPECTATOR MODE EVENTS ────────────────────────────────────────────────
     // ────────────────────────────────────────────────────────────────────────
 

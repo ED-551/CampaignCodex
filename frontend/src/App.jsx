@@ -26,6 +26,7 @@ export default function App() {
               <Route path="/"                element={<LandingPage />} />
               <Route path="/signup"          element={<LandingPage />} />
               <Route path="/forgot-password" element={<LandingPage />} />
+              <Route path="/reset-password"  element={<LandingPage />} />
 
               {/* ── Public: legal ── */}
               <Route path="/terms" element={<TermsPage />} />
