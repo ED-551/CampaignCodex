@@ -13,6 +13,7 @@ import AdminDashboard     from './pages/AdminDashboard'
 import TermsPage          from './pages/TermsPage'
 import SettingsPage       from './pages/SettingsPage'
 import RavenPost          from './pages/RavenPost'
+import ChatPage           from './pages/ChatPage'
 
 export default function App() {
   return (
@@ -38,6 +39,9 @@ export default function App() {
               } />
               <Route path="/ravens" element={
                 <ProtectedRoute><RavenPost /></ProtectedRoute>
+              } />
+              <Route path="/chat" element={
+                <ProtectedRoute><ChatPage /></ProtectedRoute>
               } />
               <Route path="/campaigns/:id" element={
                 <ProtectedRoute><CampaignDetail /></ProtectedRoute>

@@ -70,6 +70,36 @@ async function isCampaignMember(campaignId, userId) {
   return result.rows.length > 0
 }
 
+// ─── Public room definitions (allowlist) ─────────────────────────────────────
+// Room IDs are validated against this set on every inbound event — no arbitrary
+// room names can be injected by a client.
+const PUBLIC_ROOMS = new Map([
+  ['tavern',   { name: 'The Wyrm Wood Tavern', description: 'General hangout — all are welcome',   icon: '🍺' }],
+  ['arcane',   { name: 'The Arcane Library',   description: 'Shadowdark discussion',                icon: '📚' }],
+  ['boneyard', { name: 'The Bone Yard',         description: 'Mörk Borg discussion',                icon: '💀' }],
+  ['nimble',   { name: 'The Nimble Path',       description: 'Nimble RPG discussion',               icon: '🛡️' }],
+  ['warroom',  { name: "The GM's War Room",     description: 'Game master strategy & advice',       icon: '⚔️' }],
+  ['recruit',  { name: "The Recruit's Tent",    description: 'New players, character help',         icon: '🪄' }],
+])
+
+// ─── In-memory occupant tracking ─────────────────────────────────────────────
+// Map<roomId, Map<socketId, { userId, username }>>
+// A Map-of-Maps lets us remove a specific socket on disconnect in O(1).
+const roomOccupants = new Map()
+for (const id of PUBLIC_ROOMS.keys()) roomOccupants.set(id, new Map())
+
+// Returns a plain array of { userId, username } for broadcasting
+function getOccupants(roomId) {
+  return [...(roomOccupants.get(roomId)?.values() ?? [])]
+}
+
+// Returns { roomId: count } for all public rooms
+function getRoomCounts() {
+  const counts = {}
+  for (const [id, members] of roomOccupants) counts[id] = members.size
+  return counts
+}
+
 // ─── createSocketServer ───────────────────────────────────────────────────────
 // Attaches a Socket.io server to an existing Node http.Server instance.
 // Returns the io object (useful for future server-side emits from REST routes).
@@ -341,8 +371,141 @@ function createSocketServer(httpServer) {
       }
     })
 
+    // ────────────────────────────────────────────────────────────────────────
+    // ── PUBLIC CHATROOM EVENTS ───────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────
+
+    // ── join_lobby ────────────────────────────────────────────────────────────
+    // Emitted when the client lands on the /chat room-selection screen.
+    // Joins the `lobby` Socket.io room so the client receives live count
+    // updates whenever anyone enters or leaves a public room.
+    //
+    // Callback: { rooms: RoomInfo[], counts: { [roomId]: number } }
+    socket.on('join_lobby', (_, callback) => {
+      if (typeof callback !== 'function') return
+      socket.join('lobby')
+      const roomList = [...PUBLIC_ROOMS.entries()].map(([id, meta]) => ({
+        id,
+        ...meta,
+        count: roomOccupants.get(id)?.size ?? 0,
+      }))
+      callback({ rooms: roomList })
+    })
+
+    // ── leave_lobby ──────────────────────────────────────────────────────────
+    socket.on('leave_lobby', () => socket.leave('lobby'))
+
+    // ── join_public_room ──────────────────────────────────────────────────────
+    // Emitted when the client clicks a room card and enters the chat.
+    // Validates room ID against the hardcoded allowlist — no arbitrary names.
+    //
+    // Payload : { roomId: string }
+    // Callback: { occupants: Occupant[] } | { error: string }
+    socket.on('join_public_room', ({ roomId } = {}, callback) => {
+      if (typeof callback !== 'function') return
+
+      if (!roomId || !PUBLIC_ROOMS.has(roomId)) {
+        return callback({ error: 'Unknown room.' })
+      }
+
+      // Leave any previous public room (handles tab reuse)
+      if (socket.currentPublicRoomId && socket.currentPublicRoomId !== roomId) {
+        const prevId = socket.currentPublicRoomId
+        socket.leave(`public:${prevId}`)
+        roomOccupants.get(prevId)?.delete(socket.id)
+        io.to(`public:${prevId}`).emit('room_occupants', getOccupants(prevId))
+      }
+
+      // Also leave lobby (they're now inside a room)
+      socket.leave('lobby')
+
+      socket.join(`public:${roomId}`)
+      socket.currentPublicRoomId = roomId
+
+      // Add to occupant tracking
+      roomOccupants.get(roomId).set(socket.id, {
+        userId:   socket.userId,
+        username: socket.username,
+      })
+
+      // Push updated occupant list to everyone in the room
+      const occupants = getOccupants(roomId)
+      io.to(`public:${roomId}`).emit('room_occupants', occupants)
+
+      // Push updated counts to anyone still on the room selection screen
+      io.to('lobby').emit('room_counts_update', getRoomCounts())
+
+      callback({ occupants })
+    })
+
+    // ── leave_public_room ─────────────────────────────────────────────────────
+    // Emitted when the client clicks Back on a room or navigates away.
+    // Also called automatically from the disconnect handler below.
+    //
+    // Payload: { roomId: string }
+    function leavePublicRoom(roomId) {
+      if (!roomId || !PUBLIC_ROOMS.has(roomId)) return
+      socket.leave(`public:${roomId}`)
+      roomOccupants.get(roomId)?.delete(socket.id)
+      if (socket.currentPublicRoomId === roomId) socket.currentPublicRoomId = null
+
+      io.to(`public:${roomId}`).emit('room_occupants', getOccupants(roomId))
+      io.to('lobby').emit('room_counts_update', getRoomCounts())
+    }
+
+    socket.on('leave_public_room', ({ roomId } = {}) => leavePublicRoom(roomId))
+
+    // ── send_public_message ───────────────────────────────────────────────────
+    // Broadcast a message to a public room. No persistence — ephemeral only.
+    // Messages are lost when the server restarts, matching the tavern vibe.
+    //
+    // Payload : { roomId: string, body: string }
+    // Callback: { ok: true } | { error: string }
+    socket.on('send_public_message', ({ roomId, body } = {}, callback) => {
+      if (typeof callback !== 'function') return
+
+      if (!roomId || !PUBLIC_ROOMS.has(roomId)) {
+        return callback({ error: 'Unknown room.' })
+      }
+
+      // Sender must currently be in the room (not just anywhere on the site)
+      if (socket.currentPublicRoomId !== roomId) {
+        return callback({ error: 'You are not in this room.' })
+      }
+
+      if (!body || typeof body !== 'string') {
+        return callback({ error: 'Message body required.' })
+      }
+
+      const trimmed = body.trim()
+      if (trimmed.length === 0) return callback({ error: 'Message cannot be empty.' })
+      if (trimmed.length > 500) return callback({ error: 'Max 500 characters.' })
+
+      if (!checkMsgRate(socket.userId)) {
+        return callback({ error: 'Slow down — too many messages.' })
+      }
+
+      // Ephemeral — no DB write
+      const message = {
+        id:         require('crypto').randomUUID(),
+        username:   socket.username,
+        user_id:    socket.userId,
+        body:       trimmed,
+        created_at: new Date().toISOString(),
+      }
+
+      io.to(`public:${roomId}`).emit('room_message', message)
+      callback({ ok: true })
+    })
+
+    // ── disconnect ────────────────────────────────────────────────────────────
     socket.on('disconnect', () => {
       console.log(`[socket] - uid=${socket.userId} (${socket.username})`)
+
+      // Clean up presence from any public room
+      if (socket.currentPublicRoomId) {
+        leavePublicRoom(socket.currentPublicRoomId)
+      }
     })
   })
 

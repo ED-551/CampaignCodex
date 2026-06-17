@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Plus, LogOut, Scroll, Users, Shield, BookOpen, Settings, Feather } from 'lucide-react'
+import { Plus, LogOut, Scroll, Users, Shield, BookOpen, Settings, Feather, MessagesSquare } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../utils/api'
 import CreateCampaignModal from '../components/campaign/CreateCampaignModal'
@@ -117,6 +117,16 @@ export default function Dashboard() {
                 {tier.label}
               </span>
             )}
+            {/* Public Chatrooms nav link */}
+            <Link
+              to="/chat"
+              className="flex items-center gap-1.5 text-xs text-codex-subtext hover:text-codex-gold transition-colors"
+              title="Public Chatrooms"
+            >
+              <MessagesSquare size={14} />
+              <span className="hidden sm:block">Chatrooms</span>
+            </Link>
+
             {/* Raven Post nav link with unread badge */}
             <Link
               to="/ravens"
