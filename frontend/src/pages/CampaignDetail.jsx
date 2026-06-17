@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, Copy, Check, Sword, Plus, BookOpen, X, Trash2, MessageSquare, Send } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
+import { useDM } from '../context/DMContext'
 import { api } from '../utils/api'
 
 const GAME_STYLE = {
@@ -166,6 +167,7 @@ export default function CampaignDetail() {
                   member={m}
                   isGM={isGM}
                   gameSystem={campaign.game_system}
+                  currentUserId={user?.id}
                   onClick={isGM && m.character_id
                     ? () => navigate(`/characters/${m.character_id}?readOnly=true`)
                     : undefined}
@@ -301,15 +303,22 @@ export default function CampaignDetail() {
   )
 }
 
-function PlayerCard({ member, isGM, gameSystem, onClick }) {
+function PlayerCard({ member, isGM, gameSystem, currentUserId, onClick }) {
+  const { openDM } = useDM()
+  const isMe = member.user_id === currentUserId
+
   return (
-    <div
-      onClick={onClick}
-      className={`flex flex-col items-center gap-2 p-4 bg-codex-surface border border-codex-border rounded-xl transition-all duration-150
-        ${onClick ? 'cursor-pointer hover:border-codex-gold hover:bg-codex-card group' : ''}`}
-    >
+    <div className="relative flex flex-col items-center gap-2 p-4 bg-codex-surface border border-codex-border rounded-xl transition-all duration-150 group">
+      {/* Clickable overlay for sheet navigation */}
+      {onClick && (
+        <div
+          onClick={onClick}
+          className="absolute inset-0 rounded-xl cursor-pointer hover:border-codex-gold hover:bg-codex-card/40 z-0 transition-all"
+        />
+      )}
+
       {/* Portrait */}
-      <div className="w-16 h-16 rounded-full bg-codex-bg border-2 border-codex-border overflow-hidden flex items-center justify-center">
+      <div className="relative z-10 w-16 h-16 rounded-full bg-codex-bg border-2 border-codex-border overflow-hidden flex items-center justify-center">
         {member.portrait_url ? (
           <img src={member.portrait_url} alt={member.character_name} className="w-full h-full object-cover" />
         ) : (
@@ -317,8 +326,8 @@ function PlayerCard({ member, isGM, gameSystem, onClick }) {
         )}
       </div>
 
-      {/* Character name */}
-      <div className="text-center">
+      {/* Character name + username */}
+      <div className="relative z-10 text-center">
         <p className={`text-sm font-semibold text-codex-text leading-tight ${onClick ? 'group-hover:text-codex-gold transition-colors' : ''}`}>
           {member.character_name || '—'}
         </p>
@@ -326,7 +335,21 @@ function PlayerCard({ member, isGM, gameSystem, onClick }) {
       </div>
 
       {!member.character_id && (
-        <span className="text-xs text-codex-muted italic">No sheet yet</span>
+        <span className="relative z-10 text-xs text-codex-muted italic">No sheet yet</span>
+      )}
+
+      {/* DM button — appears on hover, hidden for self */}
+      {!isMe && (
+        <button
+          onClick={e => { e.stopPropagation(); openDM(member.user_id, member.username) }}
+          className="relative z-10 opacity-0 group-hover:opacity-100 transition-opacity
+            flex items-center gap-1 text-[10px] text-codex-subtext hover:text-codex-gold
+            border border-codex-border hover:border-codex-gold/50 rounded-full px-2 py-0.5
+            bg-codex-bg hover:bg-codex-surface"
+          title={`DM ${member.username}`}
+        >
+          <MessageSquare size={9} /> DM
+        </button>
       )}
     </div>
   )

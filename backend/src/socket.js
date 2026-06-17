@@ -213,6 +213,134 @@ function createSocketServer(httpServer) {
       }
     })
 
+    // ────────────────────────────────────────────────────────────────────────
+    // ── DIRECT MESSAGE EVENTS ────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────
+
+    // ── open_dm ─────────────────────────────────────────────────────────────
+    // Join the DM room for a conversation with a specific user and receive
+    // message history. Called whenever the client opens or focuses a DM window.
+    //
+    // Payload : { targetUserId: string }
+    // Callback: { messages: DMMessage[], targetUser: { id, username } }
+    //         | { error: string }
+    socket.on('open_dm', async ({ targetUserId } = {}, callback) => {
+      if (typeof callback !== 'function') return
+
+      if (!targetUserId || !UUID_RE.test(targetUserId)) {
+        return callback({ error: 'Invalid user ID.' })
+      }
+      if (targetUserId === socket.userId) {
+        return callback({ error: 'Cannot DM yourself.' })
+      }
+
+      try {
+        // Verify target user exists
+        const userCheck = await db.query(
+          'SELECT id, username FROM users WHERE id = $1 LIMIT 1',
+          [targetUserId]
+        )
+        if (userCheck.rows.length === 0) {
+          return callback({ error: 'User not found.' })
+        }
+        const targetUser = userCheck.rows[0]
+
+        // Deterministic room key: always lower UUID first
+        const roomKey = [socket.userId, targetUserId].sort().join(':')
+        socket.join(`dm:${roomKey}`)
+
+        // Fetch last 50 messages for this conversation pair (both directions)
+        const history = await db.query(
+          `SELECT id, sender_id, sender_username, recipient_id, recipient_username,
+                  body, created_at
+           FROM dm_messages
+           WHERE (sender_id = $1 AND recipient_id = $2)
+              OR (sender_id = $2 AND recipient_id = $1)
+           ORDER BY created_at DESC
+           LIMIT 50`,
+          [socket.userId, targetUserId]
+        )
+
+        callback({ messages: history.rows.reverse(), targetUser })
+      } catch (err) {
+        console.error('[socket:open_dm]', err)
+        callback({ error: 'Failed to open conversation.' })
+      }
+    })
+
+    // ── send_dm ──────────────────────────────────────────────────────────────
+    // Send a direct message to a specific user. Persists to dm_messages and
+    // broadcasts to BOTH sides of the conversation.
+    //
+    // Payload : { targetUserId: string, body: string }
+    // Callback: { ok: true } | { error: string }
+    socket.on('send_dm', async ({ targetUserId, body } = {}, callback) => {
+      if (typeof callback !== 'function') return
+
+      if (!targetUserId || !UUID_RE.test(targetUserId)) {
+        return callback({ error: 'Invalid user ID.' })
+      }
+      if (targetUserId === socket.userId) {
+        return callback({ error: 'Cannot DM yourself.' })
+      }
+      if (!body || typeof body !== 'string') {
+        return callback({ error: 'Message body required.' })
+      }
+
+      const trimmed = body.trim()
+      if (trimmed.length === 0) return callback({ error: 'Message cannot be empty.' })
+      if (trimmed.length > 1000) return callback({ error: 'Max 1000 characters.' })
+
+      // Shared per-user rate limiter
+      if (!checkMsgRate(socket.userId)) {
+        return callback({ error: 'Slow down — too many messages.' })
+      }
+
+      try {
+        // Verify target exists and retrieve their username for denormalization
+        const userCheck = await db.query(
+          'SELECT id, username FROM users WHERE id = $1 LIMIT 1',
+          [targetUserId]
+        )
+        if (userCheck.rows.length === 0) {
+          return callback({ error: 'User not found.' })
+        }
+        const targetUser = userCheck.rows[0]
+
+        const result = await db.query(
+          `INSERT INTO dm_messages
+             (sender_id, sender_username, recipient_id, recipient_username, body)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id, sender_id, sender_username, recipient_id, recipient_username,
+                     body, created_at`,
+          [socket.userId, socket.username, targetUserId, targetUser.username, trimmed]
+        )
+
+        const message = result.rows[0]
+        const roomKey = [socket.userId, targetUserId].sort().join(':')
+
+        // Broadcast to both ends — recipient gets it even if their widget is minimized
+        io.to(`dm:${roomKey}`).emit('new_dm', message)
+
+        callback({ ok: true })
+      } catch (err) {
+        console.error('[socket:send_dm]', err)
+        callback({ error: 'Failed to send message.' })
+      }
+    })
+
+    // ── close_dm ─────────────────────────────────────────────────────────────
+    // Leave a DM socket room. Emitted when the user closes a DM window.
+    // The room is also automatically cleaned up on disconnect.
+    //
+    // Payload: { targetUserId: string }
+    socket.on('close_dm', ({ targetUserId } = {}) => {
+      if (targetUserId && UUID_RE.test(targetUserId)) {
+        const roomKey = [socket.userId, targetUserId].sort().join(':')
+        socket.leave(`dm:${roomKey}`)
+      }
+    })
+
     socket.on('disconnect', () => {
       console.log(`[socket] - uid=${socket.userId} (${socket.username})`)
     })

@@ -173,3 +173,23 @@ CREATE TABLE IF NOT EXISTS campaign_messages (
 -- Scoped to campaign + time-ordered for history loads
 CREATE INDEX IF NOT EXISTS idx_campaign_messages_room
   ON campaign_messages(campaign_id, created_at DESC);
+
+-- ─── DIRECT MESSAGES (DM Widget — real-time 1:1 chat) ────────────────────────
+-- Both sender_username and recipient_username are denormalized so the
+-- conversation widget can display names without a JOIN on every history load.
+CREATE TABLE IF NOT EXISTS dm_messages (
+  id                 UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  sender_id          UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recipient_id       UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sender_username    VARCHAR(20) NOT NULL,
+  recipient_username VARCHAR(20) NOT NULL,
+  body               TEXT        NOT NULL,
+  created_at         TIMESTAMP   NOT NULL DEFAULT NOW()
+);
+
+-- Separate indexes on each side; PostgreSQL uses BitmapOr to serve
+-- the (sender OR recipient) query pattern efficiently.
+CREATE INDEX IF NOT EXISTS idx_dm_sender
+  ON dm_messages(sender_id,    created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dm_recipient
+  ON dm_messages(recipient_id, created_at DESC);
