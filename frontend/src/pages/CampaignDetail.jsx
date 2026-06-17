@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Copy, Check, Sword, Plus, BookOpen, X, Trash2, MessageSquare, Send } from 'lucide-react'
+import { ArrowLeft, Copy, Check, Sword, Plus, BookOpen, X, Trash2, MessageSquare, Send, Eye, EyeOff, Users } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
 import { useDM } from '../context/DMContext'
@@ -197,7 +197,7 @@ export default function CampaignDetail() {
         )}
 
         {/* ── Campaign Chat ── */}
-        <CampaignChat campaignId={id} />
+        <CampaignChat campaignId={id} isGM={isGM} />
 
         {/* ── Danger Zone (GM only) ── */}
         {isGM && (
@@ -399,45 +399,135 @@ function DefaultPortrait({ system }) {
 
 // ─── Campaign Chat ────────────────────────────────────────────────────────────
 // Real-time chat panel scoped to a single campaign room.
-// Renders below the party roster on the campaign detail page.
-function CampaignChat({ campaignId }) {
-  const { user }            = useAuth()
+// Supports spectator mode: GM can open the session to public viewers,
+// with a per-player consent flow and 60-second timeout.
+function CampaignChat({ campaignId, isGM }) {
+  const { user }              = useAuth()
   const { socket, connected } = useSocket()
+
+  // Core chat state
   const [messages, setMessages]   = useState([])
   const [input, setInput]         = useState('')
   const [chatError, setChatError] = useState('')
   const [sending, setSending]     = useState(false)
   const [joined, setJoined]       = useState(false)
-  const bottomRef = useRef(null)
-  const inputRef  = useRef(null)
+
+  // Spectator mode state
+  // spectatorStatus: null | 'pending' | 'active'
+  const [spectatorStatus, setSpectatorStatus]       = useState(null)
+  const [spectatorCount,  setSpectatorCount]         = useState(0)
+  // GM-side: how many consents have been received
+  const [consentProgress, setConsentProgress]       = useState(null) // { accepted, total }
+  // Player-side: consent prompt sent by GM
+  const [consentPending,  setConsentPending]         = useState(null) // { campaignId, campaignName, gmUsername, timeoutSecs }
+  const [consentCountdown, setConsentCountdown]      = useState(0)
+  const [lateJoinBanner,  setLateJoinBanner]         = useState(false)
+  const [spectatorAction, setSpectatorAction]        = useState(false) // loading state for GM buttons
+
+  const bottomRef         = useRef(null)
+  const inputRef          = useRef(null)
+  const countdownInterval = useRef(null)
 
   // ── Join room + listen for messages ────────────────────────────────────────
   useEffect(() => {
     if (!socket || !connected) return
 
-    // Reset on each (re)connect or campaignId change
     setJoined(false)
     setMessages([])
     setChatError('')
+    setSpectatorStatus(null)
+    setConsentPending(null)
+    setLateJoinBanner(false)
+    setSpectatorCount(0)
 
-    socket.emit('join_campaign', { campaignId }, ({ messages: history, error }) => {
-      if (error) {
-        setChatError(error)
-        return
-      }
+    socket.emit('join_campaign', { campaignId }, ({ messages: history, spectatorModeActive, error }) => {
+      if (error) { setChatError(error); return }
       setMessages(history ?? [])
       setJoined(true)
+      if (spectatorModeActive) {
+        setSpectatorStatus('active')
+        setLateJoinBanner(true)
+      }
     })
 
+    // ── Incoming messages ──────────────────────────────────────────────────
     function handleNewMessage(msg) {
       setMessages(prev => [...prev, msg])
     }
 
-    socket.on('new_message', handleNewMessage)
+    // ── Spectator: GM receives consent progress updates ────────────────────
+    function handleConsentUpdate({ accepted, total }) {
+      setConsentProgress({ accepted, total })
+    }
+
+    // ── Spectator: all players accepted → mode is live ────────────────────
+    function handleSpectatorActive({ campaignId: cid }) {
+      if (cid !== campaignId) return
+      setSpectatorStatus('active')
+      setConsentProgress(null)
+      setConsentPending(null)
+      clearInterval(countdownInterval.current)
+    }
+
+    // ── Spectator: a player declined or GM cancelled ───────────────────────
+    function handleSpectatorCancelled({ campaignId: cid, reason }) {
+      if (cid !== campaignId) return
+      setSpectatorStatus(null)
+      setConsentProgress(null)
+      setConsentPending(null)
+      clearInterval(countdownInterval.current)
+      setChatError(reason ? `Spectator mode cancelled: ${reason}` : 'Spectator mode cancelled.')
+    }
+
+    // ── Spectator: GM closed the session ──────────────────────────────────
+    function handleSpectatorEnded({ campaignId: cid }) {
+      if (cid !== campaignId) return
+      setSpectatorStatus(null)
+      setSpectatorCount(0)
+    }
+
+    // ── Spectator: live viewer count changed ───────────────────────────────
+    function handleSpectatorCountUpdate({ campaignId: cid, count }) {
+      if (cid !== campaignId) return
+      setSpectatorCount(count)
+    }
+
+    // ── Player: GM requested consent ───────────────────────────────────────
+    function handleConsentRequested({ campaignId: cid, ...data }) {
+      if (cid !== campaignId) return
+      setConsentPending({ campaignId: cid, ...data })
+      // Start countdown so the player can see the timeout ticking
+      setConsentCountdown(data.timeoutSecs ?? 60)
+      clearInterval(countdownInterval.current)
+      countdownInterval.current = setInterval(() => {
+        setConsentCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(countdownInterval.current)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+    }
+
+    socket.on('new_message',            handleNewMessage)
+    socket.on('consent_update',         handleConsentUpdate)
+    socket.on('spectator_active',       handleSpectatorActive)
+    socket.on('spectator_cancelled',    handleSpectatorCancelled)
+    socket.on('spectator_ended',        handleSpectatorEnded)
+    socket.on('spectator_count_update', handleSpectatorCountUpdate)
+    socket.on('consent_requested',      handleConsentRequested)
 
     return () => {
-      socket.off('new_message', handleNewMessage)
+      socket.off('new_message',            handleNewMessage)
+      socket.off('consent_update',         handleConsentUpdate)
+      socket.off('spectator_active',       handleSpectatorActive)
+      socket.off('spectator_cancelled',    handleSpectatorCancelled)
+      socket.off('spectator_ended',        handleSpectatorEnded)
+      socket.off('spectator_count_update', handleSpectatorCountUpdate)
+      socket.off('consent_requested',      handleConsentRequested)
       socket.emit('leave_campaign', { campaignId })
+      clearInterval(countdownInterval.current)
     }
   }, [socket, connected, campaignId])
 
@@ -455,59 +545,193 @@ function CampaignChat({ campaignId }) {
     setChatError('')
     socket.emit('send_message', { campaignId, body }, ({ ok, error }) => {
       setSending(false)
-      if (error) {
-        setChatError(error)
-      } else {
-        setInput('')
-        inputRef.current?.focus()
-      }
+      if (error) { setChatError(error) }
+      else { setInput(''); inputRef.current?.focus() }
     })
   }, [input, socket, joined, sending, campaignId])
 
-  // ── Enter key sends, Shift+Enter = newline ──────────────────────────────────
   function handleKeyDown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSend(e)
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(e) }
   }
 
-  // ── Connection / join status banner ────────────────────────────────────────
-  function StatusBanner() {
-    if (!connected) {
-      return (
-        <div className="flex items-center gap-2 px-4 py-2.5 text-xs text-codex-muted bg-codex-bg/40 border-b border-codex-border">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400/60 animate-pulse" />
-          Connecting to campaign chat…
-        </div>
-      )
-    }
-    if (!joined) {
-      return (
-        <div className="flex items-center gap-2 px-4 py-2.5 text-xs text-codex-muted bg-codex-bg/40 border-b border-codex-border">
-          <span className="w-1.5 h-1.5 rounded-full bg-codex-gold animate-pulse" />
-          Joining campaign chat…
-        </div>
-      )
-    }
+  // ── GM: open spectator mode ─────────────────────────────────────────────────
+  function handleSpectatorRequest() {
+    if (!socket || spectatorAction) return
+    setSpectatorAction(true)
+    setChatError('')
+    socket.emit('spectator_request', { campaignId }, ({ ok, totalNeeded, error }) => {
+      setSpectatorAction(false)
+      if (error) { setChatError(error); return }
+      if (totalNeeded === 0) {
+        // Activated immediately — spectator_active event will follow
+      } else {
+        setSpectatorStatus('pending')
+        setConsentProgress({ accepted: 0, total: totalNeeded })
+      }
+    })
+  }
+
+  // ── GM: close spectator mode ────────────────────────────────────────────────
+  function handleSpectatorClose() {
+    if (!socket || spectatorAction) return
+    setSpectatorAction(true)
+    socket.emit('spectator_close', { campaignId }, ({ ok, error }) => {
+      setSpectatorAction(false)
+      if (error) setChatError(error)
+    })
+  }
+
+  // ── Player: respond to consent request ─────────────────────────────────────
+  function handleConsent(accepted) {
+    if (!socket || !consentPending) return
+    clearInterval(countdownInterval.current)
+    setConsentPending(null)
+    socket.emit('consent_response', { campaignId, accepted }, ({ ok, error }) => {
+      if (error) setChatError(error)
+    })
+  }
+
+  // ── Connection / join status strip ─────────────────────────────────────────
+  function StatusStrip() {
+    if (!connected) return (
+      <div className="flex items-center gap-2 px-4 py-2 text-xs text-codex-muted bg-codex-bg/40 border-b border-codex-border">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-400/60 animate-pulse" />
+        Connecting to campaign chat…
+      </div>
+    )
+    if (!joined) return (
+      <div className="flex items-center gap-2 px-4 py-2 text-xs text-codex-muted bg-codex-bg/40 border-b border-codex-border">
+        <span className="w-1.5 h-1.5 rounded-full bg-codex-gold animate-pulse" />
+        Joining campaign chat…
+      </div>
+    )
     return (
-      <div className="flex items-center gap-2 px-4 py-2.5 text-xs text-codex-muted border-b border-codex-border">
+      <div className="flex items-center gap-2 px-4 py-2 text-xs text-codex-muted border-b border-codex-border">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
         Campaign chat — live
+        {spectatorStatus === 'active' && spectatorCount > 0 && (
+          <span className="ml-auto flex items-center gap-1 text-codex-subtext">
+            <Users size={10} />
+            {spectatorCount} watching
+          </span>
+        )}
       </div>
     )
   }
 
   return (
     <div className="border border-codex-border rounded-xl overflow-hidden bg-codex-surface">
+
       {/* ── Header ── */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-codex-border">
         <MessageSquare size={14} className="text-codex-gold" />
         <h2 className="text-sm font-semibold text-codex-text">Campaign Chat</h2>
+
+        {/* Spectator mode indicator */}
+        {spectatorStatus === 'active' && (
+          <span className="ml-1 flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-400/10 border border-emerald-400/30 rounded-full px-2 py-0.5">
+            <Eye size={9} /> LIVE — Spectators On
+          </span>
+        )}
+        {spectatorStatus === 'pending' && (
+          <span className="ml-1 flex items-center gap-1 text-[10px] font-semibold text-amber-400 bg-amber-400/10 border border-amber-400/30 rounded-full px-2 py-0.5 animate-pulse">
+            Waiting for consent…
+          </span>
+        )}
+
+        {/* GM controls — pushed to the right */}
+        {isGM && joined && (
+          <div className="ml-auto">
+            {spectatorStatus === null && (
+              <button
+                onClick={handleSpectatorRequest}
+                disabled={spectatorAction}
+                className="flex items-center gap-1.5 text-xs text-codex-subtext hover:text-codex-text border border-codex-border hover:border-codex-gold/50 rounded-lg px-2.5 py-1 transition-all disabled:opacity-40"
+                title="Open this session to public spectators (requires player consent)"
+              >
+                <Eye size={11} />
+                Open to Spectators
+              </button>
+            )}
+
+            {spectatorStatus === 'pending' && consentProgress && (
+              <span className="text-xs text-amber-400">
+                {consentProgress.accepted}/{consentProgress.total} consented…
+              </span>
+            )}
+
+            {spectatorStatus === 'active' && (
+              <button
+                onClick={handleSpectatorClose}
+                disabled={spectatorAction}
+                className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/60 rounded-lg px-2.5 py-1 transition-all disabled:opacity-40"
+                title="Close spectator mode — removes session from the public room list"
+              >
+                <EyeOff size={11} />
+                Close Spectators
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Connection / join status ── */}
-      <StatusBanner />
+      <StatusStrip />
+
+      {/* ── Late-join spectator banner (player-only, dismissible) ── */}
+      {lateJoinBanner && !isGM && (
+        <div className="flex items-start justify-between gap-3 px-4 py-2.5 text-xs bg-amber-500/5 border-b border-amber-500/20">
+          <div className="flex items-center gap-2 text-amber-400">
+            <Eye size={11} className="shrink-0 mt-0.5" />
+            <span>
+              This session is currently open to public spectators.
+              You are joining as a participant — your messages are visible to viewers.
+            </span>
+          </div>
+          <button
+            onClick={() => setLateJoinBanner(false)}
+            className="text-codex-muted hover:text-codex-text shrink-0"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
+      {/* ── Player consent modal (rendered inside chat panel) ── */}
+      {consentPending && !isGM && (
+        <div className="px-4 py-4 border-b border-codex-gold/20 bg-codex-gold/5">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-start gap-2">
+              <Eye size={14} className="text-codex-gold shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-codex-text">
+                  {consentPending.gmUsername} wants to open this session to spectators
+                </p>
+                <p className="text-xs text-codex-subtext mt-0.5">
+                  Spectators can read the chat but cannot send messages. Do you consent?
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => handleConsent(true)}
+                className="flex-1 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors"
+              >
+                Allow
+              </button>
+              <button
+                onClick={() => handleConsent(false)}
+                className="flex-1 py-2 rounded-lg border border-codex-border text-codex-subtext hover:text-codex-text hover:border-codex-text text-xs font-semibold transition-colors"
+              >
+                Decline
+              </button>
+              <span className="text-xs text-codex-muted tabular-nums w-8 text-right">
+                {consentCountdown}s
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Message log ── */}
       <div className="h-80 overflow-y-auto px-4 py-3 flex flex-col gap-3 scroll-smooth">
@@ -522,40 +746,24 @@ function CampaignChat({ campaignId }) {
         {messages.map((msg) => {
           const isMine = msg.user_id === user?.id
           return (
-            <div
-              key={msg.id}
-              className={`flex gap-2 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}
-            >
-              {/* Avatar */}
-              <div
-                className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold uppercase select-none
-                  ${isMine
-                    ? 'bg-codex-gold/20 text-codex-gold border border-codex-gold/30'
-                    : 'bg-codex-surface text-codex-subtext border border-codex-border'
-                  }`}
-              >
+            <div key={msg.id} className={`flex gap-2 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
+              <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold uppercase select-none
+                ${isMine
+                  ? 'bg-codex-gold/20 text-codex-gold border border-codex-gold/30'
+                  : 'bg-codex-surface text-codex-subtext border border-codex-border'
+                }`}>
                 {msg.username?.[0] ?? '?'}
               </div>
-
-              {/* Bubble + meta */}
               <div className={`max-w-[72%] flex flex-col gap-0.5 ${isMine ? 'items-end' : 'items-start'}`}>
                 <div className="flex items-baseline gap-1.5">
-                  {!isMine && (
-                    <span className="text-[11px] font-medium text-codex-subtext">
-                      {msg.username}
-                    </span>
-                  )}
-                  <span className="text-[10px] text-codex-muted">
-                    {formatChatTime(msg.created_at)}
-                  </span>
+                  {!isMine && <span className="text-[11px] font-medium text-codex-subtext">{msg.username}</span>}
+                  <span className="text-[10px] text-codex-muted">{formatChatTime(msg.created_at)}</span>
                 </div>
-                <div
-                  className={`px-3 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words
-                    ${isMine
-                      ? 'bg-codex-gold/10 border border-codex-gold/20 text-codex-text rounded-tr-sm'
-                      : 'bg-codex-bg border border-codex-border text-codex-text rounded-tl-sm'
-                    }`}
-                >
+                <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words
+                  ${isMine
+                    ? 'bg-codex-gold/10 border border-codex-gold/20 text-codex-text rounded-tr-sm'
+                    : 'bg-codex-bg border border-codex-border text-codex-text rounded-tl-sm'
+                  }`}>
                   {msg.body}
                 </div>
               </div>
@@ -563,22 +771,21 @@ function CampaignChat({ campaignId }) {
           )
         })}
 
-        {/* Scroll anchor */}
         <div ref={bottomRef} />
       </div>
 
       {/* ── Error banner ── */}
       {chatError && (
-        <div className="mx-4 mb-2 text-xs text-red-400 bg-red-400/5 border border-red-400/20 rounded-lg px-3 py-2">
-          {chatError}
+        <div className="mx-4 mb-2 flex items-center justify-between gap-2 text-xs text-red-400 bg-red-400/5 border border-red-400/20 rounded-lg px-3 py-2">
+          <span>{chatError}</span>
+          <button onClick={() => setChatError('')} className="shrink-0 hover:text-red-300">
+            <X size={11} />
+          </button>
         </div>
       )}
 
       {/* ── Input form ── */}
-      <form
-        onSubmit={handleSend}
-        className="flex items-end gap-2 px-4 py-3 border-t border-codex-border"
-      >
+      <form onSubmit={handleSend} className="flex items-end gap-2 px-4 py-3 border-t border-codex-border">
         <textarea
           ref={inputRef}
           value={input}

@@ -100,6 +100,89 @@ function getRoomCounts() {
   return counts
 }
 
+// ─── Spectator Mode session state ────────────────────────────────────────────
+//
+// Map<campaignId, SpectatorSession>
+//
+// SpectatorSession {
+//   campaignId    : string
+//   campaignName  : string
+//   gmUserId      : string
+//   gmUsername    : string
+//   gmSocketId    : string        — used to emit consent_update directly to GM
+//   status        : 'pending' | 'active'
+//   pendingUserIds: Set<string>   — userIds whose consent is still outstanding
+//   consents      : Map<userId, boolean>   — received responses
+//   totalRequired : number        — original pending count (for progress display)
+//   spectatorCount: number        — live count of watchers
+//   timeoutHandle : Timer
+// }
+const spectatorSessions = new Map()
+const CONSENT_TIMEOUT_MS = 60_000  // 60 seconds
+
+// Returns the public-facing spectator session list for the lobby screen.
+function getSpectatorSessionsForLobby() {
+  return [...spectatorSessions.values()]
+    .filter(s => s.status === 'active')
+    .map(s => ({
+      campaignId:     s.campaignId,
+      campaignName:   s.campaignName,
+      gmUsername:     s.gmUsername,
+      spectatorCount: s.spectatorCount,
+    }))
+}
+
+// Shared activation function — called when all consents arrive OR 0 players online.
+// `io` is captured in closure when createSocketServer is called.
+let _io = null  // set once in createSocketServer
+
+function activateSpectatorMode(campaignId) {
+  const session = spectatorSessions.get(campaignId)
+  if (!session) return
+
+  clearTimeout(session.timeoutHandle)
+  session.status = 'active'
+
+  // Notify campaign room that spectator mode is live
+  _io.to(`campaign:${campaignId}`).emit('spectator_active', {
+    campaignId,
+    campaignName: session.campaignName,
+    gmUsername:   session.gmUsername,
+  })
+
+  // Update the lobby screen (room selection) with the new live session
+  _io.to('lobby').emit('spectator_sessions_update', getSpectatorSessionsForLobby())
+
+  console.log(`[spectator] ACTIVE  campaign=${campaignId} gm=${session.gmUsername}`)
+}
+
+function cancelSpectatorSession(campaignId, reason) {
+  const session = spectatorSessions.get(campaignId)
+  if (!session) return
+
+  clearTimeout(session.timeoutHandle)
+  spectatorSessions.delete(campaignId)
+
+  _io.to(`campaign:${campaignId}`).emit('spectator_cancelled', { campaignId, reason })
+  _io.to('lobby').emit('spectator_sessions_update', getSpectatorSessionsForLobby())
+
+  console.log(`[spectator] CANCEL  campaign=${campaignId} reason="${reason}"`)
+}
+
+function endSpectatorSession(campaignId) {
+  const session = spectatorSessions.get(campaignId)
+  if (!session) return
+
+  clearTimeout(session.timeoutHandle)
+  spectatorSessions.delete(campaignId)
+
+  _io.to(`campaign:${campaignId}`).emit('spectator_ended', { campaignId })
+  _io.to(`spectator:${campaignId}`).emit('spectator_ended', { campaignId })
+  _io.to('lobby').emit('spectator_sessions_update', getSpectatorSessionsForLobby())
+
+  console.log(`[spectator] ENDED   campaign=${campaignId}`)
+}
+
 // ─── createSocketServer ───────────────────────────────────────────────────────
 // Attaches a Socket.io server to an existing Node http.Server instance.
 // Returns the io object (useful for future server-side emits from REST routes).
@@ -110,6 +193,8 @@ function createSocketServer(httpServer) {
       credentials: true,
     },
   })
+
+  _io = io  // expose io to spectator session helpers
 
   // ── Handshake JWT auth middleware ─────────────────────────────────────────
   // Every socket must present a valid JWT in socket.handshake.auth.token.
@@ -170,7 +255,11 @@ function createSocketServer(httpServer) {
           [campaignId]
         )
 
-        callback({ messages: history.rows.reverse() })
+        // Inform late-joining players if spectator mode is already active
+        const session = spectatorSessions.get(campaignId)
+        const spectatorModeActive = session?.status === 'active'
+
+        callback({ messages: history.rows.reverse(), spectatorModeActive })
       } catch (err) {
         console.error('[socket:join_campaign]', err)
         callback({ error: 'Failed to join campaign chat.' })
@@ -218,8 +307,16 @@ function createSocketServer(httpServer) {
 
         const message = result.rows[0]
 
-        // Broadcast to the entire room (including sender — no double-add needed)
+        // Broadcast to the entire campaign room (including sender)
         io.to(`campaign:${campaignId}`).emit('new_message', message)
+
+        // Forward to spectators if a live session is active
+        if (spectatorSessions.get(campaignId)?.status === 'active') {
+          io.to(`spectator:${campaignId}`).emit('room_message', {
+            ...message,
+            created_at: message.created_at.toISOString?.() ?? message.created_at,
+          })
+        }
 
         callback({ ok: true })
       } catch (err) {
@@ -389,7 +486,7 @@ function createSocketServer(httpServer) {
         ...meta,
         count: roomOccupants.get(id)?.size ?? 0,
       }))
-      callback({ rooms: roomList })
+      callback({ rooms: roomList, spectatorSessions: getSpectatorSessionsForLobby() })
     })
 
     // ── leave_lobby ──────────────────────────────────────────────────────────
@@ -498,6 +595,233 @@ function createSocketServer(httpServer) {
       callback({ ok: true })
     })
 
+    // ────────────────────────────────────────────────────────────────────────
+    // ── SPECTATOR MODE EVENTS ────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────
+
+    // ── spectator_request ─────────────────────────────────────────────────────
+    // GM requests to open the campaign table to public spectators.
+    // Finds all campaign members currently in the Socket.io room and starts
+    // a consent round. If no members are online, activates immediately.
+    //
+    // Payload : { campaignId: string }
+    // Callback: { ok: true, totalNeeded: number } | { error: string }
+    socket.on('spectator_request', async ({ campaignId } = {}, callback) => {
+      if (typeof callback !== 'function') return
+
+      if (!campaignId || !UUID_RE.test(campaignId)) {
+        return callback({ error: 'Invalid campaign ID.' })
+      }
+
+      // Only the GM can initiate
+      try {
+        const campResult = await db.query(
+          `SELECT id, name, gm_user_id FROM campaigns
+           WHERE id = $1 AND is_deleted = false LIMIT 1`,
+          [campaignId]
+        )
+        if (!campResult.rows[0]) return callback({ error: 'Campaign not found.' })
+        if (campResult.rows[0].gm_user_id !== socket.userId) {
+          return callback({ error: 'Only the GM can open spectator mode.' })
+        }
+
+        // Reject if a session is already running
+        if (spectatorSessions.has(campaignId)) {
+          return callback({ error: 'Spectator mode is already active for this campaign.' })
+        }
+
+        const campaignName = campResult.rows[0].name
+
+        // Find all online campaign members (exclude the GM's own sockets)
+        const roomSockets = await io.in(`campaign:${campaignId}`).fetchSockets()
+        // Deduplicate by userId — a member with 2 tabs still counts once
+        const onlineUserIds = new Set(
+          roomSockets
+            .filter(s => s.userId !== socket.userId)
+            .map(s => s.userId)
+        )
+
+        const session = {
+          campaignId,
+          campaignName,
+          gmUserId:       socket.userId,
+          gmUsername:     socket.username,
+          gmSocketId:     socket.id,
+          status:         'pending',
+          pendingUserIds: new Set(onlineUserIds),
+          consents:       new Map(),
+          totalRequired:  onlineUserIds.size,
+          spectatorCount: 0,
+          timeoutHandle:  null,
+        }
+
+        if (onlineUserIds.size === 0) {
+          // Nobody online to consent — activate immediately
+          spectatorSessions.set(campaignId, session)
+          activateSpectatorMode(campaignId)
+          return callback({ ok: true, totalNeeded: 0 })
+        }
+
+        // Start timeout BEFORE setting session so cancel works if something blows up
+        session.timeoutHandle = setTimeout(() => {
+          cancelSpectatorSession(campaignId, 'Consent request timed out.')
+        }, CONSENT_TIMEOUT_MS)
+
+        spectatorSessions.set(campaignId, session)
+
+        // Broadcast consent request to online campaign members (not the GM)
+        io.to(`campaign:${campaignId}`).except(socket.id).emit('consent_requested', {
+          campaignId,
+          campaignName,
+          gmUsername:   socket.username,
+          timeoutSecs:  CONSENT_TIMEOUT_MS / 1000,
+        })
+
+        console.log(`[spectator] REQUEST campaign=${campaignId} gm=${socket.username} pending=${onlineUserIds.size}`)
+        callback({ ok: true, totalNeeded: onlineUserIds.size })
+      } catch (err) {
+        console.error('[socket:spectator_request]', err)
+        callback({ error: 'Failed to initiate spectator mode.' })
+      }
+    })
+
+    // ── consent_response ──────────────────────────────────────────────────────
+    // A campaign member responds to the GM's spectator mode request.
+    //
+    // Payload : { campaignId: string, accepted: boolean }
+    // Callback: { ok: true } | { error: string }
+    socket.on('consent_response', ({ campaignId, accepted } = {}, callback) => {
+      if (typeof callback !== 'function') return
+
+      if (!campaignId || !UUID_RE.test(campaignId)) {
+        return callback({ error: 'Invalid campaign ID.' })
+      }
+
+      const session = spectatorSessions.get(campaignId)
+      if (!session || session.status !== 'pending') {
+        return callback({ error: 'No active consent request for this campaign.' })
+      }
+
+      // Only players who were online when the request was made need to respond
+      if (!session.pendingUserIds.has(socket.userId)) {
+        return callback({ error: 'You are not part of this consent request.' })
+      }
+
+      session.pendingUserIds.delete(socket.userId)
+      session.consents.set(socket.userId, accepted)
+
+      if (!accepted) {
+        cancelSpectatorSession(campaignId, `${socket.username} declined.`)
+        return callback({ ok: true })
+      }
+
+      // Update GM with consent progress
+      const acceptedCount = [...session.consents.values()].filter(Boolean).length
+      io.to(session.gmSocketId).emit('consent_update', {
+        campaignId,
+        accepted: acceptedCount,
+        total:    session.totalRequired,
+      })
+
+      // All required consents received → activate
+      if (session.pendingUserIds.size === 0) {
+        activateSpectatorMode(campaignId)
+      }
+
+      callback({ ok: true })
+    })
+
+    // ── spectator_close ───────────────────────────────────────────────────────
+    // GM ends spectator mode. Notifies both the campaign room and the spectator
+    // room, then removes the session from the lobby.
+    //
+    // Payload : { campaignId: string }
+    // Callback: { ok: true } | { error: string }
+    socket.on('spectator_close', ({ campaignId } = {}, callback) => {
+      if (typeof callback !== 'function') return
+
+      if (!campaignId || !UUID_RE.test(campaignId)) {
+        return callback({ error: 'Invalid campaign ID.' })
+      }
+
+      const session = spectatorSessions.get(campaignId)
+      if (!session) return callback({ error: 'No active spectator session.' })
+      if (session.gmUserId !== socket.userId) {
+        return callback({ error: 'Only the GM can close spectator mode.' })
+      }
+
+      endSpectatorSession(campaignId)
+      callback({ ok: true })
+    })
+
+    // ── join_spectator ────────────────────────────────────────────────────────
+    // A public user joins a live spectator session to watch the campaign chat.
+    // Validates that the session is active, then adds them to the spectator room.
+    //
+    // Payload : { campaignId: string }
+    // Callback: { campaignName: string, gmUsername: string } | { error: string }
+    socket.on('join_spectator', ({ campaignId } = {}, callback) => {
+      if (typeof callback !== 'function') return
+
+      if (!campaignId || !UUID_RE.test(campaignId)) {
+        return callback({ error: 'Invalid campaign ID.' })
+      }
+
+      const session = spectatorSessions.get(campaignId)
+      if (!session || session.status !== 'active') {
+        return callback({ error: 'This session is no longer live.' })
+      }
+
+      // Leave any previous spectator room
+      if (socket.currentSpectatorCampaignId && socket.currentSpectatorCampaignId !== campaignId) {
+        const prev = socket.currentSpectatorCampaignId
+        socket.leave(`spectator:${prev}`)
+        const prevSession = spectatorSessions.get(prev)
+        if (prevSession) {
+          prevSession.spectatorCount = Math.max(0, prevSession.spectatorCount - 1)
+          io.to(`campaign:${prev}`).emit('spectator_count_update', { campaignId: prev, count: prevSession.spectatorCount })
+          io.to('lobby').emit('spectator_sessions_update', getSpectatorSessionsForLobby())
+        }
+      }
+
+      socket.join(`spectator:${campaignId}`)
+      socket.currentSpectatorCampaignId = campaignId
+
+      session.spectatorCount++
+      io.to(`campaign:${campaignId}`).emit('spectator_count_update', {
+        campaignId,
+        count: session.spectatorCount,
+      })
+      io.to('lobby').emit('spectator_sessions_update', getSpectatorSessionsForLobby())
+
+      callback({
+        campaignName: session.campaignName,
+        gmUsername:   session.gmUsername,
+      })
+    })
+
+    // ── leave_spectator ───────────────────────────────────────────────────────
+    // Public user leaves a spectator session.
+    //
+    // Payload: { campaignId: string }
+    socket.on('leave_spectator', ({ campaignId } = {}) => {
+      if (!campaignId || !UUID_RE.test(campaignId)) return
+      if (socket.currentSpectatorCampaignId !== campaignId) return
+
+      socket.leave(`spectator:${campaignId}`)
+      socket.currentSpectatorCampaignId = null
+
+      const session = spectatorSessions.get(campaignId)
+      if (session) {
+        session.spectatorCount = Math.max(0, session.spectatorCount - 1)
+        io.to(`campaign:${campaignId}`).emit('spectator_count_update', {
+          campaignId,
+          count: session.spectatorCount,
+        })
+        io.to('lobby').emit('spectator_sessions_update', getSpectatorSessionsForLobby())
+      }
+    })
+
     // ── disconnect ────────────────────────────────────────────────────────────
     socket.on('disconnect', () => {
       console.log(`[socket] - uid=${socket.userId} (${socket.username})`)
@@ -505,6 +829,31 @@ function createSocketServer(httpServer) {
       // Clean up presence from any public room
       if (socket.currentPublicRoomId) {
         leavePublicRoom(socket.currentPublicRoomId)
+      }
+
+      // If this socket was a spectator, decrement spectator count
+      if (socket.currentSpectatorCampaignId) {
+        const session = spectatorSessions.get(socket.currentSpectatorCampaignId)
+        if (session) {
+          session.spectatorCount = Math.max(0, session.spectatorCount - 1)
+          io.to(`campaign:${socket.currentSpectatorCampaignId}`).emit('spectator_count_update', {
+            campaignId: socket.currentSpectatorCampaignId,
+            count:      session.spectatorCount,
+          })
+          io.to('lobby').emit('spectator_sessions_update', getSpectatorSessionsForLobby())
+        }
+      }
+
+      // If the GM disconnects, cancel any pending request or end any active session
+      for (const [campaignId, session] of spectatorSessions) {
+        if (session.gmUserId === socket.userId) {
+          if (session.status === 'pending') {
+            cancelSpectatorSession(campaignId, 'GM disconnected.')
+          } else if (session.status === 'active') {
+            endSpectatorSession(campaignId)
+          }
+          break  // A GM can only run one spectator session at a time
+        }
       }
     })
   })
