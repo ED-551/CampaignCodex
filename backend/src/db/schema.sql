@@ -100,6 +100,10 @@ CREATE INDEX IF NOT EXISTS idx_campaign_members_user ON campaign_members(user_id
 CREATE INDEX IF NOT EXISTS idx_campaigns_gm          ON campaigns(gm_user_id);
 CREATE INDEX IF NOT EXISTS idx_campaigns_join_code   ON campaigns(join_code);
 CREATE INDEX IF NOT EXISTS idx_prt_user              ON password_reset_tokens(user_id);
+-- Partial index: only rows where newsletter is opted in (used by admin broadcast query)
+CREATE INDEX IF NOT EXISTS idx_users_newsletter_optin
+  ON users(created_at ASC)
+  WHERE newsletter_opt_in = true AND is_admin = false;
 
 -- ─── AUTO-UPDATE updated_at ───────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION update_updated_at()

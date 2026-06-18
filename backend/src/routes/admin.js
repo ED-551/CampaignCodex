@@ -1,6 +1,7 @@
 const express = require('express')
 const db      = require('../db')
-const { requireAdmin } = require('../middleware/adminAuth')
+const { requireAdmin }       = require('../middleware/adminAuth')
+const { sendBroadcastEmail } = require('../utils/email')
 
 const router = express.Router()
 
@@ -15,6 +16,7 @@ router.get('/stats', async (req, res) => {
       activeCampaigns,
       totalCharacters,
       totalSupporters,
+      newsletterSubscribers,
       supportersByTier,
       charactersBySystem,
       campaignsBySystem,
@@ -30,6 +32,9 @@ router.get('/stats', async (req, res) => {
 
       db.query(`SELECT COUNT(*) AS count FROM users
                 WHERE supporter_tier != 'free' AND is_admin = false`),
+
+      db.query(`SELECT COUNT(*) AS count FROM users
+                WHERE newsletter_opt_in = true AND is_admin = false`),
 
       db.query(`SELECT supporter_tier AS tier, COUNT(*) AS count
                 FROM users WHERE supporter_tier != 'free' AND is_admin = false
@@ -61,13 +66,14 @@ router.get('/stats', async (req, res) => {
 
     res.json({
       stats: {
-        totalUsers:         parseInt(totalUsers.rows[0].count),
-        activeCampaigns:    parseInt(activeCampaigns.rows[0].count),
-        totalCharacters:    parseInt(totalCharacters.rows[0].count),
-        totalSupporters:    parseInt(totalSupporters.rows[0].count),
-        supportersByTier:   supportersByTier.rows,
-        charactersBySystem: charactersBySystem.rows,
-        campaignsBySystem:  campaignsBySystem.rows,
+        totalUsers:             parseInt(totalUsers.rows[0].count),
+        activeCampaigns:        parseInt(activeCampaigns.rows[0].count),
+        totalCharacters:        parseInt(totalCharacters.rows[0].count),
+        totalSupporters:        parseInt(totalSupporters.rows[0].count),
+        newsletterSubscribers:  parseInt(newsletterSubscribers.rows[0].count),
+        supportersByTier:       supportersByTier.rows,
+        charactersBySystem:     charactersBySystem.rows,
+        campaignsBySystem:      campaignsBySystem.rows,
       },
       recentUsers:     recentUsers.rows,
       recentCampaigns: recentCampaigns.rows,
@@ -118,6 +124,60 @@ router.get('/users', async (req, res) => {
   } catch (err) {
     console.error('[admin/users]', err)
     res.status(500).json({ error: 'Failed to fetch users.' })
+  }
+})
+
+// ─── POST /api/admin/broadcast-email ─────────────────────────────────────────
+// Send a newsletter to all opted-in users via Resend.
+// Requires { subject, body, confirm: true } in request body.
+// `confirm: true` is a mandatory safety gate against accidental API calls.
+router.post('/broadcast-email', async (req, res) => {
+  const { subject, body, confirm } = req.body
+
+  if (!confirm) {
+    return res.status(400).json({ error: 'Send not confirmed. Set confirm: true to proceed.' })
+  }
+
+  const subjectStr = (subject || '').trim()
+  const bodyStr    = (body    || '').trim()
+
+  if (!subjectStr)             return res.status(400).json({ error: 'Subject is required.' })
+  if (subjectStr.length > 200) return res.status(400).json({ error: 'Subject must be 200 characters or fewer.' })
+  if (!bodyStr)                return res.status(400).json({ error: 'Message body is required.' })
+  if (bodyStr.length > 5000)   return res.status(400).json({ error: 'Message body must be 5,000 characters or fewer.' })
+
+  try {
+    const result = await db.query(
+      `SELECT username, email FROM users
+       WHERE newsletter_opt_in = true AND is_admin = false
+       ORDER BY created_at ASC`
+    )
+    const recipients = result.rows
+
+    if (recipients.length === 0) {
+      return res.json({
+        sent: 0, failed: 0, total: 0, stub: false,
+        message: 'No users have opted in to the newsletter.',
+      })
+    }
+
+    const stats = await sendBroadcastEmail(recipients, subjectStr, bodyStr)
+
+    console.log(
+      `[admin/broadcast] Admin: "${req.user?.username ?? 'unknown'}" | ` +
+      `Subject: "${subjectStr}" | Sent: ${stats.sent} | Failed: ${stats.failed}`
+    )
+
+    res.json({
+      ...stats,
+      total: recipients.length,
+      message: stats.stub
+        ? `Stubbed to console (no RESEND_API_KEY). Would have reached ${recipients.length} subscriber(s).`
+        : `Broadcast complete — ${stats.sent} delivered, ${stats.failed} failed.`,
+    })
+  } catch (err) {
+    console.error('[admin/broadcast]', err)
+    res.status(500).json({ error: 'Broadcast failed. Check server logs.' })
   }
 })
 
