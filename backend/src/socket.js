@@ -200,15 +200,23 @@ function createSocketServer(httpServer) {
   // Every socket must present a valid JWT in socket.handshake.auth.token.
   // This runs before connection is established — no socket event is possible
   // for an unauthenticated caller.
-  io.use((socket, next) => {
+  // Also verifies token_version so a password-change invalidates open sockets
+  // at the next reconnect (Socket.io reconnects automatically on error).
+  io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token
-    if (!token) {
-      return next(new Error('AUTH_REQUIRED'))
-    }
+    if (!token) return next(new Error('AUTH_REQUIRED'))
     try {
-      const payload     = verifyToken(token)
-      socket.userId     = payload.sub
-      socket.username   = payload.username
+      const payload = verifyToken(token)
+      const result  = await db.query(
+        'SELECT token_version FROM users WHERE id = $1 LIMIT 1',
+        [payload.sub]
+      )
+      const row = result.rows[0]
+      if (!row || row.token_version !== (payload.tv ?? 1)) {
+        return next(new Error('AUTH_INVALID'))
+      }
+      socket.userId   = payload.sub
+      socket.username = payload.username
       next()
     } catch {
       next(new Error('AUTH_INVALID'))

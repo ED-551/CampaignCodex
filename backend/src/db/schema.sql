@@ -27,9 +27,11 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at        TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- Safe migration for existing installations (no-op on fresh schema)
+-- Safe migrations for existing installations (no-op on fresh schema)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS newsletter_opt_in BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP;
+-- Token version: incremented on password change/reset to immediately invalidate prior JWTs
+ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 1;
 
 -- ─── PASSWORD RESET TOKENS ───────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS password_reset_tokens (

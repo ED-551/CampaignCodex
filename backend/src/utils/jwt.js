@@ -9,6 +9,9 @@ if (!SECRET) {
 
 /**
  * Sign a JWT for a given user row.
+ * `tv` (token version) is embedded so requireAuth can detect stale tokens
+ * that pre-date a password change or account reset without touching the DB
+ * on every verify — the DB check happens in requireAuth after signature verify.
  */
 function signToken(user) {
   return jwt.sign(
@@ -17,6 +20,7 @@ function signToken(user) {
       username: user.username,
       isAdmin:  user.is_admin,
       tier:     user.supporter_tier,
+      tv:       user.token_version ?? 1,
     },
     SECRET,
     { expiresIn: EXPIRES_IN }

@@ -94,7 +94,7 @@ router.post('/signup', authLimiter, [
           newsletter_opt_in, terms_accepted_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
        RETURNING id, username, email, first_name, last_name,
-                 supporter_tier, is_admin, newsletter_opt_in, created_at`,
+                 supporter_tier, is_admin, newsletter_opt_in, token_version, created_at`,
       [username, email, firstName, lastName, middleInitial || null,
        passwordHash, question1, a1Hash, question2, a2Hash,
        newsletterOptIn === true || newsletterOptIn === 'true']
@@ -122,7 +122,7 @@ router.post('/login', authLimiter, [
   try {
     const result = await db.query(
       `SELECT id, username, email, first_name, last_name,
-              password_hash, supporter_tier, is_admin, created_at
+              password_hash, supporter_tier, is_admin, token_version, created_at
        FROM users WHERE username = $1 LIMIT 1`,
       [username]
     )
@@ -243,7 +243,11 @@ router.patch('/change-password', requireAuth, [
     if (!valid) return res.status(401).json({ error: 'Current password is incorrect.' })
 
     const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS)
-    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, user.id])
+    // Bump token_version to immediately invalidate all previously issued JWTs
+    await db.query(
+      'UPDATE users SET password_hash = $1, token_version = token_version + 1 WHERE id = $2',
+      [newHash, user.id]
+    )
 
     res.json({ message: 'Password updated successfully.' })
   } catch (err) {
@@ -378,8 +382,17 @@ router.post('/forgot-password/reset', authLimiter, [
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS)
 
-    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, tokenRow.user_id])
-    await db.query('UPDATE password_reset_tokens SET used = true WHERE id = $1', [tokenRow.id])
+    // Bump token_version alongside the hash — invalidates all prior sessions
+    await Promise.all([
+      db.query(
+        'UPDATE users SET password_hash = $1, token_version = token_version + 1 WHERE id = $2',
+        [passwordHash, tokenRow.user_id]
+      ),
+      db.query(
+        'UPDATE password_reset_tokens SET used = true WHERE id = $1',
+        [tokenRow.id]
+      ),
+    ])
 
     res.json({ message: 'Password updated successfully.' })
   } catch (err) {
@@ -389,23 +402,15 @@ router.post('/forgot-password/reset', authLimiter, [
 })
 
 // ─── GET /api/auth/security-questions ─────────────────────────────────────────
-// Returns the security question labels for a given username (for the recovery UI)
-router.get('/security-questions/:username', authLimiter, async (req, res) => {
-  try {
-    const result = await db.query(
-      'SELECT security_q1, security_q2 FROM users WHERE username = $1 LIMIT 1',
-      [req.params.username]
-    )
-    // Always return 200 with placeholder questions to avoid username enumeration
-    const user = result.rows[0]
-    res.json({
-      question1: user ? user.security_q1 : 'What was the name of your first pet?',
-      question2: user ? user.security_q2 : 'What city were you born in?',
-    })
-  } catch (err) {
-    console.error('[security-questions]', err)
-    res.status(500).json({ error: 'An error occurred.' })
-  }
+// Always returns static placeholder question text — never real question labels.
+// Returning a user's actual questions leaks username existence: an attacker who
+// sees questions different from the placeholders knows the account is real.
+// The recovery UI now prompts users to recall their own questions instead.
+router.get('/security-questions/:username', authLimiter, (req, res) => {
+  res.json({
+    question1: 'What was the name of your first pet?',
+    question2: 'What city were you born in?',
+  })
 })
 
 // ─── DELETE /api/auth/account ─────────────────────────────────────────────────

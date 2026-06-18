@@ -21,11 +21,6 @@ export default function ForgotPassword() {
   const [step,           setStep]           = useState(STEPS.CHOOSE)
   const [recoveryMethod, setRecoveryMethod] = useState(null)   // 'email' | 'questions'
   const [username,       setUsername]       = useState('')
-  const [questions,      setQuestions]      = useState([
-    'What was the name of your first pet?',
-    'What city were you born in?',
-  ])
-  const [questionsFetching, setQuestionsFetching] = useState(false)
   const [answer1,  setAnswer1]  = useState('')
   const [answer2,  setAnswer2]  = useState('')
   const [resetToken, setResetToken] = useState('')
@@ -33,24 +28,6 @@ export default function ForgotPassword() {
   const [confirmPass, setConfirmPass] = useState('')
   const [error,    setError]    = useState('')
   const [loading,  setLoading]  = useState(false)
-
-  // ── Fetch the user's actual security question labels ──────────────────────────
-  // Called when the username field blurs on the questions step.
-  // The backend always returns something (even for nonexistent users) to prevent
-  // username enumeration — so this is safe to call without revealing existence.
-  async function fetchQuestions(un) {
-    const trimmed = un.trim()
-    if (!trimmed) return
-    setQuestionsFetching(true)
-    try {
-      const { question1, question2 } = await api.get(`/auth/security-questions/${encodeURIComponent(trimmed)}`)
-      setQuestions([question1, question2])
-    } catch {
-      // Non-critical — keep default labels if fetch fails
-    } finally {
-      setQuestionsFetching(false)
-    }
-  }
 
   // ── Email recovery ────────────────────────────────────────────────────────────
   async function handleEmailSubmit(e) {
@@ -167,31 +144,30 @@ export default function ForgotPassword() {
           id="fq-username" label="Username"
           value={username}
           onChange={e => setUsername(e.target.value)}
-          onBlur={e  => fetchQuestions(e.target.value)}
           placeholder="Your username"
           required
         />
-        {questionsFetching && (
-          <p className="text-xs text-codex-muted animate-pulse -mt-2">Loading your questions…</p>
-        )}
+        <p className="text-xs text-codex-muted -mt-2 leading-relaxed">
+          Enter the answers to the two security questions you chose when you signed up.
+        </p>
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-codex-text">{questions[0]}</label>
+          <label className="text-sm font-medium text-codex-text">Security Question 1</label>
           <input
             type="text"
             value={answer1}
             onChange={e => setAnswer1(e.target.value)}
-            placeholder="Your answer"
+            placeholder="Your answer to question 1"
             autoComplete="off"
             className={INPUT_CLASS}
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-codex-text">{questions[1]}</label>
+          <label className="text-sm font-medium text-codex-text">Security Question 2</label>
           <input
             type="text"
             value={answer2}
             onChange={e => setAnswer2(e.target.value)}
-            placeholder="Your answer"
+            placeholder="Your answer to question 2"
             autoComplete="off"
             className={INPUT_CLASS}
           />
