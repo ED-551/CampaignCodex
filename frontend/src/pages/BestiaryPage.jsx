@@ -4,13 +4,15 @@
  * Lists a user's custom monsters for one game system. Supports creating,
  * editing, and deleting monsters.
  *
- * Shadowdark: full-page stat block builder (ShadowdarkMonsterForm)
- * Mörk Borg / Nimble: lightweight modal (stat block forms deferred)
+ * Full-page stat block builders:
+ *   Shadowdark : ShadowdarkMonsterForm (amber theme)
+ *   Mörk Borg  : MorkborgMonsterForm   (near-black + yellow theme)
+ *   Nimble RPG : NimbleMonsterForm      (emerald theme, tier selection)
  *
  * Card display per system:
  *   Shadowdark : "Lv. 3" — numeric challenge gets the prefix; free text shown as-is
- *   Mörk Borg  : challenge shown as-is (e.g. "2d8 HD")
- *   Nimble RPG : challenge shown as-is (e.g. "Tier 2")
+ *   Mörk Borg  : "HP 12" — numeric challenge gets the prefix; free text shown as-is
+ *   Nimble RPG : "Lv. 3" — numeric challenge gets the prefix; free text shown as-is
  */
 
 import { useState, useEffect, useCallback } from 'react'
@@ -19,6 +21,7 @@ import { ArrowLeft, BookOpen, Plus, Trash2, X, Pencil } from 'lucide-react'
 import { api }                               from '../utils/api'
 import ShadowdarkMonsterForm                 from '../components/bestiary/ShadowdarkMonsterForm'
 import MorkborgMonsterForm                   from '../components/bestiary/MorkborgMonsterForm'
+import NimbleMonsterForm                     from '../components/bestiary/NimbleMonsterForm'
 
 // ─── System metadata ──────────────────────────────────────────────────────────
 
@@ -52,15 +55,16 @@ const SYSTEM_META = {
     color:                'text-emerald-400',
     badgeClass:           'text-emerald-400 bg-emerald-400/10 border-emerald-400/30',
     cardBorder:           'hover:border-emerald-400/40',
-    challengeLabel:       'Tier / Difficulty',
-    challengePlaceholder: 'e.g. Tier 2',
+    challengeLabel:       'Level',
+    challengePlaceholder: 'e.g. 3',
     tagsPlaceholder:      'e.g. Beast, Aerial',
-    formatChallenge: c => c || null,
+    // challenge stores the level string; prefix numeric values for display
+    formatChallenge: c => c ? (/^\d+$/.test(c.trim()) ? `Lv. ${c.trim()}` : c) : null,
   },
 }
 
 // Systems that have a full-page stat block form (vs the lightweight modal)
-const FULL_FORM_SYSTEMS = ['shadowdark', 'morkborg']
+const FULL_FORM_SYSTEMS = ['shadowdark', 'morkborg', 'nimble']
 
 const INPUT = `w-full bg-codex-surface border border-codex-border rounded-lg px-4 py-2.5
   text-codex-text placeholder-codex-muted text-sm
@@ -175,6 +179,12 @@ export default function BestiaryPage() {
   if (system === 'morkborg' && formView) {
     return (
       <MorkborgMonsterForm existing={formTarget} onBack={formBack} onSaved={handleSaved} />
+    )
+  }
+
+  if (system === 'nimble' && formView) {
+    return (
+      <NimbleMonsterForm existing={formTarget} onBack={formBack} onSaved={handleSaved} />
     )
   }
 
@@ -305,9 +315,11 @@ function MonsterCard({ monster, meta, system, onEdit, onDelete }) {
   // Stat block summary from JSONB — per system
   const sd = monster.stat_data ?? {}
   const hasStatBlock = system === 'shadowdark'
-    ? (sd.ac || sd.hp || sd.level != null)
+    ? Boolean(sd.ac || sd.hp || sd.level != null)
     : system === 'morkborg'
-    ? (sd.hp || sd.morale || sd.armor)
+    ? Boolean(sd.hp || sd.morale || sd.armor)
+    : system === 'nimble'
+    ? Boolean(sd.hp || sd.level)
     : false
 
   return (
@@ -389,6 +401,23 @@ function MonsterCard({ monster, meta, system, onEdit, onDelete }) {
               {sd.armor           && <StatPip label="Armor"  value={sd.armor} />}
               {sd.attacks?.length > 0 && (
                 <StatPip label="ATK" value={`${sd.attacks.length}×`} />
+              )}
+            </>}
+            {/* Nimble RPG */}
+            {system === 'nimble' && <>
+              {sd.level           && <StatPip label="LV"    value={sd.level} />}
+              {sd.hp     != null  && <StatPip label="HP"    value={sd.hp} />}
+              {sd.armor && sd.armor !== 'none' && (
+                <StatPip label="Armor" value={sd.armor === 'heavy' ? 'Heavy' : 'Medium'} />
+              )}
+              {sd.monsterTier === 'entry' && sd.attacks?.length > 0 && (
+                <StatPip label="ATK" value={`${sd.attacks.length}×`} />
+              )}
+              {sd.monsterTier === 'legendary' && (
+                <StatPip label="Type" value="Legendary" />
+              )}
+              {sd.monsterTier === 'legendary' && sd.actions?.length > 0 && (
+                <StatPip label="Actions" value={sd.actions.length} />
               )}
             </>}
           </div>
