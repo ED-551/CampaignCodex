@@ -148,26 +148,27 @@ export default function ForgotPassword() {
           required
         />
         <p className="text-xs text-codex-muted -mt-2 leading-relaxed">
-          Enter the answers to the two security questions you chose when you signed up.
+          Enter the answers to the two security questions you set during sign-up —
+          whether you chose from the list or wrote your own. Answers are not case-sensitive.
         </p>
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-codex-text">Security Question 1</label>
+          <label className="text-sm font-medium text-codex-text">Answer to Security Question 1</label>
           <input
             type="text"
             value={answer1}
             onChange={e => setAnswer1(e.target.value)}
-            placeholder="Your answer to question 1"
+            placeholder="Your answer"
             autoComplete="off"
             className={INPUT_CLASS}
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-codex-text">Security Question 2</label>
+          <label className="text-sm font-medium text-codex-text">Answer to Security Question 2</label>
           <input
             type="text"
             value={answer2}
             onChange={e => setAnswer2(e.target.value)}
-            placeholder="Your answer to question 2"
+            placeholder="Your answer"
             autoComplete="off"
             className={INPUT_CLASS}
           />

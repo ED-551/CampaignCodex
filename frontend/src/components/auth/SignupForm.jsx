@@ -5,7 +5,10 @@ import Input from '../ui/Input'
 import PasswordInput from '../ui/PasswordInput'
 import { ExternalLink } from 'lucide-react'
 
-const SECURITY_QUESTIONS = [
+// Sentinel value used when the user chooses to write their own question
+const CUSTOM_Q = '__custom__'
+
+const STOCK_QUESTIONS = [
   'What was the name of your first pet?',
   "What is your mother's maiden name?",
   'What city were you born in?',
@@ -14,6 +17,8 @@ const SECURITY_QUESTIONS = [
   'What is the name of your favorite childhood friend?',
   'What street did you grow up on?',
   'What was your childhood nickname?',
+  'What was the name of your first TTRPG character?',
+  'What is the name of the town where you had your first job?',
 ]
 
 const SELECT_CLASS = `w-full bg-codex-surface border border-codex-border rounded-lg px-4 py-2.5 text-codex-text text-sm focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/30 transition-colors duration-150 cursor-pointer`
@@ -25,8 +30,9 @@ export default function SignupForm() {
   const [form, setForm] = useState({
     username: '', email: '', firstName: '', lastName: '', middleInitial: '',
     password: '', confirmPassword: '',
-    question1: SECURITY_QUESTIONS[0], answer1: '',
-    question2: SECURITY_QUESTIONS[1], answer2: '',
+    // question fields hold either a stock string or CUSTOM_Q sentinel
+    question1: STOCK_QUESTIONS[0], customQuestion1: '', answer1: '',
+    question2: STOCK_QUESTIONS[1], customQuestion2: '', answer2: '',
     agreedToTerms:  false,
     newsletterOptIn: false,
   })
@@ -38,9 +44,16 @@ export default function SignupForm() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
-    if (!form.agreedToTerms)                     { setError('You must read and accept the Terms & Conditions to create an account.'); return }
-    if (form.password !== form.confirmPassword)   { setError('Passwords do not match.'); return }
-    if (form.question1 === form.question2)         { setError('Please choose two different security questions.'); return }
+    if (!form.agreedToTerms)                   { setError('You must read and accept the Terms & Conditions to create an account.'); return }
+    if (form.password !== form.confirmPassword) { setError('Passwords do not match.'); return }
+
+    // Resolve actual question text (custom or stock)
+    const q1 = form.question1 === CUSTOM_Q ? form.customQuestion1.trim() : form.question1
+    const q2 = form.question2 === CUSTOM_Q ? form.customQuestion2.trim() : form.question2
+
+    if (!q1) { setError('Please enter your first security question.'); return }
+    if (!q2) { setError('Please enter your second security question.'); return }
+    if (q1 === q2) { setError('Please choose two different security questions.'); return }
 
     setLoading(true)
     try {
@@ -52,9 +65,9 @@ export default function SignupForm() {
         middleInitial:   form.middleInitial.trim() || undefined,
         password:        form.password,
         confirmPassword: form.confirmPassword,
-        question1:       form.question1,
+        question1:       q1,
         answer1:         form.answer1.trim(),
-        question2:       form.question2,
+        question2:       q2,
         answer2:         form.answer2.trim(),
         agreedToTerms:   form.agreedToTerms,
         newsletterOptIn: form.newsletterOptIn,
@@ -99,17 +112,46 @@ export default function SignupForm() {
 
       {/* Security Questions */}
       <div className="border-t border-codex-border pt-4 flex flex-col gap-4">
-        <p className="text-xs text-codex-subtext -mb-1">Choose two security questions for password recovery.</p>
-        {[1, 2].map(n => (
-          <div key={n} className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-codex-text">Security Question {n}</label>
-            <select value={form[`question${n}`]} onChange={set(`question${n}`)} className={SELECT_CLASS}>
-              {SECURITY_QUESTIONS.map(q => <option key={q} value={q}>{q}</option>)}
-            </select>
-            <input type="text" value={form[`answer${n}`]} onChange={set(`answer${n}`)}
-              placeholder="Your answer" className={INPUT_CLASS} />
-          </div>
-        ))}
+        <div className="-mb-1">
+          <p className="text-xs text-codex-subtext">
+            Choose two security questions for password recovery. Pick from the list or write your own —
+            a question only you would know the answer to is the strongest choice.
+          </p>
+        </div>
+        {[1, 2].map(n => {
+          const qKey       = `question${n}`
+          const cKey       = `customQuestion${n}`
+          const aKey       = `answer${n}`
+          const isCustom   = form[qKey] === CUSTOM_Q
+          return (
+            <div key={n} className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-codex-text">Security Question {n}</label>
+              <select value={form[qKey]} onChange={set(qKey)} className={SELECT_CLASS}>
+                {STOCK_QUESTIONS.map(q => <option key={q} value={q}>{q}</option>)}
+                <option value={CUSTOM_Q}>✏️ Write my own question…</option>
+              </select>
+              {isCustom && (
+                <input
+                  type="text"
+                  value={form[cKey]}
+                  onChange={set(cKey)}
+                  placeholder="Type your own security question"
+                  maxLength={200}
+                  className={INPUT_CLASS}
+                  autoFocus
+                />
+              )}
+              <input
+                type="text"
+                value={form[aKey]}
+                onChange={set(aKey)}
+                placeholder={isCustom ? 'Your answer to that question' : 'Your answer'}
+                autoComplete="off"
+                className={INPUT_CLASS}
+              />
+            </div>
+          )
+        })}
       </div>
 
       {/* Legal & newsletter */}
