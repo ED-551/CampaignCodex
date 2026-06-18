@@ -4,7 +4,7 @@ const crypto   = require('crypto')
 const { body, validationResult } = require('express-validator')
 const db       = require('../db')
 const { signToken }              = require('../utils/jwt')
-const { sendPasswordResetEmail } = require('../utils/email')
+const { sendPasswordResetEmail, sendUsernameReminderEmail } = require('../utils/email')
 const { authLimiter }            = require('../middleware/rateLimiter')
 const { requireAuth }            = require('../middleware/auth')
 
@@ -52,24 +52,14 @@ router.post('/signup', authLimiter, [
   body('confirmPassword')
     .custom((val, { req }) => val === req.body.password)
     .withMessage('Passwords do not match.'),
-  body('question1').trim().notEmpty().withMessage('Security question 1 is required.'),
-  body('answer1').trim().notEmpty().withMessage('Security answer 1 is required.'),
-  body('question2').trim().notEmpty().withMessage('Security question 2 is required.'),
-  body('answer2').trim().notEmpty().withMessage('Security answer 2 is required.'),
   body('agreedToTerms')
     .custom(val => val === true || val === 'true')
     .withMessage('You must accept the Terms & Conditions to create an account.'),
-  body().custom((_, { req }) => {
-    if (req.body.question1 === req.body.question2)
-      throw new Error('Please choose two different security questions.')
-    return true
-  }),
 ], async (req, res) => {
   if (validationErrors(req, res)) return
 
   const { username, email, firstName, lastName, middleInitial,
-          password, question1, answer1, question2, answer2,
-          newsletterOptIn } = req.body
+          password, newsletterOptIn } = req.body
 
   try {
     // Check uniqueness
@@ -81,22 +71,17 @@ router.post('/signup', authLimiter, [
       return res.status(409).json({ error: 'Username or email is already taken.' })
     }
 
-    const [passwordHash, a1Hash, a2Hash] = await Promise.all([
-      bcrypt.hash(password, SALT_ROUNDS),
-      bcrypt.hash(answer1.toLowerCase().trim(), SALT_ROUNDS),
-      bcrypt.hash(answer2.toLowerCase().trim(), SALT_ROUNDS),
-    ])
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS)
 
     const result = await db.query(
       `INSERT INTO users
          (username, email, first_name, last_name, middle_initial,
-          password_hash, security_q1, security_a1_hash, security_q2, security_a2_hash,
-          newsletter_opt_in, terms_accepted_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
+          password_hash, newsletter_opt_in, terms_accepted_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
        RETURNING id, username, email, first_name, last_name,
                  supporter_tier, is_admin, newsletter_opt_in, token_version, created_at`,
       [username, email, firstName, lastName, middleInitial || null,
-       passwordHash, question1, a1Hash, question2, a2Hash,
+       passwordHash,
        newsletterOptIn === true || newsletterOptIn === 'true']
     )
 
@@ -252,6 +237,34 @@ router.patch('/change-password', requireAuth, [
     res.json({ message: 'Password updated successfully.' })
   } catch (err) {
     console.error('[change-password]', err)
+    res.status(500).json({ error: 'An error occurred. Please try again.' })
+  }
+})
+
+// ─── POST /api/auth/forgot-username ──────────────────────────────────────────
+// Looks up the username by email and sends a reminder.
+// Always returns 200 — never reveals whether the email is registered.
+router.post('/forgot-username', authLimiter, [
+  body('email')
+    .trim().normalizeEmail()
+    .isEmail().withMessage('Please enter a valid email address.'),
+], async (req, res) => {
+  if (validationErrors(req, res)) return
+
+  try {
+    const result = await db.query(
+      'SELECT username FROM users WHERE email = $1 AND is_admin = false LIMIT 1',
+      [req.body.email]
+    )
+
+    if (result.rows[0]) {
+      await sendUsernameReminderEmail(req.body.email, result.rows[0].username)
+    }
+
+    // Always identical response — caller cannot infer whether email was found
+    res.json({ message: 'If that email is registered, your username has been sent to it.' })
+  } catch (err) {
+    console.error('[forgot-username]', err)
     res.status(500).json({ error: 'An error occurred. Please try again.' })
   }
 })

@@ -7,8 +7,18 @@ const FROM    = process.env.EMAIL_FROM   || 'noreply@campaigncodex.com'
 const API_KEY = process.env.RESEND_API_KEY
 const CLIENT  = process.env.CLIENT_URL   || 'http://localhost:5173'
 
-// Shared HTML shell for all outbound emails
-function wrapHtml(inner) {
+// Shared HTML shell for all outbound emails.
+// footer: optional override — defaults to the transactional account notice.
+//         Pass NEWSLETTER_FOOTER for opt-in broadcast emails.
+const NEWSLETTER_FOOTER =
+  "You're receiving this because you opted in to the CampaignCodex newsletter.<br>" +
+  'To unsubscribe, sign in and update your notification preferences in account settings.'
+
+const TRANSACTIONAL_FOOTER =
+  "You're receiving this email because it was requested for your CampaignCodex account.<br>" +
+  'If you did not make this request, you can safely ignore it.'
+
+function wrapHtml(inner, footer = TRANSACTIONAL_FOOTER) {
   return `
     <div style="font-family:sans-serif;max-width:600px;margin:0 auto;
                 background:#0f1117;color:#e2e8f0;padding:32px 24px;border-radius:12px">
@@ -22,8 +32,7 @@ function wrapHtml(inner) {
       </div>
       <div style="border-top:1px solid #2d3748;padding-top:16px;margin-top:32px;
                   font-size:12px;color:#6b7280;line-height:1.5">
-        You're receiving this because you opted in to the CampaignCodex newsletter.<br>
-        To unsubscribe, sign in and update your notification preferences in account settings.
+        ${footer}
       </div>
     </div>
   `
@@ -103,7 +112,7 @@ async function sendBroadcastEmail(recipients, subject, plainBody) {
       : '<p style="margin:0 0 14px">&nbsp;</p>')
     .join('\n')
 
-  const html = wrapHtml(htmlBody)
+  const html = wrapHtml(htmlBody, NEWSLETTER_FOOTER)
 
   if (!API_KEY) {
     console.log('\n─── BROADCAST EMAIL (stub) ─────────────────────────')
@@ -155,4 +164,57 @@ async function sendBroadcastEmail(recipients, subject, plainBody) {
   return { sent, failed, stub: false }
 }
 
-module.exports = { sendPasswordResetEmail, sendBroadcastEmail }
+/**
+ * Send a username reminder to a user who has forgotten their username.
+ * Triggered by entering the registered email on the forgot-username flow.
+ *
+ * @param {string} toEmail
+ * @param {string} username
+ */
+async function sendUsernameReminderEmail(toEmail, username) {
+  if (!API_KEY) {
+    console.log('\n─── USERNAME REMINDER EMAIL (stub) ─────────────────')
+    console.log(`To:       ${toEmail}`)
+    console.log(`Username: ${username}`)
+    console.log('────────────────────────────────────────────────────\n')
+    return { ok: true, stub: true }
+  }
+
+  const html = wrapHtml(`
+    <p>You asked us to look up the username associated with this email address.</p>
+    <p style="font-size:18px;font-weight:700;color:#c9a84c;margin:24px 0">
+      ${username}
+    </p>
+    <p>
+      <a href="${CLIENT}"
+         style="display:inline-block;background:#c9a84c;color:#0a0b0f;
+                padding:12px 24px;border-radius:8px;font-weight:600;
+                text-decoration:none">
+        Sign In
+      </a>
+    </p>
+  `)
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method:  'POST',
+    headers: {
+      'Authorization': `Bearer ${API_KEY}`,
+      'Content-Type':  'application/json',
+    },
+    body: JSON.stringify({
+      from:    `CampaignCodex <${FROM}>`,
+      to:      [toEmail],
+      subject: 'Your CampaignCodex username',
+      html,
+    }),
+  })
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(`Resend error: ${JSON.stringify(err)}`)
+  }
+
+  return { ok: true }
+}
+
+module.exports = { sendPasswordResetEmail, sendUsernameReminderEmail, sendBroadcastEmail }

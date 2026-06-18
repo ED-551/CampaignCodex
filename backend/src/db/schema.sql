@@ -32,6 +32,12 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS newsletter_opt_in BOOLEAN NOT NULL DE
 ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP;
 -- Token version: incremented on password change/reset to immediately invalidate prior JWTs
 ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 1;
+-- Security questions removed from signup (email-only recovery going forward).
+-- Columns kept for existing users; new rows may leave them NULL.
+ALTER TABLE users ALTER COLUMN security_q1      DROP NOT NULL;
+ALTER TABLE users ALTER COLUMN security_a1_hash DROP NOT NULL;
+ALTER TABLE users ALTER COLUMN security_q2      DROP NOT NULL;
+ALTER TABLE users ALTER COLUMN security_a2_hash DROP NOT NULL;
 
 -- ─── PASSWORD RESET TOKENS ───────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS password_reset_tokens (

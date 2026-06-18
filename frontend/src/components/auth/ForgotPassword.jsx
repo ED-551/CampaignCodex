@@ -5,11 +5,11 @@ import PasswordInput from '../ui/PasswordInput'
 import { api } from '../../utils/api'
 
 const STEPS = {
-  CHOOSE:    'choose',
-  EMAIL:     'email',
-  QUESTIONS: 'questions',
-  RESET:     'reset',
-  DONE:      'done',
+  CHOOSE:          'choose',
+  EMAIL:           'email',
+  USERNAME_LOOKUP: 'username_lookup',
+  RESET:           'reset',
+  DONE:            'done',
 }
 
 const INPUT_CLASS = `w-full bg-codex-surface border border-codex-border rounded-lg px-4 py-2.5
@@ -19,10 +19,9 @@ const INPUT_CLASS = `w-full bg-codex-surface border border-codex-border rounded-
 
 export default function ForgotPassword() {
   const [step,           setStep]           = useState(STEPS.CHOOSE)
-  const [recoveryMethod, setRecoveryMethod] = useState(null)   // 'email' | 'questions'
+  const [recoveryMethod, setRecoveryMethod] = useState(null)   // 'email' | 'username_lookup'
   const [username,       setUsername]       = useState('')
-  const [answer1,  setAnswer1]  = useState('')
-  const [answer2,  setAnswer2]  = useState('')
+  const [lookupEmail,    setLookupEmail]    = useState('')
   const [resetToken, setResetToken] = useState('')
   const [newPass,  setNewPass]  = useState('')
   const [confirmPass, setConfirmPass] = useState('')
@@ -47,23 +46,17 @@ export default function ForgotPassword() {
     }
   }
 
-  // ── Security questions recovery ───────────────────────────────────────────────
-  async function handleQuestionsSubmit(e) {
+  // ── Username lookup ───────────────────────────────────────────────────────────
+  async function handleUsernameLookup(e) {
     e.preventDefault()
     setError('')
-    const un = username.trim()
-    if (!un)                    { setError('Please enter your username.'); return }
-    if (!answer1.trim())        { setError('Please answer the first question.'); return }
-    if (!answer2.trim())        { setError('Please answer the second question.'); return }
+    const em = lookupEmail.trim()
+    if (!em) { setError('Please enter your email address.'); return }
     setLoading(true)
     try {
-      const { resetToken: token } = await api.post('/auth/forgot-password/verify-answers', {
-        username: un,
-        answer1:  answer1.trim(),
-        answer2:  answer2.trim(),
-      })
-      setResetToken(token)
-      setStep(STEPS.RESET)
+      await api.post('/auth/forgot-username', { email: em })
+      setRecoveryMethod('username_lookup')
+      setStep(STEPS.DONE)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -103,6 +96,8 @@ export default function ForgotPassword() {
         <p className="text-codex-text text-sm">
           {recoveryMethod === 'email'
             ? 'If that account exists, a reset link has been sent to your email. Check your inbox (and spam folder).'
+            : recoveryMethod === 'username_lookup'
+            ? 'If that email is registered, your username has been sent to it. Check your inbox (and spam folder).'
             : 'Your password has been updated successfully.'}
         </p>
         <Link to="/" className="text-codex-gold hover:text-codex-goldHover text-sm transition-colors">
@@ -136,47 +131,28 @@ export default function ForgotPassword() {
     )
   }
 
-  // ── Security questions step ───────────────────────────────────────────────────
-  if (step === STEPS.QUESTIONS) {
+  // ── Username lookup step ──────────────────────────────────────────────────────
+  if (step === STEPS.USERNAME_LOOKUP) {
     return (
-      <form onSubmit={handleQuestionsSubmit} className="flex flex-col gap-4" noValidate>
-        <Input
-          id="fq-username" label="Username"
-          value={username}
-          onChange={e => setUsername(e.target.value)}
-          placeholder="Your username"
-          required
-        />
-        <p className="text-xs text-codex-muted -mt-2 leading-relaxed">
-          Enter the answers to the two security questions you set during sign-up —
-          whether you chose from the list or wrote your own. Answers are not case-sensitive.
+      <form onSubmit={handleUsernameLookup} className="flex flex-col gap-4" noValidate>
+        <p className="text-sm text-codex-subtext">
+          Enter the email address on your account and we'll send your username to it.
         </p>
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-codex-text">Answer to Security Question 1</label>
+          <label className="text-sm font-medium text-codex-text">Email Address</label>
           <input
-            type="text"
-            value={answer1}
-            onChange={e => setAnswer1(e.target.value)}
-            placeholder="Your answer"
-            autoComplete="off"
-            className={INPUT_CLASS}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-codex-text">Answer to Security Question 2</label>
-          <input
-            type="text"
-            value={answer2}
-            onChange={e => setAnswer2(e.target.value)}
-            placeholder="Your answer"
-            autoComplete="off"
+            type="email"
+            value={lookupEmail}
+            onChange={e => setLookupEmail(e.target.value)}
+            placeholder="you@example.com"
+            autoComplete="email"
             className={INPUT_CLASS}
           />
         </div>
         {error && <p className="text-sm text-red-400 text-center">{error}</p>}
         <button type="submit" disabled={loading}
           className="w-full py-2.5 rounded-lg bg-codex-gold hover:bg-codex-goldHover text-codex-bg font-semibold text-sm disabled:opacity-50 transition-all">
-          {loading ? 'Verifying…' : 'Verify Answers'}
+          {loading ? 'Sending…' : 'Send My Username'}
         </button>
         <button type="button" onClick={() => { setError(''); setStep(STEPS.CHOOSE) }}
           className="text-xs text-codex-subtext hover:text-codex-text transition-colors text-center">
@@ -224,23 +200,23 @@ export default function ForgotPassword() {
           transition-all duration-150 group"
       >
         <span className="block font-semibold text-codex-text group-hover:text-codex-gold transition-colors">
-          📧 Send me a reset link
+          🔑 Reset my password
         </span>
         <span className="text-xs text-codex-subtext">
-          We'll email a link to the address on your account
+          We'll email a reset link to the address on your account
         </span>
       </button>
       <button
-        onClick={() => { setError(''); setStep(STEPS.QUESTIONS) }}
+        onClick={() => { setError(''); setStep(STEPS.USERNAME_LOOKUP) }}
         className="w-full py-3 px-4 rounded-lg border border-codex-border bg-codex-surface
           hover:border-codex-gold hover:bg-codex-card text-codex-text text-sm font-medium text-left
           transition-all duration-150 group"
       >
         <span className="block font-semibold text-codex-text group-hover:text-codex-gold transition-colors">
-          🔐 Answer my security questions
+          👤 I forgot my username
         </span>
         <span className="text-xs text-codex-subtext">
-          Answer the two questions you set during sign-up
+          We'll email your username to the address on your account
         </span>
       </button>
       <Link to="/" className="text-center text-xs text-codex-subtext hover:text-codex-text transition-colors mt-1">

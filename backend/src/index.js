@@ -1,4 +1,50 @@
 require('dotenv').config()
+
+// ─── Startup Environment Validation ──────────────────────────────────────────
+// Catch misconfigured deployments before they become security incidents.
+;(function validateEnv() {
+  const errors   = []
+  const warnings = []
+
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+    errors.push('JWT_SECRET is missing or too short (minimum 32 characters).')
+    errors.push('  Generate one: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"')
+  }
+
+  if (!process.env.DB_PASSWORD || process.env.DB_PASSWORD === 'devpassword') {
+    if (process.env.NODE_ENV === 'production') {
+      errors.push('DB_PASSWORD must be set to a strong value in production.')
+    } else {
+      warnings.push('DB_PASSWORD is using the development default — do not use in production.')
+    }
+  }
+
+  if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD) {
+    warnings.push('ADMIN_USERNAME or ADMIN_PASSWORD not set — admin seeding will fail.')
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.RESEND_API_KEY) {
+      warnings.push('RESEND_API_KEY not set — all emails will stub to console in production.')
+    }
+    if (!process.env.CLIENT_URL || process.env.CLIENT_URL.includes('localhost')) {
+      warnings.push('CLIENT_URL appears to be a localhost address in production.')
+    }
+  }
+
+  if (warnings.length > 0) {
+    console.warn('\n⚠️  CampaignCodex startup warnings:')
+    warnings.forEach(w => console.warn(`   • ${w}`))
+  }
+
+  if (errors.length > 0) {
+    console.error('\n🚨 CampaignCodex FATAL startup errors — server will not start:')
+    errors.forEach(e => console.error(`   • ${e}`))
+    console.error('')
+    process.exit(1)
+  }
+})()
+
 const http       = require('http')
 const express    = require('express')
 const helmet     = require('helmet')
