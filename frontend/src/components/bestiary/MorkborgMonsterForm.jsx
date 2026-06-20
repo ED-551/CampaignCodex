@@ -56,7 +56,8 @@ const TINY = `w-full bg-black/60 border border-yellow-300/30 rounded-lg px-2 py-
 let _uid = Date.now()
 const uid = () => ++_uid
 
-function blankAttack() { return { id: uid(), name: '', damage: '' } }
+function blankAttack()  { return { id: uid(), name: '', damage: '' } }
+function blankReward()  { return { id: uid(), label: '', amount: '' } }
 
 function blankTable(die = 'd4') {
   const count = parseInt(die.replace('d', ''), 10)
@@ -84,8 +85,15 @@ function initForm(existing) {
           entries: Array.isArray(t.entries) ? t.entries : [],
         }))
       : [],
-    rewardDead:     sd.rewards?.dead     ?? '',
-    rewardCaptured: sd.rewards?.captured ?? '',
+    rewards: (() => {
+      if (!sd.rewards) return []
+      if (Array.isArray(sd.rewards)) return sd.rewards.map(r => ({ ...r, id: uid() }))
+      // Legacy {dead, captured} format — migrate gracefully
+      const out = []
+      if (sd.rewards.dead)     out.push({ id: uid(), label: 'Dead',     amount: sd.rewards.dead })
+      if (sd.rewards.captured) out.push({ id: uid(), label: 'Captured', amount: sd.rewards.captured })
+      return out
+    })(),
     tags:           existing?.tags       ?? '',
   }
 }
@@ -147,6 +155,16 @@ export default function MorkborgMonsterForm({ existing, onBack, onSaved }) {
     setForm(p => ({ ...p, tables: p.tables.filter(t => t.id !== id) }))
   }
 
+  function addReward() {
+    setForm(p => ({ ...p, rewards: [...p.rewards, blankReward()] }))
+  }
+  function updateReward(id, field, val) {
+    setForm(p => ({ ...p, rewards: p.rewards.map(r => r.id === id ? { ...r, [field]: val } : r) }))
+  }
+  function removeReward(id) {
+    setForm(p => ({ ...p, rewards: p.rewards.filter(r => r.id !== id) }))
+  }
+
   // ── Live preview ─────────────────────────────────────────────────────────────
 
   const filledAttacks = useMemo(
@@ -183,10 +201,9 @@ export default function MorkborgMonsterForm({ existing, onBack, onSaved }) {
             entries: t.entries.map(e => e.trim()).filter(Boolean),
           }))
           .filter(t => t.label),
-        rewards: {
-          dead:     form.rewardDead.trim(),
-          captured: form.rewardCaptured.trim(),
-        },
+        rewards: form.rewards
+          .map(({ id, ...r }) => ({ label: r.label.trim(), amount: r.amount.trim() }))
+          .filter(r => r.label || r.amount),
       },
     }
 
@@ -412,21 +429,55 @@ export default function MorkborgMonsterForm({ existing, onBack, onSaved }) {
               </Sect>
 
               {/* 8. Bounty */}
-              <Sect title="Bounty / Rewards (Optional)">
-                <p className="text-[10px] text-yellow-300/35 mb-3">
-                  Silver rewarded for eliminating or delivering this creature.
+              <Sect title="Bounties & Harvest (Optional)">
+                <p className="text-[10px] text-yellow-300/35 mb-3 leading-relaxed">
+                  What is this creature worth? Add as many lines as needed — Mörk Borg bounties are
+                  creative: Skull, Ectoplasm, Blood per litre, Remains, Horn, Corpse…
                 </p>
-                <div className="grid grid-cols-2 gap-4">
-                  <Fld label="Dead (silver)">
-                    <input type="text" value={form.rewardDead}
-                      onChange={e => update('rewardDead', e.target.value)}
-                      placeholder="20s" disabled={loading} className={INP} />
-                  </Fld>
-                  <Fld label="Captured (silver)">
-                    <input type="text" value={form.rewardCaptured}
-                      onChange={e => update('rewardCaptured', e.target.value)}
-                      placeholder="80s" disabled={loading} className={INP} />
-                  </Fld>
+                <div className="flex flex-col gap-2">
+                  {form.rewards.map(r => (
+                    <div key={r.id} className="flex gap-2 items-end">
+                      <div className="flex-1">
+                        <label className="block text-[10px] text-yellow-300/45 mb-1">Label</label>
+                        <input type="text" value={r.label}
+                          onChange={e => updateReward(r.id, 'label', e.target.value)}
+                          placeholder="Dead, Captured, Skull, Ectoplasm…"
+                          maxLength={50} disabled={loading} className={`${INP} text-left`} />
+                      </div>
+                      <div className="w-28 shrink-0">
+                        <label className="block text-[10px] text-yellow-300/45 mb-1">Amount</label>
+                        <input type="text" value={r.amount}
+                          onChange={e => updateReward(r.id, 'amount', e.target.value)}
+                          placeholder="20s" maxLength={30} disabled={loading} className={TINY} />
+                      </div>
+                      <button type="button" onClick={() => removeReward(r.id)}
+                        disabled={loading}
+                        className="pb-2 text-yellow-300/25 hover:text-red-500
+                          transition-colors disabled:opacity-30">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  {/* Quick-add common Mörk Borg bounty labels */}
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {['Dead','Captured','Head','Skull','Destroyed','Remains','Ectoplasm','Blood per litre','Horn','Corpse'].map(label => (
+                      <button key={label} type="button"
+                        onClick={() => setForm(p => ({ ...p, rewards: [...p.rewards, { id: uid(), label, amount: '' }] }))}
+                        disabled={loading}
+                        className="text-[10px] px-2 py-0.5 rounded border border-yellow-300/20
+                          text-yellow-300/40 hover:text-yellow-300 hover:border-yellow-300/50
+                          transition-colors disabled:opacity-30">
+                        + {label}
+                      </button>
+                    ))}
+                  </div>
+                  <button type="button" onClick={addReward} disabled={loading}
+                    className="mt-1 flex items-center justify-center gap-1.5 py-2.5 text-xs
+                      text-yellow-300/35 hover:text-yellow-300/80 transition-colors rounded-lg
+                      border border-dashed border-yellow-300/20 hover:border-yellow-300/40
+                      disabled:opacity-30 disabled:cursor-not-allowed">
+                    <Plus size={12} /> Add Bounty Line
+                  </button>
                 </div>
               </Sect>
 
@@ -542,10 +593,14 @@ export default function MorkborgMonsterForm({ existing, onBack, onSaved }) {
                   ))}
 
                   {/* Rewards */}
-                  {(form.rewardDead || form.rewardCaptured) && (
-                    <div className="flex justify-between mt-3 pt-2 border-t border-yellow-300/10 text-xs">
-                      {form.rewardDead     && <span className="text-white/50">Head <span className="font-bold text-white">{form.rewardDead}</span></span>}
-                      {form.rewardCaptured && <span className="text-white/50">Captured <span className="font-bold text-white">{form.rewardCaptured}</span></span>}
+                  {form.rewards.some(r => r.label || r.amount) && (
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 pt-2 border-t border-yellow-300/10 text-xs">
+                      {form.rewards.filter(r => r.label || r.amount).map((r, i) => (
+                        <span key={i} className="text-white/50">
+                          {r.label}{' '}
+                          <span className="font-bold text-white">{r.amount}</span>
+                        </span>
+                      ))}
                     </div>
                   )}
 

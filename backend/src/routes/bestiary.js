@@ -40,7 +40,7 @@ router.get('/', requireAuth, [
   const { system } = req.query
   try {
     const result = await db.query(
-      `SELECT id, game_system, name, challenge, tags, created_at, updated_at
+      `SELECT id, game_system, name, challenge, tags, stat_data, created_at, updated_at
        FROM monsters
        WHERE user_id = $1
          ${system ? 'AND game_system = $2' : ''}

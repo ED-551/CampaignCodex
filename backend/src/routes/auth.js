@@ -311,59 +311,6 @@ router.post('/forgot-password/request-email', authLimiter, [
   }
 })
 
-// ─── POST /api/auth/forgot-password/verify-answers ───────────────────────────
-router.post('/forgot-password/verify-answers', authLimiter, [
-  body('username').trim().notEmpty().withMessage('Username is required.'),
-  body('answer1').trim().notEmpty().withMessage('Answer 1 is required.'),
-  body('answer2').trim().notEmpty().withMessage('Answer 2 is required.'),
-], async (req, res) => {
-  if (validationErrors(req, res)) return
-
-  const { username, answer1, answer2 } = req.body
-
-  try {
-    const result = await db.query(
-      `SELECT id, security_q1, security_a1_hash, security_q2, security_a2_hash
-       FROM users WHERE username = $1 LIMIT 1`,
-      [username]
-    )
-
-    // Constant-time: always check both hashes
-    const fakeHash = '$2b$12$invalidhashusedfortimingprotection00000000000000000000000'
-    const user     = result.rows[0]
-    const a1Hash   = user ? user.security_a1_hash : fakeHash
-    const a2Hash   = user ? user.security_a2_hash : fakeHash
-
-    const [ok1, ok2] = await Promise.all([
-      bcrypt.compare(answer1.toLowerCase().trim(), a1Hash),
-      bcrypt.compare(answer2.toLowerCase().trim(), a2Hash),
-    ])
-
-    if (!user || !ok1 || !ok2) {
-      return res.status(401).json({ error: 'Answers are incorrect.' })
-    }
-
-    // Issue a short-lived reset token
-    const rawToken  = crypto.randomBytes(32).toString('hex')
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
-
-    await db.query(
-      'UPDATE password_reset_tokens SET used = true WHERE user_id = $1',
-      [user.id]
-    )
-    await db.query(
-      'INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1,$2,$3)',
-      [user.id, tokenHash, expiresAt]
-    )
-
-    res.json({ resetToken: rawToken, message: 'Answers verified. You may now set a new password.' })
-  } catch (err) {
-    console.error('[forgot-password/verify-answers]', err)
-    res.status(500).json({ error: 'An error occurred. Please try again.' })
-  }
-})
-
 // ─── POST /api/auth/forgot-password/reset ────────────────────────────────────
 router.post('/forgot-password/reset', authLimiter, [
   body('token').notEmpty().withMessage('Reset token is required.'),

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import { BookOpen, ExternalLink, Shield, Heart, Users, AlertTriangle } from 'lucide-react'
 
 function Section({ icon: Icon, title, children }) {
@@ -59,19 +60,24 @@ const GAMES = [
 ]
 
 export default function TermsPage() {
+  const { user } = useAuth()
+  const homeLink = user ? '/dashboard' : '/'
+  const backLink = user ? '/dashboard' : '/signup'
+  const backLabel = user ? '← Back to Dashboard' : '← Back to sign up'
+
   return (
     <div className="min-h-screen bg-codex-bg">
       {/* Header */}
       <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5 group">
+          <Link to={homeLink} className="flex items-center gap-2.5 group">
             <BookOpen size={17} className="text-codex-gold" />
             <span className="font-display text-sm text-codex-gold tracking-wide group-hover:text-codex-goldHover transition-colors">
               CampaignCodex
             </span>
           </Link>
-          <Link to="/signup" className="text-xs text-codex-subtext hover:text-codex-text transition-colors">
-            ← Back to sign up
+          <Link to={backLink} className="text-xs text-codex-subtext hover:text-codex-text transition-colors">
+            {backLabel}
           </Link>
         </div>
       </header>
@@ -81,7 +87,7 @@ export default function TermsPage() {
         {/* Page title */}
         <div className="text-center pb-2">
           <h1 className="text-2xl font-semibold text-codex-text mb-2">Terms, Conditions & Community Standards</h1>
-          <p className="text-sm text-codex-subtext">Effective date: January 1, 2025 · Last updated: June 2025</p>
+          <p className="text-sm text-codex-subtext">Effective date: January 1, 2025 · Last updated: June 2026</p>
         </div>
 
         {/* 1. About CampaignCodex */}
@@ -97,8 +103,53 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        {/* 2. Rulebook Ownership */}
-        <Section icon={BookOpen} title="2. Rulebook Ownership Requirement">
+        {/* 2. Independent Fan Project & Non-Affiliation */}
+        <Section icon={Heart} title="2. Independent Fan Project & Non-Affiliation">
+          <p>
+            CampaignCodex is a passion project. It was created and is maintained by a single individual — a fan of
+            tabletop roleplaying games who wanted a better way to run and play the games they love. It began as a
+            personal tool and grew into something worth sharing with the broader TTRPG community. There is no company,
+            no investors, no marketing department, and no commercial agenda behind this platform. Just one person and
+            a deep appreciation for the hobby.
+          </p>
+
+          <SubHead>No Affiliation</SubHead>
+          <p>
+            CampaignCodex has no affiliation, association, connection, authorization, or relationship of any kind
+            with the publishers, studios, designers, or intellectual property holders of any game referenced on this
+            platform — including but not limited to The Arcane Library (Shadowdark RPG), Free League Publishing and
+            Stockholm Kartell (Mörk Borg), and Nimble RPG. This platform is not endorsed, licensed, approved, or
+            sponsored by any of these parties in any capacity.
+          </p>
+
+          <SubHead>No Commercial Relationship</SubHead>
+          <p>
+            The creator of CampaignCodex does not profit from the sale, distribution, or promotion of any TTRPG
+            product. No revenue is generated through affiliate links, referral programs, licensing arrangements,
+            or any other commercial mechanism connected to the games referenced here. Any mention of a game, studio,
+            or publisher is solely for descriptive identification purposes — to explain what this tool supports —
+            and does not imply any commercial or legal relationship.
+          </p>
+
+          <SubHead>A Note from the Creator</SubHead>
+          <p>
+            This platform exists because these games are genuinely worth playing, and the communities around them
+            are worth supporting. The goal has always been to make it easier for players and game masters to focus
+            on what matters — the stories they tell together. If you are a publisher or rights holder and have
+            concerns about how your intellectual property is represented here, please reach out directly at{' '}
+            <a
+              href="mailto:campaigncodex@pm.me"
+              className="text-codex-gold hover:text-codex-goldHover underline underline-offset-2 transition-colors"
+            >
+              campaigncodex@pm.me
+            </a>
+            . I will respond promptly and in good faith.
+          </p>
+        </Section>
+
+        {/* 3. Rulebook Ownership */}
+        <Section icon={BookOpen} title="3. Rulebook Ownership & Personal Advocacy">
+          <SubHead>3.1 — Minimum Requirement</SubHead>
           <p>
             CampaignCodex is a <strong className="text-codex-text">companion tool</strong>, not a replacement for
             official game materials. It does not reproduce, redistribute, or substitute for any copyrighted game content.
@@ -112,10 +163,33 @@ export default function TermsPage() {
             to ensure they are fairly compensated for their work. Unauthorized use of game content violates copyright
             law and harms the independent creators behind these titles.
           </p>
+
+          <SubHead>3.2 — Our Personal Advocacy for Ownership</SubHead>
+          <p>
+            Beyond the minimum requirement above, the creator of CampaignCodex personally believes in ownership —
+            real, individual ownership — of the games you play. We strongly encourage every player and game master
+            using this platform to purchase their own physical copy, official PDF, or both of any ruleset their
+            group engages with. Not because you are legally required to, but because it is the right thing to do
+            for the hobby and the people who built it.
+          </p>
+          <p>
+            Physical books and official PDFs are the definitive version of a game. They are complete, permanent,
+            and fully yours. A physical copy sits on your shelf, survives platform shutdowns, can be shared at
+            the table, and carries a tactile quality that no digital tool can replicate. An official PDF gives
+            you portability, searchability, and the freedom to play anywhere. Owning both, where accessible,
+            is ideal.
+          </p>
+          <p>
+            CampaignCodex exists to complement your books — never to replace them. The character sheets,
+            campaign tools, and trackers here only become meaningful when paired with the rules you own and
+            the sessions they support. If you are using this platform regularly and do not yet own a copy of
+            the game you are running, please consider buying one. The designers behind these games deserve to
+            be paid for their work, and your purchase directly makes that possible.
+          </p>
         </Section>
 
-        {/* 3. Intellectual Property */}
-        <Section icon={Shield} title="3. Intellectual Property Disclaimer">
+        {/* 4. Intellectual Property */}
+        <Section icon={Shield} title="4. Intellectual Property Disclaimer">
           <p>
             All game names, systems, mechanics, artwork, lore, and related content referenced within CampaignCodex
             are the intellectual property of their respective owners and publishers. CampaignCodex makes no claim of
@@ -128,8 +202,8 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        {/* 4. Support the Creators */}
-        <Section icon={Heart} title="4. Support the Creators">
+        {/* 5. Support the Creators */}
+        <Section icon={Heart} title="5. Support the Creators">
           <p>
             The games supported by this platform are the work of talented independent designers, artists, writers,
             and creative teams who poured enormous effort into making something special for all of us to enjoy.
@@ -145,8 +219,8 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        {/* 5. Community Code of Conduct */}
-        <Section icon={Users} title="5. Community Code of Conduct">
+        {/* 6. Community Code of Conduct */}
+        <Section icon={Users} title="6. Community Code of Conduct">
           <p>
             CampaignCodex is built on the belief that tabletop roleplaying games are for everyone. We are committed
             to maintaining a welcoming, respectful, and safe environment for all users, regardless of background,
@@ -185,8 +259,8 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        {/* 6. Safe & Inclusive Gameplay */}
-        <Section icon={Shield} title="6. Safe & Inclusive Gameplay Practices">
+        {/* 7. Safe & Inclusive Gameplay */}
+        <Section icon={Shield} title="7. Safe & Inclusive Gameplay Practices">
           <p>
             CampaignCodex strongly encourages all gaming groups to establish shared expectations before play begins.
             The following practices are widely recognized in the TTRPG community as essential for creating a positive
@@ -294,8 +368,8 @@ export default function TermsPage() {
           </ul>
         </Section>
 
-        {/* 7. Limitation of Liability */}
-        <Section icon={AlertTriangle} title="7. Limitation of Liability">
+        {/* 8. Limitation of Liability */}
+        <Section icon={AlertTriangle} title="8. Limitation of Liability">
           <p>
             CampaignCodex is provided "as is" and "as available" without warranties of any kind, either express or
             implied. We make no representations regarding the accuracy, reliability, or completeness of any content
@@ -320,8 +394,8 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        {/* 8. Privacy */}
-        <Section icon={Shield} title="8. Privacy & Data">
+        {/* 9. Privacy */}
+        <Section icon={Shield} title="9. Privacy & Data">
           <p>
             CampaignCodex collects only the information necessary to operate the platform — account credentials,
             character sheet data, and campaign information. We do not sell, rent, or share your personal information
@@ -343,8 +417,8 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        {/* 9. Official Game Links */}
-        <Section icon={ExternalLink} title="9. Official Games & Where to Buy">
+        {/* 10. Official Game Links */}
+        <Section icon={ExternalLink} title="10. Official Games & Where to Buy">
           <p className="mb-4">
             CampaignCodex supports the following games. Please support these creators by purchasing official copies
             of their work through their official channels:
@@ -376,13 +450,19 @@ export default function TermsPage() {
         {/* Footer nav */}
         <div className="text-center pt-4 pb-8">
           <Link
-            to="/signup"
+            to={backLink}
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-codex-gold hover:bg-codex-goldHover text-codex-bg text-sm font-semibold rounded-lg transition-colors"
           >
-            ← Back to Sign Up
+            {backLabel}
           </Link>
           <p className="text-xs text-codex-muted mt-4">
-            Questions? Reach out via the contact information on your account page.
+            Questions or intellectual property concerns?{' '}
+            <a
+              href="mailto:campaigncodex@pm.me"
+              className="text-codex-gold hover:text-codex-goldHover underline underline-offset-2 transition-colors"
+            >
+              campaigncodex@pm.me
+            </a>
           </p>
         </div>
 

@@ -1,4 +1,5 @@
-import { useLocation } from 'react-router-dom'
+import { useLocation, Navigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import LoginForm from '../components/auth/LoginForm'
 import SignupForm from '../components/auth/SignupForm'
 import ForgotPassword from '../components/auth/ForgotPassword'
@@ -12,7 +13,15 @@ const VIEWS = {
 }
 
 export default function LandingPage() {
+  const { user, loading } = useAuth()
   const { pathname } = useLocation()
+
+  // Wait for auth to resolve before deciding — avoids a flash of the login form
+  if (loading) return null
+
+  // Already authenticated — send straight to the dashboard
+  if (user) return <Navigate to="/dashboard" replace />
+
   const view = VIEWS[pathname] ?? VIEWS['/']
   const Form = view.form
 

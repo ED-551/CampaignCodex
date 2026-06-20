@@ -41,4 +41,18 @@ const ravensLimiter = rateLimit({
   },
 })
 
-module.exports = { authLimiter, apiLimiter, ravensLimiter }
+/**
+ * Bestiary share limiter — 15 shares per hour per IP.
+ * Prevents flooding another user's share inbox.
+ */
+const shareLimiter = rateLimit({
+  windowMs:        60 * 60 * 1000,
+  max:             15,
+  standardHeaders: true,
+  legacyHeaders:   false,
+  message: {
+    error: 'You can only send 15 bestiary shares per hour. Even ravens tire.',
+  },
+})
+
+module.exports = { authLimiter, apiLimiter, ravensLimiter, shareLimiter }

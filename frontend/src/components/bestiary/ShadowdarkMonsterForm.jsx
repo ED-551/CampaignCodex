@@ -32,6 +32,12 @@ const TINY = `w-full bg-codex-surface border border-codex-border rounded-lg px-2
   focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/20
   transition-colors disabled:opacity-40`
 
+// Same as TINY but no text-center (for <select> elements where centering misbehaves)
+const TINY_SEL = `w-full bg-codex-surface border border-codex-border rounded-lg px-2 py-1.5
+  text-codex-text text-xs
+  focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/20
+  transition-colors disabled:opacity-40 cursor-pointer`
+
 // ─── Static data ──────────────────────────────────────────────────────────────
 
 const COMBAT_ROLES = [
@@ -42,6 +48,47 @@ const COMBAT_ROLES = [
   { id: 'controller', label: 'Controller', hint: 'Disrupts. Debuffs, repositions.' },
   { id: 'legendary',  label: 'Legendary',  hint: 'Boss tier. All stats high.' },
 ]
+
+// Middle-of-the-road defaults applied when a combat role button is clicked.
+// Attacks use placeholder IDs; callers must remap with uid() before setting state.
+const ROLE_DEFAULTS = {
+  mook: {
+    level: '1', ac: '11', hp: '4', movement: 'near', hitDie: 'd6',
+    str: '0', dex: '+1', con: '0', int: '-1', wis: '-1', cha: '-1',
+    attacks: [{ count: '1', weapon: 'claw or bite', range: '', bonus: '1', damage: '1d4', connector: 'or' }],
+  },
+  soldier: {
+    level: '3', ac: '14', hp: '15', movement: 'near', hitDie: 'd8',
+    str: '+2', dex: '0', con: '+1', int: '0', wis: '0', cha: '0',
+    attacks: [{ count: '1', weapon: 'weapon', range: '', bonus: '3', damage: '1d8', connector: 'or' }],
+  },
+  striker: {
+    level: '3', ac: '12', hp: '10', movement: 'near', hitDie: 'd6',
+    str: '+1', dex: '+3', con: '0', int: '0', wis: '0', cha: '0',
+    attacks: [
+      { count: '1', weapon: 'blade', range: '',    bonus: '4', damage: '1d6', connector: 'or'  },
+      { count: '1', weapon: 'dart',  range: 'far', bonus: '4', damage: '1d4', connector: 'or'  },
+    ],
+  },
+  tank: {
+    level: '4', ac: '16', hp: '30', movement: 'near', hitDie: 'd10',
+    str: '+3', dex: '-1', con: '+2', int: '-1', wis: '0', cha: '-1',
+    attacks: [{ count: '1', weapon: 'heavy slam', range: '', bonus: '4', damage: '1d10+2', connector: 'or' }],
+  },
+  controller: {
+    level: '3', ac: '13', hp: '12', movement: 'near', hitDie: 'd6',
+    str: '0', dex: '+1', con: '0', int: '+3', wis: '+2', cha: '+1',
+    attacks: [{ count: '1', weapon: 'staff', range: 'near', bonus: '2', damage: '1d6', connector: 'or' }],
+  },
+  legendary: {
+    level: '7', ac: '17', hp: '55', movement: 'near', hitDie: 'd12',
+    str: '+4', dex: '+2', con: '+3', int: '+2', wis: '+2', cha: '+3',
+    attacks: [
+      { count: '2', weapon: 'strike', range: '',    bonus: '7', damage: '1d12',  connector: 'or'  },
+      { count: '1', weapon: 'slam',   range: 'near', bonus: '6', damage: '2d8',  connector: 'and' },
+    ],
+  },
+}
 
 const GENERATOR_TABLE = [
   { quality: 'Beastlike',    strength: '+1 attack bonus',       weakness: 'Cold' },
@@ -116,6 +163,7 @@ function initForm(existing) {
     wis: sd.stats?.wis != null ? String(sd.stats.wis) : '',
     cha: sd.stats?.cha != null ? String(sd.stats.cha) : '',
     alignment: sd.alignment ?? 'N',
+    hitDie:    sd.hitDie ?? '',
     attacks: sd.attacks?.length
       ? sd.attacks.map((a, i) => ({ ...a, id: uid(), connector: i > 0 ? (a.connector ?? 'or') : 'or' }))
       : [blankAttack()],
@@ -193,7 +241,7 @@ export default function ShadowdarkMonsterForm({ existing, onBack, onSaved }) {
       `I ${fmt(form.int)}`,
       `W ${fmt(form.wis)}`,
       `Ch ${fmt(form.cha)}`,
-      form.alignment && `AL ${form.alignment}`,
+      form.hitDie    && `HD ${form.hitDie}`,
       form.level     && `LV ${form.level}`,
     ].filter(Boolean)
 
@@ -227,6 +275,7 @@ export default function ShadowdarkMonsterForm({ existing, onBack, onSaved }) {
           wis: parseInt(form.wis, 10) || 0,
           cha: parseInt(form.cha, 10) || 0,
         },
+        hitDie:    form.hitDie,
         alignment: form.alignment,
         attacks: form.attacks
           .map(({ id, ...a }) => ({
@@ -330,7 +379,23 @@ export default function ShadowdarkMonsterForm({ existing, onBack, onSaved }) {
                         <button
                           key={r.id}
                           type="button"
-                          onClick={() => update('combatRole', form.combatRole === r.id ? '' : r.id)}
+                          onClick={() => {
+                            const newRole = form.combatRole === r.id ? '' : r.id
+                            if (newRole && ROLE_DEFAULTS[newRole]) {
+                              const d = ROLE_DEFAULTS[newRole]
+                              setForm(prev => ({
+                                ...prev,
+                                combatRole: newRole,
+                                level: d.level, ac: d.ac, hp: d.hp,
+                                movement: d.movement, hitDie: d.hitDie,
+                                str: d.str, dex: d.dex, con: d.con,
+                                int: d.int, wis: d.wis, cha: d.cha,
+                                attacks: d.attacks.map(a => ({ ...a, id: uid() })),
+                              }))
+                            } else {
+                              update('combatRole', newRole)
+                            }
+                          }}
                           disabled={loading}
                           className={`text-left p-2.5 rounded-lg border text-xs transition-all
                             ${form.combatRole === r.id
@@ -349,7 +414,7 @@ export default function ShadowdarkMonsterForm({ existing, onBack, onSaved }) {
 
               {/* ── 2. Core Stats ── */}
               <FormSection title="Core Stats">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
                   <StatBox label="LV"  placeholder="1"    value={form.level}    onChange={v => update('level',    v)} disabled={loading} hint="Level" />
                   <StatBox label="AC"  placeholder="11"   value={form.ac}       onChange={v => update('ac',       v)} disabled={loading} hint="Armor class" />
                   <StatBox label="HP"  placeholder="5"    value={form.hp}       onChange={v => update('hp',       v)} disabled={loading} hint="Hit points" />
@@ -364,6 +429,23 @@ export default function ShadowdarkMonsterForm({ existing, onBack, onSaved }) {
                       className={TINY}
                     />
                     <span className="text-[9px] text-codex-muted">Movement</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <label className="text-[10px] text-codex-muted uppercase tracking-widest">HD</label>
+                    <select
+                      value={form.hitDie}
+                      onChange={e => update('hitDie', e.target.value)}
+                      disabled={loading}
+                      className={TINY_SEL}
+                    >
+                      <option value="">—</option>
+                      <option value="d4">d4</option>
+                      <option value="d6">d6</option>
+                      <option value="d8">d8</option>
+                      <option value="d10">d10</option>
+                      <option value="d12">d12</option>
+                    </select>
+                    <span className="text-[9px] text-codex-muted">Hit die</span>
                   </div>
                 </div>
                 <p className="text-[10px] text-codex-muted mt-2 leading-relaxed">
@@ -400,36 +482,6 @@ export default function ShadowdarkMonsterForm({ existing, onBack, onSaved }) {
                   Enter signed modifiers: <span className="text-codex-subtext">+1 · 0 · -2</span>.
                   Typical range is −5 to +5, though high-level monsters can go higher.
                   Compare with well-known creatures when calibrating.
-                </p>
-              </FormSection>
-
-              {/* ── 4. Alignment ── */}
-              <FormSection title="Alignment">
-                <div className="flex gap-3">
-                  {[
-                    { val: 'L', label: 'Lawful',  abbr: 'L', hint: 'Code, order, hierarchy' },
-                    { val: 'N', label: 'Neutral',  abbr: 'N', hint: 'Instinct, nature, survival' },
-                    { val: 'C', label: 'Chaotic',  abbr: 'C', hint: 'Appetite, impulse, destruction' },
-                  ].map(({ val, abbr, label, hint }) => (
-                    <button
-                      key={val}
-                      type="button"
-                      onClick={() => update('alignment', val)}
-                      disabled={loading}
-                      className={`flex-1 py-3 px-3 rounded-lg border text-xs transition-all
-                        ${form.alignment === val
-                          ? 'border-amber-500/60 bg-amber-500/10 text-amber-400'
-                          : 'border-codex-border text-codex-subtext hover:border-codex-text/40 hover:text-codex-text'
-                        } disabled:opacity-40`}
-                    >
-                      <div className="font-bold text-base">{abbr}</div>
-                      <div className="font-semibold text-[11px] mt-0.5">{label}</div>
-                      <div className="text-[9px] mt-0.5 opacity-70 leading-tight">{hint}</div>
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[10px] text-codex-muted mt-2">
-                  Individual monsters may differ from the typical alignment of their species.
                 </p>
               </FormSection>
 
@@ -476,9 +528,22 @@ export default function ShadowdarkMonsterForm({ existing, onBack, onSaved }) {
                           </div>
                           <div className="col-span-2">
                             <label className="block text-[10px] text-codex-muted mb-1">Range</label>
-                            <input type="text" value={atk.range}
+                            <select
+                              value={atk.range}
                               onChange={e => updateAttack(atk.id, 'range', e.target.value)}
-                              placeholder="far" disabled={loading} className={TINY} />
+                              disabled={loading}
+                              className={TINY_SEL}
+                            >
+                              <option value="">melee</option>
+                              <option value="close">close</option>
+                              <option value="near">near</option>
+                              <option value="far">far</option>
+                              <option value="close/near">close/near</option>
+                              <option value="near/far">near/far</option>
+                              <option value="near (fly)">near (fly)</option>
+                              <option value="near (swim)">near (swim)</option>
+                              <option value="near (burrow)">near (burrow)</option>
+                            </select>
                           </div>
                           <div className="col-span-2">
                             <label className="block text-[10px] text-codex-muted mb-1">Bonus</label>

@@ -134,6 +134,8 @@ ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS is_deleted  BOOLEAN   NOT NULL DE
 ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS deleted_at  TIMESTAMP;
 -- Player leave support: soft-leave keeps the record for GM awareness
 ALTER TABLE campaign_members ADD COLUMN IF NOT EXISTS left_at TIMESTAMP;
+-- GM character: the GM can optionally play a character in their own campaign
+ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS gm_character_id UUID REFERENCES characters(id) ON DELETE SET NULL;
 
 CREATE OR REPLACE TRIGGER trg_characters_updated
   BEFORE UPDATE ON characters
@@ -179,6 +181,7 @@ CREATE TABLE IF NOT EXISTS campaign_messages (
   user_id      UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   username     VARCHAR(20) NOT NULL,
   body         TEXT        NOT NULL,
+  metadata     JSONB,                   -- optional: dice rolls, embeds, etc.
   created_at   TIMESTAMP   NOT NULL DEFAULT NOW()
 );
 
@@ -196,6 +199,7 @@ CREATE TABLE IF NOT EXISTS dm_messages (
   sender_username    VARCHAR(20) NOT NULL,
   recipient_username VARCHAR(20) NOT NULL,
   body               TEXT        NOT NULL,
+  metadata           JSONB,               -- optional: dice rolls, embeds, etc.
   created_at         TIMESTAMP   NOT NULL DEFAULT NOW()
 );
 
@@ -234,4 +238,87 @@ CREATE INDEX IF NOT EXISTS idx_monsters_user
 
 CREATE OR REPLACE TRIGGER trg_monsters_updated
   BEFORE UPDATE ON monsters
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ─── ENCOUNTERS ───────────────────────────────────────────────────────────────
+-- Saved reusable encounter templates, scoped by game system (NOT by campaign).
+-- A GM with 3 Shadowdark campaigns can reuse any encounter across all of them.
+--
+-- monsters JSONB array — each entry:
+--   { monsterId, name, count, hp, maxHp, ac, dexMod, notes }
+--   monsterId: UUID ref to monsters table, or null for inline custom entries.
+--   count:     number of this creature type (expands to N combatant rows when loaded).
+--   dexMod:    pre-computed DEX modifier for initiative (floor((dex-10)/2)).
+CREATE TABLE IF NOT EXISTS encounters (
+  id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id      UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  game_system  VARCHAR(20) NOT NULL
+               CHECK (game_system IN ('shadowdark','morkborg','nimble')),
+  name         VARCHAR(100) NOT NULL,
+  description  TEXT,
+  monsters     JSONB       NOT NULL DEFAULT '[]',
+  tags         VARCHAR(200),
+  times_used   INTEGER     NOT NULL DEFAULT 0,
+  created_at   TIMESTAMP   NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMP   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_encounters_user
+  ON encounters(user_id, game_system, created_at DESC);
+
+CREATE OR REPLACE TRIGGER trg_encounters_updated
+  BEFORE UPDATE ON encounters
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ─── SAFE MIGRATIONS: combat_sessions v2 ─────────────────────────────────────
+ALTER TABLE combat_sessions ADD COLUMN IF NOT EXISTS encounter_name VARCHAR(100);
+ALTER TABLE combat_sessions ADD COLUMN IF NOT EXISTS phase VARCHAR(20) NOT NULL DEFAULT 'active';
+ALTER TABLE combat_sessions ADD COLUMN IF NOT EXISTS active_combatant_index INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE combat_sessions ADD COLUMN IF NOT EXISTS encounter_id UUID REFERENCES encounters(id) ON DELETE SET NULL;
+
+-- ─── SAFE MIGRATIONS: combat_sessions v3 (persistent light timer — DEPRECATED) ──
+-- These columns are retained for data safety but the timer now lives on campaigns.
+ALTER TABLE combat_sessions ADD COLUMN IF NOT EXISTS light_timer_expires_at TIMESTAMPTZ;
+ALTER TABLE combat_sessions ADD COLUMN IF NOT EXISTS light_timer_remaining_secs INTEGER NOT NULL DEFAULT 3600;
+
+-- ─── SAFE MIGRATIONS: combat_sessions v4 (Nimble combat mode) ────────────────
+ALTER TABLE combat_sessions ADD COLUMN IF NOT EXISTS combat_mode VARCHAR(20) NOT NULL DEFAULT 'standard';
+
+-- ─── SAFE MIGRATIONS: campaigns v2 (campaign-scoped persistent torch timer) ────
+-- Decoupled from combat: torch burns independently of whether a fight is active.
+-- light_timer_expires_at: UTC timestamp when torch burns out (null = paused/reset)
+-- light_timer_remaining_secs: seconds remaining at last pause or the set duration
+ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS light_timer_expires_at TIMESTAMPTZ;
+ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS light_timer_remaining_secs INTEGER NOT NULL DEFAULT 3600;
+
+-- ─── BESTIARY SHARES (monster gifting between users) ─────────────────────────
+-- Stores a snapshot of the shared monsters at the time of sending so recipients
+-- can accept even if the sender later edits or deletes the originals.
+-- monsters_data: JSONB array of full monster records (id, name, challenge, tags, stat_data)
+-- status: 'pending' → recipient hasn't acted yet
+--         'accepted' → recipient added some or all monsters
+--         'dismissed' → recipient declined without adding
+CREATE TABLE IF NOT EXISTS bestiary_shares (
+  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  from_user_id  UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  to_user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  game_system   VARCHAR(20) NOT NULL
+                CHECK (game_system IN ('shadowdark','morkborg','nimble')),
+  monsters_data JSONB       NOT NULL DEFAULT '[]',
+  status        VARCHAR(20) NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending','accepted','dismissed')),
+  created_at    TIMESTAMP   NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMP   NOT NULL DEFAULT NOW()
+);
+
+-- Inbox lookup: all pending shares for a recipient, newest first
+CREATE INDEX IF NOT EXISTS idx_bestiary_shares_to
+  ON bestiary_shares(to_user_id, status, created_at DESC);
+
+-- Sent-shares lookup: all shares a user has sent
+CREATE INDEX IF NOT EXISTS idx_bestiary_shares_from
+  ON bestiary_shares(from_user_id, created_at DESC);
+
+CREATE OR REPLACE TRIGGER trg_bestiary_shares_updated
+  BEFORE UPDATE ON bestiary_shares
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();

@@ -5,6 +5,8 @@ const { requireAuth } = require('../middleware/auth')
 
 const router = express.Router()
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 const GAME_SYSTEMS  = ['shadowdark', 'morkborg', 'nimble']
 const FREE_LIMIT    = 10
 const SUPPORTER_LIMIT = 30
@@ -115,6 +117,7 @@ router.post('/', requireAuth, [
 
 // ─── GET /api/characters/:id ──────────────────────────────────────────────────
 router.get('/:id', requireAuth, async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid character ID.' })
   try {
     const result = await db.query(
       `SELECT c.*, u.username AS owner_username
@@ -165,6 +168,7 @@ router.patch('/:id', requireAuth, [
   body('sheetData').optional().isObject(),
   body('portraitUrl').optional().isURL().withMessage('Invalid portrait URL.'),
 ], async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid character ID.' })
   if (validationErrors(req, res)) return
 
   try {
@@ -209,6 +213,35 @@ router.patch('/:id', requireAuth, [
       [characterName || null, sheetData ? JSON.stringify(sheetData) : null,
        portraitUrl || null, req.params.id]
     )
+
+    // Sync HP to active combat session if this character is a PC combatant
+    const combatSync = await db.query(
+      `SELECT cs.id, cs.combatants FROM combat_sessions cs
+       JOIN campaign_members cm ON cm.campaign_id = cs.campaign_id
+       WHERE cm.character_id = $1 AND cs.is_active = true
+       LIMIT 1`,
+      [req.params.id]
+    )
+    if (combatSync.rows[0] && req.body.sheetData) {
+      const sess = combatSync.rows[0]
+      const newHpCurrent = req.body.sheetData.hp_current
+      const newHpMax     = req.body.sheetData.hp_max
+      if (newHpCurrent !== undefined || newHpMax !== undefined) {
+        const syncedCombatants = (sess.combatants ?? []).map(c => {
+          if (c.characterId !== req.params.id) return c
+          return {
+            ...c,
+            ...(newHpCurrent !== undefined ? { hp_current: newHpCurrent } : {}),
+            ...(newHpMax     !== undefined ? { hp_max:     newHpMax     } : {}),
+          }
+        })
+        await db.query(
+          'UPDATE combat_sessions SET combatants = $1 WHERE id = $2',
+          [JSON.stringify(syncedCombatants), sess.id]
+        )
+      }
+    }
+
     res.json({ character: updated.rows[0] })
   } catch (err) {
     console.error('[characters/update]', err)
@@ -216,8 +249,58 @@ router.patch('/:id', requireAuth, [
   }
 })
 
+// ─── PATCH /api/characters/:id/hp ────────────────────────────────────────────
+// Lightweight HP-only merge — used by the GM Combat Tracker to sync HP changes
+// back to the character sheet without overwriting any other sheet fields.
+// Auth: character owner, GM of the campaign the character is linked to, or admin.
+router.patch('/:id/hp', requireAuth, [
+  body('hp_current').isInt().withMessage('hp_current must be an integer.'),
+  body('hp_max').isInt({ min: 1 }).withMessage('hp_max must be a positive integer.'),
+], async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid character ID.' })
+  if (validationErrors(req, res)) return
+
+  try {
+    const charRow = await db.query(
+      'SELECT user_id, campaign_id FROM characters WHERE id = $1',
+      [req.params.id]
+    )
+    if (!charRow.rows[0]) return res.status(404).json({ error: 'Character not found.' })
+
+    const char    = charRow.rows[0]
+    const isOwner = char.user_id === req.user.sub
+    let   isGM    = false
+    if (!isOwner && char.campaign_id) {
+      const gmCheck = await db.query(
+        'SELECT gm_user_id FROM campaigns WHERE id = $1 AND is_deleted = false',
+        [char.campaign_id]
+      )
+      isGM = gmCheck.rows[0]?.gm_user_id === req.user.sub
+    }
+    if (!isOwner && !isGM && !req.user.isAdmin) {
+      return res.status(403).json({ error: 'Access denied.' })
+    }
+
+    const { hp_current, hp_max } = req.body
+    // Use JSONB merge (||) to patch only hp fields — preserves all other sheet_data
+    await db.query(
+      `UPDATE characters
+         SET sheet_data = sheet_data || $1::jsonb,
+             updated_at = NOW()
+       WHERE id = $2`,
+      [JSON.stringify({ hp_current: Number(hp_current), hp_max: Number(hp_max) }), req.params.id]
+    )
+
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[characters/hp]', err)
+    res.status(500).json({ error: 'Failed to update HP.' })
+  }
+})
+
 // ─── DELETE /api/characters/:id ───────────────────────────────────────────────
 router.delete('/:id', requireAuth, async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid character ID.' })
   try {
     const result = await db.query('SELECT user_id FROM characters WHERE id = $1', [req.params.id])
     if (!result.rows[0]) return res.status(404).json({ error: 'Character not found.' })

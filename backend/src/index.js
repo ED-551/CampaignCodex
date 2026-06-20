@@ -59,7 +59,9 @@ const adminRoutes      = require('./routes/admin')
 const combatRoutes     = require('./routes/combat')
 const ravensRoutes     = require('./routes/ravens')
 const usersRoutes      = require('./routes/users')
-const bestiaryRoutes   = require('./routes/bestiary')
+const bestiaryRoutes       = require('./routes/bestiary')
+const bestiarySharesRoutes = require('./routes/bestiaryShares')
+const encounterRoutes      = require('./routes/encounters')
 
 const app        = express()
 const httpServer = http.createServer(app)
@@ -87,8 +89,12 @@ app.use('/api/characters', characterRoutes)
 app.use('/api/admin',      adminRoutes)
 app.use('/api/combat',     combatRoutes)
 app.use('/api/ravens',     ravensRoutes)
-app.use('/api/users',      usersRoutes)
-app.use('/api/bestiary',   bestiaryRoutes)
+app.use('/api/users',            usersRoutes)
+// IMPORTANT: /api/bestiary/shares must be mounted BEFORE /api/bestiary
+// so the shares sub-router intercepts those paths before the bestiary router's /:id handler.
+app.use('/api/bestiary/shares',  bestiarySharesRoutes)
+app.use('/api/bestiary',         bestiaryRoutes)
+app.use('/api/encounters',       encounterRoutes)
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

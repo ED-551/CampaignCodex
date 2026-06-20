@@ -18,6 +18,8 @@ import { useDM } from '../../context/DMContext'
 import { useAuth } from '../../context/AuthContext'
 import { useSocket } from '../../context/SocketContext'
 import { api } from '../../utils/api'
+import DiceRollBubble from '../chat/DiceRollBubble'
+import { parseDiceCommand, rollDice, buildDiceMetadata, formatDiceBody } from '../../utils/dice'
 
 export default function DMWidget() {
   const { user }       = useAuth()
@@ -244,6 +246,7 @@ function ConvoList({ openConvos, unread, onSelect, onClose, onNewDM, closeDM }) 
 
 // ─── Chat pane ────────────────────────────────────────────────────────────────
 function ChatPane({ targetUserId, targetUsername, msgs, connected, user, onBack, onClose, sendDM }) {
+  const { socket } = useSocket()
   const [input, setInput]     = useState('')
   const [sending, setSending] = useState(false)
   const [chatErr, setChatErr] = useState('')
@@ -257,13 +260,32 @@ function ChatPane({ targetUserId, targetUsername, msgs, connected, user, onBack,
 
   const handleSend = useCallback((e) => {
     e.preventDefault()
-    const body = input.trim()
-    if (!body || sending || !connected) return
+    const raw = input.trim()
+    if (!raw || sending || !connected) return
 
     setSending(true)
     setChatErr('')
 
-    sendDM(targetUserId, body, ({ ok, error }) => {
+    // Dice command: /XdY
+    const dice = parseDiceCommand(raw)
+    if (dice) {
+      const rolls    = rollDice(dice.count, dice.sides)
+      const metadata = buildDiceMetadata(dice.count, dice.sides, rolls)
+      const body     = formatDiceBody(user?.username ?? 'Someone', metadata)
+      // Pass metadata through DMContext → socket
+      if (socket) {
+        socket.emit('send_dm', { targetUserId, body, metadata }, ({ ok, error } = {}) => {
+          setSending(false)
+          if (error) setChatErr(error)
+          else { setInput(''); inputRef.current?.focus() }
+        })
+      } else {
+        setSending(false)
+      }
+      return
+    }
+
+    sendDM(targetUserId, raw, ({ ok, error }) => {
       setSending(false)
       if (error) {
         setChatErr(error)
@@ -272,7 +294,7 @@ function ChatPane({ targetUserId, targetUsername, msgs, connected, user, onBack,
         inputRef.current?.focus()
       }
     })
-  }, [input, sending, connected, targetUserId, sendDM])
+  }, [input, sending, connected, targetUserId, sendDM, user, socket])
 
   function handleKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -334,6 +356,11 @@ function ChatPane({ targetUserId, targetUsername, msgs, connected, user, onBack,
         )}
 
         {!isLoading && msgs?.map(msg => {
+          // Dice roll — full-width announcement
+          if (msg.metadata?.type === 'dice') {
+            return <DiceRollBubble key={msg.id} message={msg} />
+          }
+
           const isMine = msg.sender_id === user?.id
           return (
             <div key={msg.id} className={`flex gap-2 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>

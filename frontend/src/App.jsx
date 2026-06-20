@@ -7,6 +7,9 @@ import ProtectedRoute     from './components/layout/ProtectedRoute'
 import LandingPage        from './pages/LandingPage'
 import Dashboard          from './pages/Dashboard'
 import CampaignDetail     from './pages/CampaignDetail'
+import CampaignSettings   from './pages/CampaignSettings'
+import EncounterLibrary   from './pages/EncounterLibrary'
+import EncounterBuilder   from './pages/EncounterBuilder'
 import CharacterPage      from './pages/CharacterPage'
 import CombatPage         from './pages/CombatPage'
 import AdminDashboard     from './pages/AdminDashboard'
@@ -15,6 +18,9 @@ import SettingsPage       from './pages/SettingsPage'
 import RavenPost          from './pages/RavenPost'
 import ChatPage           from './pages/ChatPage'
 import BestiaryPage       from './pages/BestiaryPage'
+import BestiarySharesPage from './pages/BestiarySharesPage'
+import SecretPage         from './pages/SecretPage'
+import SecretReviewPage   from './pages/SecretReviewPage'
 
 export default function App() {
   return (
@@ -32,6 +38,14 @@ export default function App() {
               {/* ── Public: legal ── */}
               <Route path="/terms" element={<TermsPage />} />
 
+              {/* ── Secret: easter egg (auth required) ── */}
+              <Route path="/eds-eats" element={
+                <ProtectedRoute><SecretPage /></ProtectedRoute>
+              } />
+              <Route path="/eds-eats/:slug" element={
+                <ProtectedRoute><SecretReviewPage /></ProtectedRoute>
+              } />
+
               {/* ── Protected: authenticated users ── */}
               <Route path="/dashboard" element={
                 <ProtectedRoute><Dashboard /></ProtectedRoute>
@@ -45,11 +59,26 @@ export default function App() {
               <Route path="/chat" element={
                 <ProtectedRoute><ChatPage /></ProtectedRoute>
               } />
+              <Route path="/bestiary/shares" element={
+                <ProtectedRoute><BestiarySharesPage /></ProtectedRoute>
+              } />
               <Route path="/bestiary/:system" element={
                 <ProtectedRoute><BestiaryPage /></ProtectedRoute>
               } />
               <Route path="/campaigns/:id" element={
                 <ProtectedRoute><CampaignDetail /></ProtectedRoute>
+              } />
+              <Route path="/campaigns/:id/settings" element={
+                <ProtectedRoute><CampaignSettings /></ProtectedRoute>
+              } />
+              <Route path="/encounters" element={
+                <ProtectedRoute><EncounterLibrary /></ProtectedRoute>
+              } />
+              <Route path="/encounters/new" element={
+                <ProtectedRoute><EncounterBuilder /></ProtectedRoute>
+              } />
+              <Route path="/encounters/:id/edit" element={
+                <ProtectedRoute><EncounterBuilder /></ProtectedRoute>
               } />
               <Route path="/campaigns/:id/combat" element={
                 <ProtectedRoute><CombatPage /></ProtectedRoute>

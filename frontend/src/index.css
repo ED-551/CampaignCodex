@@ -29,6 +29,20 @@
   }
 }
 
+@layer components {
+  /* Combat tracker compact control buttons */
+  .tracker-btn {
+    @apply flex items-center gap-1 text-[10px] px-2 py-1 border border-codex-border
+           rounded-lg text-codex-subtext hover:text-codex-text hover:border-codex-gold/30
+           transition-colors;
+  }
+  .tracker-btn-gold {
+    @apply flex items-center gap-1 text-[10px] px-2.5 py-1 border border-codex-gold/40
+           rounded-lg text-codex-gold font-medium hover:bg-codex-gold/10
+           transition-colors;
+  }
+}
+
 @layer utilities {
   .font-display {
     font-family: 'Cinzel Decorative', serif;

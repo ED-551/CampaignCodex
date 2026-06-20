@@ -2,7 +2,8 @@
  * BestiaryPage — /bestiary/:system
  *
  * Lists a user's custom monsters for one game system. Supports creating,
- * editing, and deleting monsters.
+ * editing, and deleting monsters. Supports share mode for sending monsters
+ * to other users.
  *
  * Full-page stat block builders:
  *   Shadowdark : ShadowdarkMonsterForm (amber theme)
@@ -15,9 +16,9 @@
  *   Nimble RPG : "Lv. 3" — numeric challenge gets the prefix; free text shown as-is
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link }      from 'react-router-dom'
-import { ArrowLeft, BookOpen, Plus, Trash2, X, Pencil } from 'lucide-react'
+import { ArrowLeft, BookOpen, Plus, Trash2, X, Pencil, Share2, Send, Check, Square, CheckSquare, Search } from 'lucide-react'
 import { api }                               from '../utils/api'
 import ShadowdarkMonsterForm                 from '../components/bestiary/ShadowdarkMonsterForm'
 import MorkborgMonsterForm                   from '../components/bestiary/MorkborgMonsterForm'
@@ -71,6 +72,29 @@ const INPUT = `w-full bg-codex-surface border border-codex-border rounded-lg px-
   focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/30
   transition-colors disabled:opacity-40`
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function parseChallengeLevel(c) {
+  if (!c) return 999
+  const s = c.trim()
+  if (s.includes('/')) {
+    const [a, b] = s.split('/')
+    return parseFloat(a) / parseFloat(b)
+  }
+  const n = parseFloat(s)
+  return isNaN(n) ? 999 : n
+}
+
+function sortMonsters(arr, order) {
+  const copy = [...arr]
+  if (order === 'alpha') return copy.sort((a, b) => a.name.localeCompare(b.name))
+  if (order === 'level') return copy.sort((a, b) =>
+    parseChallengeLevel(a.challenge) - parseChallengeLevel(b.challenge)
+  )
+  // 'created' — newest first
+  return copy.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function BestiaryPage() {
@@ -93,6 +117,12 @@ export default function BestiaryPage() {
   // Delete
   const [deleteTarget,  setDeleteTarget]  = useState(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+
+  // Sort + share
+  const [sortOrder,      setSortOrder]      = useState('created') // 'created' | 'level' | 'alpha'
+  const [shareMode,      setShareMode]      = useState(false)
+  const [selectedIds,    setSelectedIds]    = useState(new Set())
+  const [showShareModal, setShowShareModal] = useState(false)
 
   // Redirect unknown system slugs
   useEffect(() => {
@@ -164,6 +194,36 @@ export default function BestiaryPage() {
     }
   }
 
+  // ── Share mode handlers ────────────────────────────────────────────────────
+
+  function toggleShareMode() {
+    setShareMode(v => !v)
+    setSelectedIds(new Set())
+    setShowShareModal(false)
+  }
+
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds(prev =>
+      prev.size === monsters.length
+        ? new Set()
+        : new Set(monsters.map(m => m.id))
+    )
+  }
+
+  function handleShared() {
+    setShareMode(false)
+    setSelectedIds(new Set())
+    setShowShareModal(false)
+  }
+
   if (!meta) return null
 
   // ── Full-page form (system-specific) ──────────────────────────────────────
@@ -219,7 +279,7 @@ export default function BestiaryPage() {
         </Link>
 
         {/* ── Section header ── */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <span className="text-3xl">{meta.icon}</span>
             <div>
@@ -229,14 +289,89 @@ export default function BestiaryPage() {
               </p>
             </div>
           </div>
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg
-              bg-codex-gold text-codex-bg hover:bg-codex-goldHover transition-all"
-          >
-            <Plus size={14} /> New Monster
-          </button>
+
+          {shareMode ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={toggleSelectAll}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
+                  border border-codex-border text-codex-subtext
+                  hover:border-codex-text hover:text-codex-text transition-colors"
+              >
+                {selectedIds.size > 0 && selectedIds.size === monsters.length
+                  ? <CheckSquare size={12} />
+                  : <Square size={12} />
+                }
+                {selectedIds.size === monsters.length ? 'Deselect All' : 'Select All'}
+              </button>
+              <button
+                disabled={selectedIds.size === 0}
+                onClick={() => setShowShareModal(true)}
+                className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg
+                  bg-codex-gold text-codex-bg hover:bg-codex-goldHover transition-all
+                  disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <Send size={13} />
+                {selectedIds.size > 0
+                  ? `Share ${selectedIds.size} Monster${selectedIds.size !== 1 ? 's' : ''}`
+                  : 'Share Monsters'}
+              </button>
+              <button
+                onClick={toggleShareMode}
+                className="flex items-center gap-1 text-sm text-codex-muted
+                  hover:text-codex-text transition-colors px-2 py-2"
+                title="Cancel"
+              >
+                <X size={14} /> Cancel
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              {monsters.length > 0 && (
+                <button
+                  onClick={toggleShareMode}
+                  className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg
+                    border border-codex-border text-codex-subtext
+                    hover:border-codex-gold hover:text-codex-gold transition-all"
+                  title="Share monsters with a friend"
+                >
+                  <Share2 size={14} /> Share
+                </button>
+              )}
+              <button
+                onClick={openCreate}
+                className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg
+                  bg-codex-gold text-codex-bg hover:bg-codex-goldHover transition-all"
+              >
+                <Plus size={14} /> New Monster
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* ── Sort controls ── */}
+        {!loading && !error && monsters.length > 0 && (
+          <div className="flex items-center gap-2 mb-5">
+            <span className="text-xs text-codex-muted">Sort:</span>
+            {[
+              { key: 'created', label: 'Date Added' },
+              { key: 'level',   label: 'Level / HP' },
+              { key: 'alpha',   label: 'A–Z' },
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setSortOrder(key)}
+                className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                  sortOrder === key
+                    ? 'border-codex-gold text-codex-gold bg-codex-gold/10'
+                    : 'border-codex-border text-codex-muted hover:border-codex-subtext hover:text-codex-subtext'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* ── Content ── */}
         {loading && (
@@ -264,20 +399,84 @@ export default function BestiaryPage() {
           </div>
         )}
 
-        {!loading && !error && monsters.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {monsters.map(m => (
-              <MonsterCard
-                key={m.id}
-                monster={m}
-                meta={meta}
-                system={system}
-                onEdit={() => openEdit(m)}
-                onDelete={() => setDeleteTarget(m)}
-              />
-            ))}
-          </div>
-        )}
+        {!loading && !error && monsters.length > 0 && (() => {
+          // For Nimble: split into entry vs legendary, sort each group
+          if (system === 'nimble') {
+            const entry     = sortMonsters(monsters.filter(m => (m.stat_data?.monsterTier ?? 'entry') !== 'legendary'), sortOrder)
+            const legendary = sortMonsters(monsters.filter(m => m.stat_data?.monsterTier === 'legendary'), sortOrder)
+            return (
+              <div className="space-y-10">
+                {entry.length > 0 && (
+                  <section>
+                    <div className="flex items-center gap-3 mb-4">
+                      <h2 className="text-sm font-semibold text-emerald-400 uppercase tracking-widest">
+                        Bestiary
+                      </h2>
+                      <span className="text-xs text-codex-muted">
+                        ({entry.length} monsters)
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {entry.map(m => (
+                        <MonsterCard key={m.id} monster={m} meta={meta} system={system}
+                          onEdit={() => openEdit(m)} onDelete={() => setDeleteTarget(m)}
+                          shareMode={shareMode}
+                          selected={selectedIds.has(m.id)}
+                          onSelect={() => toggleSelect(m.id)} />
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {legendary.length > 0 && (
+                  <section>
+                    {/* Legendary divider */}
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="flex-1 h-px bg-gradient-to-r from-codex-gold/60 to-transparent" />
+                      <div className="flex items-center gap-2 px-3 py-1 rounded-full
+                        border border-codex-gold/40 bg-codex-gold/5">
+                        <span className="text-codex-gold text-xs">⚔</span>
+                        <span className="text-xs font-bold text-codex-gold uppercase tracking-widest">
+                          Legendary Monsters
+                        </span>
+                        <span className="text-xs text-codex-muted">({legendary.length})</span>
+                      </div>
+                      <div className="flex-1 h-px bg-gradient-to-l from-codex-gold/60 to-transparent" />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {legendary.map(m => (
+                        <MonsterCard key={m.id} monster={m} meta={meta} system={system}
+                          onEdit={() => openEdit(m)} onDelete={() => setDeleteTarget(m)}
+                          shareMode={shareMode}
+                          selected={selectedIds.has(m.id)}
+                          onSelect={() => toggleSelect(m.id)} />
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </div>
+            )
+          }
+
+          // All other systems: flat grid
+          return (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sortMonsters(monsters, sortOrder).map(m => (
+                <MonsterCard
+                  key={m.id}
+                  monster={m}
+                  meta={meta}
+                  system={system}
+                  onEdit={() => openEdit(m)}
+                  onDelete={() => setDeleteTarget(m)}
+                  shareMode={shareMode}
+                  selected={selectedIds.has(m.id)}
+                  onSelect={() => toggleSelect(m.id)}
+                />
+              ))}
+            </div>
+          )
+        })()}
       </main>
 
       {/* ── Modal (non-Shadowdark systems) ── */}
@@ -300,13 +499,37 @@ export default function BestiaryPage() {
           onCancel={() => setDeleteTarget(null)}
         />
       )}
+
+      {/* ── Share inbox link ── */}
+      {!shareMode && monsters.length > 0 && (
+        <div className="mt-6 text-center">
+          <Link
+            to="/bestiary/shares"
+            className="text-xs text-codex-muted hover:text-codex-gold transition-colors"
+          >
+            📨 View received monster shares
+          </Link>
+        </div>
+      )}
+
+      {/* ── Share Modal ── */}
+      {showShareModal && (
+        <ShareModal
+          monsters={monsters}
+          selectedIds={selectedIds}
+          system={system}
+          meta={meta}
+          onClose={() => setShowShareModal(false)}
+          onShared={handleShared}
+        />
+      )}
     </div>
   )
 }
 
 // ─── Monster Card ─────────────────────────────────────────────────────────────
 
-function MonsterCard({ monster, meta, system, onEdit, onDelete }) {
+function MonsterCard({ monster, meta, system, onEdit, onDelete, shareMode = false, selected = false, onSelect }) {
   const challenge = meta.formatChallenge(monster.challenge)
   const tagList   = monster.tags
     ? monster.tags.split(',').map(t => t.trim()).filter(Boolean)
@@ -322,31 +545,56 @@ function MonsterCard({ monster, meta, system, onEdit, onDelete }) {
     ? Boolean(sd.hp || sd.level)
     : false
 
-  return (
-    <div className={`group relative flex flex-col gap-3 p-4
-      bg-codex-surface border border-codex-border rounded-xl
-      transition-all duration-150 ${meta.cardBorder}`}>
+  const isLegendary = system === 'nimble' && sd.monsterTier === 'legendary'
 
-      {/* Action buttons — revealed on hover */}
-      <div className="absolute top-3 right-3 flex items-center gap-1
-        opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={onEdit}
-          className="p-1.5 rounded-lg text-codex-muted hover:text-codex-gold
-            hover:bg-codex-bg border border-transparent hover:border-codex-border transition-all"
-          title="Edit"
-        >
-          <Pencil size={12} />
-        </button>
-        <button
-          onClick={onDelete}
-          className="p-1.5 rounded-lg text-codex-muted hover:text-red-400
-            hover:bg-red-500/5 border border-transparent hover:border-red-500/30 transition-all"
-          title="Delete"
-        >
-          <Trash2 size={12} />
-        </button>
-      </div>
+  return (
+    <div
+      onClick={shareMode ? onSelect : undefined}
+      className={`group relative flex flex-col gap-3 p-4
+        bg-codex-surface border rounded-xl
+        transition-all duration-150
+        ${shareMode ? 'cursor-pointer' : ''}
+        ${shareMode && selected
+          ? 'border-codex-gold ring-1 ring-codex-gold/30 bg-codex-gold/5'
+          : isLegendary
+          ? 'border-codex-gold/30 hover:border-codex-gold/60 bg-gradient-to-br from-codex-surface to-codex-gold/5'
+          : `border-codex-border ${meta.cardBorder}`
+        }`}
+    >
+
+      {shareMode ? (
+        /* Share-mode checkbox */
+        <div className="absolute top-3 right-3">
+          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+            selected
+              ? 'bg-codex-gold border-codex-gold'
+              : 'border-codex-border bg-codex-bg'
+          }`}>
+            {selected && <Check size={11} className="text-codex-bg" strokeWidth={3} />}
+          </div>
+        </div>
+      ) : (
+        /* Normal edit/delete buttons */
+        <div className="absolute top-3 right-3 flex items-center gap-1
+          opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={onEdit}
+            className="p-1.5 rounded-lg text-codex-muted hover:text-codex-gold
+              hover:bg-codex-bg border border-transparent hover:border-codex-border transition-all"
+            title="Edit"
+          >
+            <Pencil size={12} />
+          </button>
+          <button
+            onClick={onDelete}
+            className="p-1.5 rounded-lg text-codex-muted hover:text-red-400
+              hover:bg-red-500/5 border border-transparent hover:border-red-500/30 transition-all"
+            title="Delete"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
+      )}
 
       {/* Name */}
       <div className="pr-14">
@@ -414,7 +662,8 @@ function MonsterCard({ monster, meta, system, onEdit, onDelete }) {
                 <StatPip label="ATK" value={`${sd.attacks.length}×`} />
               )}
               {sd.monsterTier === 'legendary' && (
-                <StatPip label="Type" value="Legendary" />
+                <span className="text-[10px] font-bold text-codex-gold border border-codex-gold/40
+                  rounded-full px-2 py-0.5 bg-codex-gold/5">⚔ Legendary</span>
               )}
               {sd.monsterTier === 'legendary' && sd.actions?.length > 0 && (
                 <StatPip label="Actions" value={sd.actions.length} />
@@ -617,6 +866,285 @@ function DeleteModal({ monster, loading, onConfirm, onCancel }) {
                 : <><Trash2 size={13} /> Delete</>}
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Share Modal ──────────────────────────────────────────────────────────────
+
+function ShareModal({ monsters, selectedIds, system, meta, onClose, onShared }) {
+  const selectedMonsters = monsters.filter(m => selectedIds.has(m.id))
+
+  const [contacts,       setContacts]       = useState([])
+  const [contactsLoaded, setContactsLoaded] = useState(false)
+  const [recipient,      setRecipient]      = useState(null)  // { id, username }
+  const [searchQuery,    setSearchQuery]    = useState('')
+  const [searchResults,  setSearchResults]  = useState([])
+  const [searchLoading,  setSearchLoading]  = useState(false)
+  const [showResults,    setShowResults]    = useState(false)
+  const [loading,        setLoading]        = useState(false)
+  const [error,          setError]          = useState('')
+  const [success,        setSuccess]        = useState(false)
+
+  const searchRef  = useRef(null)
+  const timerRef   = useRef(null)
+
+  // Close on Escape
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape' && !loading) onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [loading, onClose])
+
+  // Load raven contacts on mount
+  useEffect(() => {
+    api.get('/users/contacts')
+      .then(({ contacts: list }) => setContacts(list))
+      .catch(() => {})
+      .finally(() => setContactsLoaded(true))
+  }, [])
+
+  // Debounced username search
+  useEffect(() => {
+    clearTimeout(timerRef.current)
+    if (!searchQuery.trim() || searchQuery.length < 2) {
+      setSearchResults([])
+      setShowResults(false)
+      return
+    }
+    timerRef.current = setTimeout(async () => {
+      setSearchLoading(true)
+      try {
+        const { users } = await api.get(`/users/search?q=${encodeURIComponent(searchQuery.trim())}`)
+        setSearchResults(users)
+        setShowResults(true)
+      } catch {
+        setSearchResults([])
+      } finally {
+        setSearchLoading(false)
+      }
+    }, 300)
+    return () => clearTimeout(timerRef.current)
+  }, [searchQuery])
+
+  // Click outside to close results
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        setShowResults(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  function selectRecipient(user) {
+    setRecipient(user)
+    setSearchQuery('')
+    setSearchResults([])
+    setShowResults(false)
+  }
+
+  async function handleShare() {
+    if (!recipient) return
+    setError('')
+    setLoading(true)
+    try {
+      await api.post('/bestiary/shares', {
+        toUserId:   recipient.id,
+        monsterIds: [...selectedIds],
+      })
+      setSuccess(true)
+      setTimeout(() => {
+        onShared()
+        onClose()
+      }, 1800)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      onClick={e => { if (e.target === e.currentTarget && !loading) onClose() }}
+    >
+      <div className="relative w-full max-w-md bg-codex-card border border-codex-border rounded-2xl overflow-hidden shadow-2xl">
+        <div className="h-px w-full bg-gradient-to-r from-transparent via-codex-gold to-transparent opacity-60" />
+
+        {/* Header */}
+        <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-codex-border/40">
+          <div>
+            <h2 className="text-base font-semibold text-codex-text flex items-center gap-2">
+              <Share2 size={16} className="text-codex-gold" />
+              Share Monsters
+            </h2>
+            <p className="text-xs text-codex-subtext mt-0.5">
+              Sharing <span className="text-codex-gold font-medium">{selectedMonsters.length}</span> monster{selectedMonsters.length !== 1 ? 's' : ''} from your {meta.label} bestiary
+            </p>
+          </div>
+          {!loading && (
+            <button onClick={onClose}
+              className="text-codex-muted hover:text-codex-text p-1 rounded-lg hover:bg-codex-surface transition-colors ml-2">
+              <X size={16} />
+            </button>
+          )}
+        </div>
+
+        <div className="px-6 py-5 flex flex-col gap-5">
+
+          {/* Monster preview chips */}
+          <div>
+            <p className="text-xs font-medium text-codex-subtext mb-2">Monsters to share:</p>
+            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+              {selectedMonsters.map(m => (
+                <span key={m.id}
+                  className={`text-xs border rounded-full px-2.5 py-0.5 ${meta.badgeClass}`}>
+                  {m.name}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Recipient selector */}
+          <div>
+            <p className="text-xs font-medium text-codex-subtext mb-2">Send to:</p>
+
+            {/* Selected recipient chip */}
+            {recipient ? (
+              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-codex-gold/10
+                border border-codex-gold/40">
+                <div className="w-6 h-6 rounded-full bg-codex-gold/20 border border-codex-gold/40
+                  flex items-center justify-center text-xs font-bold text-codex-gold">
+                  {recipient.username[0].toUpperCase()}
+                </div>
+                <span className="text-sm text-codex-text font-medium flex-1">@{recipient.username}</span>
+                <button onClick={() => setRecipient(null)}
+                  className="text-codex-muted hover:text-codex-text transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {/* Friends dropdown */}
+                {contactsLoaded && contacts.length > 0 && (
+                  <div>
+                    <p className="text-[10px] text-codex-muted mb-1.5 uppercase tracking-wider">Your contacts</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {contacts.map(c => (
+                        <button
+                          key={c.id}
+                          onClick={() => selectRecipient(c)}
+                          className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full
+                            border border-codex-border text-codex-subtext
+                            hover:border-codex-gold hover:text-codex-gold hover:bg-codex-gold/5
+                            transition-all"
+                        >
+                          <span className="w-4 h-4 rounded-full bg-codex-surface border border-codex-border
+                            flex items-center justify-center text-[9px] font-bold">
+                            {c.username[0].toUpperCase()}
+                          </span>
+                          @{c.username}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Username search */}
+                <div>
+                  <p className="text-[10px] text-codex-muted mb-1.5 uppercase tracking-wider">
+                    {contacts.length > 0 ? 'Or search by username' : 'Enter a username'}
+                  </p>
+                  <div ref={searchRef} className="relative">
+                    <div className="relative">
+                      <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-codex-muted" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        onFocus={() => searchResults.length > 0 && setShowResults(true)}
+                        placeholder="Type a username…"
+                        maxLength={20}
+                        className="w-full bg-codex-surface border border-codex-border rounded-lg
+                          pl-8 pr-4 py-2 text-sm text-codex-text placeholder-codex-muted
+                          focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/30
+                          transition-colors"
+                      />
+                      {searchLoading && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2
+                          w-3.5 h-3.5 border-2 border-codex-border border-t-codex-gold
+                          rounded-full animate-spin" />
+                      )}
+                    </div>
+
+                    {/* Search results dropdown */}
+                    {showResults && searchResults.length > 0 && (
+                      <div className="absolute top-full mt-1 w-full bg-codex-card border border-codex-border
+                        rounded-lg shadow-xl z-10 overflow-hidden">
+                        {searchResults.map(u => (
+                          <button
+                            key={u.id}
+                            onClick={() => selectRecipient(u)}
+                            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-codex-subtext
+                              hover:bg-codex-surface hover:text-codex-text transition-colors text-left"
+                          >
+                            <span className="w-6 h-6 rounded-full bg-codex-surface border border-codex-border
+                              flex items-center justify-center text-xs font-bold text-codex-gold">
+                              {u.username[0].toUpperCase()}
+                            </span>
+                            @{u.username}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {showResults && !searchLoading && searchQuery.length >= 2 && searchResults.length === 0 && (
+                      <div className="absolute top-full mt-1 w-full bg-codex-card border border-codex-border
+                        rounded-lg shadow-xl z-10 px-3 py-2.5 text-xs text-codex-muted">
+                        No users found matching "@{searchQuery}"
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {error && <p className="text-sm text-red-400 text-center">{error}</p>}
+
+          {success && (
+            <div className="flex items-center justify-center gap-2 text-sm text-emerald-400 py-2">
+              <Check size={16} /> Raven dispatched! Your monsters are on their way.
+            </div>
+          )}
+
+          {/* Actions */}
+          {!success && (
+            <div className="flex gap-3">
+              <button type="button" onClick={onClose} disabled={loading}
+                className="flex-1 py-2.5 rounded-xl border border-codex-border text-codex-subtext
+                  text-sm hover:border-codex-text hover:text-codex-text transition-colors disabled:opacity-40">
+                Cancel
+              </button>
+              <button
+                onClick={handleShare}
+                disabled={loading || !recipient}
+                className="flex-1 py-2.5 rounded-xl bg-codex-gold hover:bg-codex-goldHover
+                  text-codex-bg font-semibold text-sm transition-all
+                  disabled:opacity-30 disabled:cursor-not-allowed
+                  flex items-center justify-center gap-2"
+              >
+                {loading
+                  ? <span className="w-4 h-4 border-2 border-codex-bg/30 border-t-codex-bg rounded-full animate-spin" />
+                  : <><Send size={13} /> Send Raven</>
+                }
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

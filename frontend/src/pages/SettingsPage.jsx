@@ -341,7 +341,12 @@ export default function SettingsPage() {
                 Danger Zone
               </p>
               <p className="text-sm text-codex-subtext">
-                Permanently delete your account and all associated data. This cannot be undone.
+                Permanently delete your account and all associated data. This cannot{' '}
+                <span
+                  onClick={(e) => { e.stopPropagation(); navigate('/eds-eats') }}
+                  style={{ cursor: 'text', pointerEvents: 'auto', display: 'inline' }}
+                >be</span>
+                {' '}undone.
               </p>
             </div>
             <button

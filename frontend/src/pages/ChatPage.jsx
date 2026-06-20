@@ -21,6 +21,8 @@ import { Link } from 'react-router-dom'
 import { ArrowLeft, BookOpen, Send, Users, Eye } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
+import DiceRollBubble from '../components/chat/DiceRollBubble'
+import { parseDiceCommand, rollDice, buildDiceMetadata, formatDiceBody } from '../utils/dice'
 
 // ─── Room metadata (mirrors the server's PUBLIC_ROOMS map) ───────────────────
 // This is display-only — the authoritative definition lives in socket.js.
@@ -320,17 +322,32 @@ function RoomView({ room, socket, connected, user, onExit }) {
   // ── Send ────────────────────────────────────────────────────────────────────
   const handleSend = useCallback((e) => {
     e.preventDefault()
-    const body = input.trim()
-    if (!body || sending || !connected) return
+    const raw = input.trim()
+    if (!raw || sending || !connected) return
 
     setSending(true)
     setChatErr('')
-    socket.emit('send_public_message', { roomId: room.id, body }, ({ ok, error }) => {
+
+    // Dice command: /XdY
+    const dice = parseDiceCommand(raw)
+    if (dice) {
+      const rolls    = rollDice(dice.count, dice.sides)
+      const metadata = buildDiceMetadata(dice.count, dice.sides, rolls)
+      const body     = formatDiceBody(user?.username ?? 'Someone', metadata)
+      socket.emit('send_public_message', { roomId: room.id, body, metadata }, ({ ok, error }) => {
+        setSending(false)
+        if (error) setChatErr(error)
+        else { setInput(''); inputRef.current?.focus() }
+      })
+      return
+    }
+
+    socket.emit('send_public_message', { roomId: room.id, body: raw }, ({ ok, error }) => {
       setSending(false)
       if (error) setChatErr(error)
       else { setInput(''); inputRef.current?.focus() }
     })
-  }, [input, sending, connected, socket, room.id])
+  }, [input, sending, connected, socket, room.id, user])
 
   function handleKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(e) }
@@ -396,6 +413,11 @@ function RoomView({ room, socket, connected, user, onExit }) {
             )}
 
             {messages.map(msg => {
+              // Dice roll — full-width announcement
+              if (msg.metadata?.type === 'dice') {
+                return <DiceRollBubble key={msg.id} message={msg} />
+              }
+
               const isMine = msg.user_id === user?.id
               return (
                 <div key={msg.id} className={`flex gap-2.5 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -588,24 +610,29 @@ function SpectatorView({ session, socket, connected, onExit }) {
           </div>
         )}
 
-        {messages.map((msg, i) => (
-          <div key={msg.id ?? i} className="flex gap-2.5">
-            <div className="flex-shrink-0 w-7 h-7 rounded-full bg-codex-bg border border-codex-border
-              flex items-center justify-center text-xs font-bold uppercase text-codex-subtext select-none">
-              {msg.username?.[0] ?? '?'}
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-[11px] font-medium text-codex-subtext">{msg.username}</span>
-                <span className="text-[10px] text-codex-muted">{formatTime(msg.created_at)}</span>
+        {messages.map((msg, i) => {
+          if (msg.metadata?.type === 'dice') {
+            return <DiceRollBubble key={msg.id ?? i} message={msg} />
+          }
+          return (
+            <div key={msg.id ?? i} className="flex gap-2.5">
+              <div className="flex-shrink-0 w-7 h-7 rounded-full bg-codex-bg border border-codex-border
+                flex items-center justify-center text-xs font-bold uppercase text-codex-subtext select-none">
+                {msg.username?.[0] ?? '?'}
               </div>
-              <div className="px-3 py-2 rounded-2xl rounded-tl-sm text-sm leading-relaxed
-                whitespace-pre-wrap break-words bg-codex-bg border border-codex-border text-codex-text">
-                {msg.body}
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-[11px] font-medium text-codex-subtext">{msg.username}</span>
+                  <span className="text-[10px] text-codex-muted">{formatTime(msg.created_at)}</span>
+                </div>
+                <div className="px-3 py-2 rounded-2xl rounded-tl-sm text-sm leading-relaxed
+                  whitespace-pre-wrap break-words bg-codex-bg border border-codex-border text-codex-text">
+                  {msg.body}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
 
         <div ref={bottomRef} />
       </div>

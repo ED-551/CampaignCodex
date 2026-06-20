@@ -16,11 +16,37 @@
  *  5. UUID format validated on every inbound campaign ID.
  */
 
-const { Server } = require('socket.io')
+const { Server }     = require('socket.io')
+const { randomUUID } = require('crypto')
 const { verifyToken } = require('./utils/jwt')
 const db = require('./db')
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// ─── Combat HP sanitizer ──────────────────────────────────────────────────────
+// Strips hp_current / hp_max from non-PC combatants and replaces with hp_label.
+// Called before broadcasting combat state to player sockets.
+function sanitizeCombatantsForPlayers(combatants) {
+  if (!Array.isArray(combatants)) return combatants
+  return combatants.map(c => {
+    if (c.type === 'pc') return c  // PC HP always visible
+    // Monster/NPC: replace HP numbers with a label
+    const hp = c.hp_current ?? 0
+    const max = c.hp_max ?? 1
+    let hp_label = 'Healthy'
+    if (c.is_dead || (c.conditions ?? []).includes('Dead')) {
+      hp_label = 'Dead'
+    } else if (hp <= 0 || (c.conditions ?? []).includes('dying')) {
+      hp_label = 'Dying'
+    } else if (max > 0 && hp / max <= 0.25) {
+      hp_label = 'Near Death'
+    } else if (max > 0 && hp / max <= 0.5) {
+      hp_label = 'Bloodied'
+    }
+    const { hp_current, hp_max, ...rest } = c
+    return { ...rest, hp_label }
+  })
+}
 
 // ─── Per-user message rate limiting ──────────────────────────────────────────
 // Keyed by userId so it survives reconnects and catches multi-tab abuse.
@@ -255,7 +281,7 @@ function createSocketServer(httpServer) {
 
         // Fetch last 50 messages (DESC to limit, then reverse for chronological order)
         const history = await db.query(
-          `SELECT id, user_id, username, body, created_at
+          `SELECT id, user_id, username, body, metadata, created_at
            FROM campaign_messages
            WHERE campaign_id = $1
            ORDER BY created_at DESC
@@ -263,11 +289,23 @@ function createSocketServer(httpServer) {
           [campaignId]
         )
 
+        // Fetch current torch timer state from campaigns table
+        const timerResult = await db.query(
+          'SELECT light_timer_expires_at, light_timer_remaining_secs FROM campaigns WHERE id = $1',
+          [campaignId]
+        )
+        const timerRow = timerResult.rows[0] ?? {}
+
         // Inform late-joining players if spectator mode is already active
         const session = spectatorSessions.get(campaignId)
         const spectatorModeActive = session?.status === 'active'
 
-        callback({ messages: history.rows.reverse(), spectatorModeActive })
+        callback({
+          messages:             history.rows.reverse(),
+          spectatorModeActive,
+          lightTimerExpiresAt:  timerRow.light_timer_expires_at   ?? null,
+          lightTimerRemaining:  timerRow.light_timer_remaining_secs ?? 3600,
+        })
       } catch (err) {
         console.error('[socket:join_campaign]', err)
         callback({ error: 'Failed to join campaign chat.' })
@@ -279,9 +317,9 @@ function createSocketServer(httpServer) {
     // Re-validates membership on every send (handles user leaving mid-session).
     // On success, broadcasts `new_message` to ALL sockets in the room.
     //
-    // Payload : { campaignId: string, body: string }
+    // Payload : { campaignId: string, body: string, metadata?: object }
     // Callback: { ok: true } | { error: string }
-    socket.on('send_message', async ({ campaignId, body } = {}, callback) => {
+    socket.on('send_message', async ({ campaignId, body, metadata } = {}, callback) => {
       if (typeof callback !== 'function') return
 
       if (!campaignId || !UUID_RE.test(campaignId)) {
@@ -306,11 +344,16 @@ function createSocketServer(httpServer) {
         const member = await isCampaignMember(campaignId, socket.userId)
         if (!member) return callback({ error: 'Access denied.' })
 
+        // Sanitize optional metadata — only allow known dice roll shape
+        const safeMeta = (metadata && typeof metadata === 'object' && metadata.type === 'dice')
+          ? { type: 'dice', notation: String(metadata.notation ?? ''), count: Number(metadata.count), sides: Number(metadata.sides), rolls: Array.isArray(metadata.rolls) ? metadata.rolls.map(Number) : [], total: Number(metadata.total), variant: String(metadata.variant ?? 'standard') }
+          : null
+
         const result = await db.query(
-          `INSERT INTO campaign_messages (campaign_id, user_id, username, body)
-           VALUES ($1, $2, $3, $4)
-           RETURNING id, user_id, username, body, created_at`,
-          [campaignId, socket.userId, socket.username, trimmed]
+          `INSERT INTO campaign_messages (campaign_id, user_id, username, body, metadata)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id, user_id, username, body, metadata, created_at`,
+          [campaignId, socket.userId, socket.username, trimmed, safeMeta ? JSON.stringify(safeMeta) : null]
         )
 
         const message = result.rows[0]
@@ -387,7 +430,7 @@ function createSocketServer(httpServer) {
         // Fetch last 50 messages for this conversation pair (both directions)
         const history = await db.query(
           `SELECT id, sender_id, sender_username, recipient_id, recipient_username,
-                  body, created_at
+                  body, metadata, created_at
            FROM dm_messages
            WHERE (sender_id = $1 AND recipient_id = $2)
               OR (sender_id = $2 AND recipient_id = $1)
@@ -407,9 +450,9 @@ function createSocketServer(httpServer) {
     // Send a direct message to a specific user. Persists to dm_messages and
     // broadcasts to BOTH sides of the conversation.
     //
-    // Payload : { targetUserId: string, body: string }
+    // Payload : { targetUserId: string, body: string, metadata?: object }
     // Callback: { ok: true } | { error: string }
-    socket.on('send_dm', async ({ targetUserId, body } = {}, callback) => {
+    socket.on('send_dm', async ({ targetUserId, body, metadata } = {}, callback) => {
       if (typeof callback !== 'function') return
 
       if (!targetUserId || !UUID_RE.test(targetUserId)) {
@@ -442,13 +485,17 @@ function createSocketServer(httpServer) {
         }
         const targetUser = userCheck.rows[0]
 
+        const safeDMMeta = (metadata && typeof metadata === 'object' && metadata.type === 'dice')
+          ? { type: 'dice', notation: String(metadata.notation ?? ''), count: Number(metadata.count), sides: Number(metadata.sides), rolls: Array.isArray(metadata.rolls) ? metadata.rolls.map(Number) : [], total: Number(metadata.total), variant: String(metadata.variant ?? 'standard') }
+          : null
+
         const result = await db.query(
           `INSERT INTO dm_messages
-             (sender_id, sender_username, recipient_id, recipient_username, body)
-           VALUES ($1, $2, $3, $4, $5)
+             (sender_id, sender_username, recipient_id, recipient_username, body, metadata)
+           VALUES ($1, $2, $3, $4, $5, $6)
            RETURNING id, sender_id, sender_username, recipient_id, recipient_username,
-                     body, created_at`,
-          [socket.userId, socket.username, targetUserId, targetUser.username, trimmed]
+                     body, metadata, created_at`,
+          [socket.userId, socket.username, targetUserId, targetUser.username, trimmed, safeDMMeta ? JSON.stringify(safeDMMeta) : null]
         )
 
         const message = result.rows[0]
@@ -564,9 +611,9 @@ function createSocketServer(httpServer) {
     // Broadcast a message to a public room. No persistence — ephemeral only.
     // Messages are lost when the server restarts, matching the tavern vibe.
     //
-    // Payload : { roomId: string, body: string }
+    // Payload : { roomId: string, body: string, metadata?: object }
     // Callback: { ok: true } | { error: string }
-    socket.on('send_public_message', ({ roomId, body } = {}, callback) => {
+    socket.on('send_public_message', ({ roomId, body, metadata } = {}, callback) => {
       if (typeof callback !== 'function') return
 
       if (!roomId || !PUBLIC_ROOMS.has(roomId)) {
@@ -591,16 +638,123 @@ function createSocketServer(httpServer) {
       }
 
       // Ephemeral — no DB write
+      const safePublicMeta = (metadata && typeof metadata === 'object' && metadata.type === 'dice')
+        ? { type: 'dice', notation: String(metadata.notation ?? ''), count: Number(metadata.count), sides: Number(metadata.sides), rolls: Array.isArray(metadata.rolls) ? metadata.rolls.map(Number) : [], total: Number(metadata.total), variant: String(metadata.variant ?? 'standard') }
+        : null
       const message = {
-        id:         require('crypto').randomUUID(),
+        id:         randomUUID(),
         username:   socket.username,
         user_id:    socket.userId,
         body:       trimmed,
+        metadata:   safePublicMeta,
         created_at: new Date().toISOString(),
       }
 
       io.to(`public:${roomId}`).emit('room_message', message)
       callback({ ok: true })
+    })
+
+    // ────────────────────────────────────────────────────────────────────────
+    // ── TORCH TIMER EVENTS ───────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────
+    // Campaign-scoped light timer. Independent of combat sessions — a torch
+    // burns whether or not a fight is in progress. Canonical state is stored
+    // in campaigns.light_timer_expires_at / light_timer_remaining_secs.
+    // GM pushes changes here; server persists and broadcasts to the entire
+    // campaign room (GM + players + spectators all see the same countdown).
+
+    // ── push_light_timer ──────────────────────────────────────────────────────
+    // GM-only. Persists the timer action to the DB then broadcasts
+    // 'light_timer_update' to all sockets in campaign:<id>.
+    //
+    // Payload : { campaignId, action: 'start'|'pause'|'reset', secs?: number }
+    // Callback: { ok: true } | { error: string }
+    socket.on('push_light_timer', async ({ campaignId, action, secs } = {}, callback) => {
+      const cb = typeof callback === 'function' ? callback : () => {}
+
+      if (!campaignId || !UUID_RE.test(campaignId)) {
+        return cb({ error: 'Invalid campaign ID.' })
+      }
+      if (!['start', 'pause', 'reset'].includes(action)) {
+        return cb({ error: 'action must be start, pause, or reset.' })
+      }
+
+      try {
+        // Validate GM
+        const campRow = await db.query(
+          'SELECT gm_user_id FROM campaigns WHERE id = $1 AND is_deleted = false LIMIT 1',
+          [campaignId]
+        )
+        if (campRow.rows[0]?.gm_user_id !== socket.userId) {
+          return cb({ error: 'Only the GM can control the torch timer.' })
+        }
+
+        let expiresAt, remainingSecs
+
+        if (action === 'start') {
+          // Use current remaining from DB (never start from 0)
+          const cur = await db.query(
+            'SELECT light_timer_remaining_secs FROM campaigns WHERE id = $1',
+            [campaignId]
+          )
+          const remaining = cur.rows[0]?.light_timer_remaining_secs ?? 3600
+          const startSecs = remaining > 0 ? remaining : 3600
+          const result = await db.query(
+            `UPDATE campaigns
+             SET light_timer_expires_at     = NOW() + ($1 * interval '1 second'),
+                 light_timer_remaining_secs = $1
+             WHERE id = $2
+             RETURNING light_timer_expires_at, light_timer_remaining_secs`,
+            [startSecs, campaignId]
+          )
+          expiresAt    = result.rows[0].light_timer_expires_at
+          remainingSecs = result.rows[0].light_timer_remaining_secs
+
+        } else if (action === 'pause') {
+          // CASE guard: if already paused (expires_at IS NULL), keep existing remaining_secs
+          // rather than computing GREATEST(0, NULL) which violates the NOT NULL constraint.
+          const result = await db.query(
+            `UPDATE campaigns
+             SET light_timer_remaining_secs = CASE
+                   WHEN light_timer_expires_at IS NOT NULL
+                   THEN GREATEST(0, EXTRACT(EPOCH FROM (light_timer_expires_at - NOW()))::int)
+                   ELSE light_timer_remaining_secs
+                 END,
+                 light_timer_expires_at = NULL
+             WHERE id = $1
+             RETURNING light_timer_expires_at, light_timer_remaining_secs`,
+            [campaignId]
+          )
+          expiresAt    = null
+          remainingSecs = result.rows[0].light_timer_remaining_secs
+
+        } else {
+          // reset — set a new duration, clear running state
+          const newSecs = (secs != null && Number.isFinite(secs)) ? Math.max(0, Math.min(86400, secs)) : 3600
+          const result = await db.query(
+            `UPDATE campaigns
+             SET light_timer_remaining_secs = $1,
+                 light_timer_expires_at     = NULL
+             WHERE id = $2
+             RETURNING light_timer_expires_at, light_timer_remaining_secs`,
+            [newSecs, campaignId]
+          )
+          expiresAt    = null
+          remainingSecs = result.rows[0].light_timer_remaining_secs
+        }
+
+        // Broadcast to ALL in the campaign room — GM, players, spectators
+        io.to(`campaign:${campaignId}`).emit('light_timer_update', {
+          campaignId,
+          expiresAt:    expiresAt ?? null,
+          remainingSecs: remainingSecs ?? 3600,
+        })
+
+        cb({ ok: true })
+      } catch (err) {
+        console.error('[socket:push_light_timer]', err)
+        cb({ error: 'Timer update failed.' })
+      }
     })
 
     // ────────────────────────────────────────────────────────────────────────
@@ -630,8 +784,27 @@ function createSocketServer(httpServer) {
 
         socket.join(`combat:${campaignId}`)
         socket.currentCombatCampaignId = campaignId
-        callback({ ok: true })
-      } catch {
+
+        // Return current active session state so players get it when joining mid-combat
+        const campResult = await db.query(
+          'SELECT gm_user_id FROM campaigns WHERE id = $1 AND is_deleted = false LIMIT 1',
+          [campaignId]
+        )
+        const isGM = campResult.rows[0]?.gm_user_id === socket.userId
+
+        const sessResult = await db.query(
+          'SELECT * FROM combat_sessions WHERE campaign_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1',
+          [campaignId]
+        )
+        const session = sessResult.rows[0] ?? null
+
+        if (session && !isGM) {
+          session.combatants = sanitizeCombatantsForPlayers(session.combatants)
+        }
+
+        callback({ ok: true, session })
+      } catch (err) {
+        console.error('[socket:join_combat]', err)
         callback({ error: 'Failed to join combat room.' })
       }
     })
@@ -658,7 +831,7 @@ function createSocketServer(httpServer) {
     //   eventType   : 'update' | 'started' | 'ended'
     //
     // Players receive a 'combat_update' event with the same payload.
-    socket.on('push_combat_update', async ({ campaignId, combatants, roundNumber, eventType } = {}) => {
+    socket.on('push_combat_update', async ({ campaignId, combatants, roundNumber, eventType, phase, activeIndex, combatMode } = {}) => {
       if (!campaignId || !UUID_RE.test(campaignId)) return
 
       // Only validated GMs may push state
@@ -669,11 +842,17 @@ function createSocketServer(httpServer) {
         )
         if (r.rows[0]?.gm_user_id !== socket.userId) return
 
+        // Sanitize monster HP before broadcasting to players
+        const sanitized = sanitizeCombatantsForPlayers(combatants)
+
         // Broadcast to players (not back to GM — they already have it)
         socket.to(`combat:${campaignId}`).emit('combat_update', {
-          combatants,
+          combatants:  sanitized,
           roundNumber,
-          eventType: eventType ?? 'update',
+          eventType:   eventType ?? 'update',
+          phase,
+          activeIndex,
+          combatMode,
         })
       } catch (err) {
         console.error('[socket:push_combat_update]', err)

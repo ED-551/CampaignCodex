@@ -44,4 +44,29 @@ router.get('/search', requireAuth, [
   }
 })
 
+// ─── GET /api/users/contacts ─────────────────────────────────────────────────
+// Returns users you've exchanged ravens with — used as the "friends" dropdown
+// in the bestiary share modal. Never exposes sensitive user data.
+router.get('/contacts', requireAuth, async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT DISTINCT u.id, u.username
+       FROM users u
+       WHERE u.id IN (
+         SELECT sender_id    FROM raven_messages WHERE recipient_id = $1
+         UNION
+         SELECT recipient_id FROM raven_messages WHERE sender_id    = $1
+       )
+         AND u.id != $1
+       ORDER BY u.username
+       LIMIT 50`,
+      [req.user.sub]
+    )
+    res.json({ contacts: result.rows })
+  } catch (err) {
+    console.error('[users/contacts]', err)
+    res.status(500).json({ error: 'Failed to fetch contacts.' })
+  }
+})
+
 module.exports = router

@@ -5,6 +5,8 @@ const { requireAuth } = require('../middleware/auth')
 
 const router = express.Router()
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 const GAME_SYSTEMS    = ['shadowdark', 'morkborg', 'nimble']
 const FREE_CAP        = 6
 const SUPPORTER_CAP   = 12
@@ -90,10 +92,17 @@ router.post('/', requireAuth, [
 
 // ─── GET /api/campaigns/:id ───────────────────────────────────────────────────
 router.get('/:id', requireAuth, async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid campaign ID.' })
   try {
     const camp = await db.query(
-      `SELECT c.*, u.username AS gm_username
-       FROM campaigns c JOIN users u ON u.id = c.gm_user_id
+      `SELECT c.*, u.username AS gm_username,
+              ch.character_name AS gm_character_name,
+              ch.portrait_url   AS gm_portrait_url,
+              (SELECT COUNT(*)::int FROM combat_sessions cs
+               WHERE cs.campaign_id = c.id AND cs.is_active = false) AS encounters_completed
+       FROM campaigns c
+       JOIN users u ON u.id = c.gm_user_id
+       LEFT JOIN characters ch ON ch.id = c.gm_character_id
        WHERE c.id = $1`, [req.params.id]
     )
     if (!camp.rows[0]) return res.status(404).json({ error: 'Campaign not found.' })
@@ -156,7 +165,7 @@ router.post('/join', requireAuth, [
     )
     const cap = tierCap(gmResult.rows[0]?.supporter_tier ?? 'free')
     const memberCount = await db.query(
-      'SELECT COUNT(*) FROM campaign_members WHERE campaign_id = $1', [campaign.id]
+      'SELECT COUNT(*) FROM campaign_members WHERE campaign_id = $1 AND left_at IS NULL', [campaign.id]
     )
     if (parseInt(memberCount.rows[0].count) >= cap) {
       return res.status(403).json({ error: `This campaign is full (max ${cap} players).` })
@@ -177,6 +186,7 @@ router.post('/join', requireAuth, [
 // ─── DELETE /api/campaigns/:id ────────────────────────────────────────────────
 // Soft-deletes the campaign. Players still see it as a dismissible tombstone.
 router.delete('/:id', requireAuth, async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid campaign ID.' })
   try {
     const result = await db.query(
       'SELECT gm_user_id FROM campaigns WHERE id = $1', [req.params.id]
@@ -200,6 +210,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
 // ─── POST /api/campaigns/:id/dismiss ─────────────────────────────────────────
 // Player dismisses a soft-deleted campaign — removes them from campaign_members.
 router.post('/:id/dismiss', requireAuth, async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid campaign ID.' })
   try {
     await db.query(
       'DELETE FROM campaign_members WHERE campaign_id = $1 AND user_id = $2',
@@ -216,6 +227,7 @@ router.post('/:id/dismiss', requireAuth, async (req, res) => {
 // Player voluntarily leaves a campaign (soft-leave: sets left_at).
 // The GM can still see the departed member on the campaign detail page.
 router.post('/:id/leave', requireAuth, async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid campaign ID.' })
   try {
     const camp = await db.query('SELECT gm_user_id FROM campaigns WHERE id = $1', [req.params.id])
     if (!camp.rows[0]) return res.status(404).json({ error: 'Campaign not found.' })
@@ -239,6 +251,9 @@ router.post('/:id/leave', requireAuth, async (req, res) => {
 // ─── DELETE /api/campaigns/:id/members/:memberId ─────────────────────────────
 // GM dismisses a departed (left_at set) member — permanently removes the record.
 router.delete('/:id/members/:memberId', requireAuth, async (req, res) => {
+  if (!UUID_RE.test(req.params.id) || !UUID_RE.test(req.params.memberId)) {
+    return res.status(400).json({ error: 'Invalid ID.' })
+  }
   try {
     const camp = await db.query('SELECT gm_user_id FROM campaigns WHERE id = $1', [req.params.id])
     if (!camp.rows[0]) return res.status(404).json({ error: 'Campaign not found.' })
@@ -253,6 +268,167 @@ router.delete('/:id/members/:memberId', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[campaigns/remove-member]', err)
     res.status(500).json({ error: 'Failed to remove member.' })
+  }
+})
+
+// ─── POST /api/campaigns/:id/invite ──────────────────────────────────────────
+// GM invites a player by username.
+router.post('/:id/invite', requireAuth, [
+  body('username').trim().notEmpty().withMessage('Username is required.'),
+], async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid campaign ID.' })
+  if (validationErrors(req, res)) return
+
+  const { username } = req.body
+
+  try {
+    // Fetch campaign
+    const campResult = await db.query(
+      'SELECT * FROM campaigns WHERE id = $1', [req.params.id]
+    )
+    if (!campResult.rows[0]) return res.status(404).json({ error: 'Campaign not found.' })
+
+    const campaign = campResult.rows[0]
+
+    // Requester must be GM
+    if (campaign.gm_user_id !== req.user.sub) {
+      return res.status(403).json({ error: 'Only the GM can invite players.' })
+    }
+
+    // Look up target user by username (case-sensitive exact match)
+    const userResult = await db.query(
+      'SELECT id, username FROM users WHERE username = $1', [username]
+    )
+    if (!userResult.rows[0]) {
+      return res.status(404).json({ error: `No user found with username "${username}".` })
+    }
+
+    const targetUser = userResult.rows[0]
+
+    // Cannot invite self
+    if (targetUser.id === req.user.sub) {
+      return res.status(400).json({ error: 'You cannot invite yourself.' })
+    }
+
+    // Cannot invite someone who has any row in campaign_members (active or departed)
+    const existing = await db.query(
+      'SELECT id FROM campaign_members WHERE campaign_id = $1 AND user_id = $2',
+      [campaign.id, targetUser.id]
+    )
+    if (existing.rows.length) {
+      return res.status(409).json({ error: 'This user already was a member of this campaign.' })
+    }
+
+    // Check player cap — determined by GM's tier, count active members only
+    const gmResult = await db.query(
+      'SELECT supporter_tier FROM users WHERE id = $1', [campaign.gm_user_id]
+    )
+    const cap = tierCap(gmResult.rows[0]?.supporter_tier ?? 'free')
+    const memberCount = await db.query(
+      'SELECT COUNT(*) FROM campaign_members WHERE campaign_id = $1 AND left_at IS NULL',
+      [campaign.id]
+    )
+    if (parseInt(memberCount.rows[0].count) >= cap) {
+      return res.status(403).json({ error: `This campaign is full (max ${cap} players).` })
+    }
+
+    // Insert member and return shaped row
+    const insertResult = await db.query(
+      `INSERT INTO campaign_members (campaign_id, user_id)
+       VALUES ($1, $2)
+       RETURNING id, user_id, character_id, joined_at, left_at`,
+      [campaign.id, targetUser.id]
+    )
+
+    const row = insertResult.rows[0]
+    const member = {
+      id:             row.id,
+      user_id:        row.user_id,
+      character_id:   row.character_id,
+      joined_at:      row.joined_at,
+      left_at:        row.left_at,
+      username:       targetUser.username,
+      character_name: null,
+      portrait_url:   null,
+      game_system:    null,
+    }
+
+    res.status(201).json({ member })
+  } catch (err) {
+    console.error('[campaigns/invite]', err)
+    res.status(500).json({ error: 'Failed to invite player.' })
+  }
+})
+
+// ─── PATCH /api/campaigns/:id/gm-character ────────────────────────────────────
+// GM sets or clears their own character for the campaign.
+router.patch('/:id/gm-character', requireAuth, [
+  body('characterId').optional({ nullable: true }),
+], async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid campaign ID.' })
+  if (validationErrors(req, res)) return
+
+  const { characterId } = req.body
+
+  try {
+    // Fetch campaign
+    const campResult = await db.query(
+      'SELECT gm_user_id, game_system FROM campaigns WHERE id = $1', [req.params.id]
+    )
+    if (!campResult.rows[0]) return res.status(404).json({ error: 'Campaign not found.' })
+
+    const campaign = campResult.rows[0]
+
+    // Requester must be GM
+    if (campaign.gm_user_id !== req.user.sub) {
+      return res.status(403).json({ error: 'Only the GM can set their character.' })
+    }
+
+    // If clearing, set to null directly
+    if (characterId === null || characterId === undefined) {
+      await db.query(
+        'UPDATE campaigns SET gm_character_id = $1 WHERE id = $2',
+        [null, req.params.id]
+      )
+      return res.json({ gmCharacter: null })
+    }
+
+    // Verify character exists, belongs to requesting user, and matches campaign game_system
+    const charResult = await db.query(
+      'SELECT id, user_id, character_name, portrait_url, game_system FROM characters WHERE id = $1',
+      [characterId]
+    )
+    if (!charResult.rows[0]) {
+      return res.status(404).json({ error: 'Character not found.' })
+    }
+
+    const character = charResult.rows[0]
+
+    if (character.user_id !== req.user.sub) {
+      return res.status(403).json({ error: 'You do not own this character.' })
+    }
+
+    if (character.game_system !== campaign.game_system) {
+      return res.status(400).json({
+        error: `Character must be a ${campaign.game_system} character for this campaign.`,
+      })
+    }
+
+    await db.query(
+      'UPDATE campaigns SET gm_character_id = $1 WHERE id = $2',
+      [characterId, req.params.id]
+    )
+
+    res.json({
+      gmCharacter: {
+        id:             character.id,
+        character_name: character.character_name,
+        portrait_url:   character.portrait_url,
+      },
+    })
+  } catch (err) {
+    console.error('[campaigns/gm-character]', err)
+    res.status(500).json({ error: 'Failed to update GM character.' })
   }
 })
 

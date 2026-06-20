@@ -1,10 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Copy, Check, Sword, Plus, BookOpen, X, Trash2, MessageSquare, Send, Eye, EyeOff, Users } from 'lucide-react'
+import { ArrowLeft, Copy, Check, Sword, Plus, BookOpen, X, MessageSquare, Send, Eye, EyeOff, Users, Crown, UserPlus, Settings, Flame } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
 import { useDM } from '../context/DMContext'
 import { api } from '../utils/api'
+import PageShell from '../components/layout/PageShell'
+import MiniCombatTracker from '../components/combat/MiniCombatTracker'
+import EncounterPickerModal from '../components/combat/EncounterPickerModal'
+import DiceRollBubble from '../components/chat/DiceRollBubble'
+import { parseDiceCommand, rollDice, buildDiceMetadata, formatDiceBody } from '../utils/dice'
+
+function formatLightTimer(secs) {
+  const m = Math.floor(secs / 60).toString().padStart(2, '0')
+  const s = (secs % 60).toString().padStart(2, '0')
+  return `${m}:${s}`
+}
 
 const GAME_STYLE = {
   shadowdark: { label: 'Shadowdark',  accent: '#c9a84c', badge: 'text-amber-500 bg-amber-500/10 border-amber-500/30' },
@@ -21,14 +32,36 @@ export default function CampaignDetail() {
   const [loading, setLoading]       = useState(true)
   const [copied, setCopied]         = useState(false)
   const [error, setError]           = useState('')
-  const [showDeleteModal, setShowDeleteModal]   = useState(false)
-  const [deleteConfirm, setDeleteConfirm]       = useState('')
-  const [deleteError, setDeleteError]           = useState('')
-  const [deleting, setDeleting]                 = useState(false)
+
+  const [inviteUsername, setInviteUsername] = useState('')
+  const [inviteLoading,  setInviteLoading]  = useState(false)
+  const [inviteError,    setInviteError]    = useState('')
+  const [inviteSuccess,  setInviteSuccess]  = useState('')
+  const [showInvite,     setShowInvite]     = useState(false)
+
+  const [gmCharacter,       setGmCharacter]       = useState(null)
+  const [showCharPicker,    setShowCharPicker]    = useState(false)
+  const [myCharacters,      setMyCharacters]      = useState([])
+  const [charPickerLoading, setCharPickerLoading] = useState(false)
+  const [charPickerError,   setCharPickerError]   = useState('')
+
+  // Combat tracker
+  const [combatActive,  setCombatActive]  = useState(false)
+  const [showPicker,    setShowPicker]    = useState(false)
+  const [startError,    setStartError]    = useState('')
+  const combatTrackerRef = useRef(null)
 
   useEffect(() => {
     api.get(`/campaigns/${id}`)
-      .then(({ campaign, members }) => { setCampaign(campaign); setMembers(members) })
+      .then(({ campaign, members }) => {
+        setCampaign(campaign)
+        setMembers(members)
+        setGmCharacter(campaign.gm_character_id ? {
+          id:             campaign.gm_character_id,
+          character_name: campaign.gm_character_name,
+          portrait_url:   campaign.gm_portrait_url,
+        } : null)
+      })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
   }, [id])
@@ -58,16 +91,69 @@ export default function CampaignDetail() {
     }
   }
 
-  async function handleDeleteCampaign() {
-    if (deleteConfirm !== campaign.name) return
-    setDeleting(true)
-    setDeleteError('')
+  async function handleInvite(e) {
+    e.preventDefault()
+    if (!inviteUsername.trim()) return
+    setInviteLoading(true)
+    setInviteError('')
+    setInviteSuccess('')
     try {
-      await api.delete(`/campaigns/${id}`)
-      navigate('/dashboard', { replace: true })
+      const { member } = await api.post(`/campaigns/${id}/invite`, { username: inviteUsername.trim() })
+      setMembers(prev => [...prev, member])
+      setInviteSuccess(`${member.username} has been added to the campaign.`)
+      setInviteUsername('')
+      setTimeout(() => setInviteSuccess(''), 3000)
     } catch (err) {
-      setDeleteError(err.message || 'Deletion failed.')
-      setDeleting(false)
+      setInviteError(err.message)
+    } finally {
+      setInviteLoading(false)
+    }
+  }
+
+  async function handleOpenCharPicker() {
+    setShowCharPicker(true)
+    setCharPickerLoading(true)
+    setCharPickerError('')
+    try {
+      const { characters } = await api.get('/characters')
+      setMyCharacters(characters.filter(c => c.game_system === campaign.game_system))
+    } catch {
+      setCharPickerError('Failed to load characters.')
+    } finally {
+      setCharPickerLoading(false)
+    }
+  }
+
+  async function handleSetGMCharacter(characterId) {
+    try {
+      const { gmCharacter: updated } = await api.patch(`/campaigns/${id}/gm-character`, { characterId })
+      setGmCharacter(updated)
+      setShowCharPicker(false)
+    } catch (err) {
+      setCharPickerError(err.message)
+    }
+  }
+
+  async function handleRemoveGMCharacter() {
+    try {
+      await api.patch(`/campaigns/${id}/gm-character`, { characterId: null })
+      setGmCharacter(null)
+    } catch (err) {
+      console.error('Failed to remove GM character:', err)
+    }
+  }
+
+  // ── Combat start handler ─────────────────────────────────────────────────────
+  // Called by EncounterPickerModal.  Delegates to the mounted CombatTracker
+  // via its imperative handle (which handles API call + socket broadcast).
+  async function handleStartCombat(opts) {
+    setStartError('')
+    try {
+      await combatTrackerRef.current?.startCombat(opts)
+      setShowPicker(false)
+    } catch (err) {
+      setStartError(err.message)
+      throw err // re-throw so the picker modal can show a spinner reset
     }
   }
 
@@ -91,6 +177,14 @@ export default function CampaignDetail() {
             {campaign.description && (
               <p className="text-sm text-codex-subtext max-w-xl">{campaign.description}</p>
             )}
+            {isGM && (
+              <Link
+                to={`/campaigns/${id}/settings`}
+                className="inline-flex items-center gap-1 text-xs text-codex-muted hover:text-codex-subtext hover:underline transition-colors w-fit"
+              >
+                <Settings size={11} /> Campaign Settings & Info
+              </Link>
+            )}
           </div>
 
           <div className="flex flex-col gap-2 items-end shrink-0">
@@ -105,13 +199,21 @@ export default function CampaignDetail() {
                 </button>
               </div>
             )}
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap justify-end">
               {isGM && (
                 <button
-                  onClick={() => navigate(`/campaigns/${id}/combat`)}
+                  onClick={() => navigate(`/encounters/new?system=${campaign.game_system}&campaignId=${id}&from=campaign`)}
+                  className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg bg-codex-surface border border-codex-border text-codex-subtext hover:border-codex-gold/50 hover:text-codex-text transition-all"
+                >
+                  <Plus size={14} /> Make Encounter
+                </button>
+              )}
+              {isGM && (
+                <button
+                  onClick={() => { setShowPicker(true); setStartError('') }}
                   className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg bg-red-900/40 border border-red-700/40 text-red-300 hover:bg-red-900/60 transition-all"
                 >
-                  <Sword size={14} /> Start Combat
+                  <Sword size={14} /> {combatActive ? 'Combat Live ⚔' : 'Start Combat'}
                 </button>
               )}
               {!isGM && !myMember?.character_id && (
@@ -141,26 +243,112 @@ export default function CampaignDetail() {
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
         {/* Active Members */}
         <div>
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-semibold text-codex-text">
               Party Roster
               <span className="ml-2 text-codex-subtext font-normal text-sm">
-                {activeMembers.length} / {isGM ? (user?.campaignLimit ?? 6) : '?'} players
+                {activeMembers.length + (gmCharacter ? 1 : 0)} / {isGM ? (user?.campaignLimit ?? 6) : '?'} heroes
               </span>
             </h2>
+            {isGM && (
+              <div className="flex items-center gap-2">
+                {/* My Character — compact chip when set, quiet button when not */}
+                {gmCharacter ? (
+                  <div className="flex items-center gap-1.5 text-xs border border-codex-gold/30 bg-codex-gold/5 rounded-lg px-2 py-1.5 group">
+                    <Crown size={11} className="text-codex-gold/70 flex-shrink-0" />
+                    <button
+                      onClick={() => navigate(`/characters/${gmCharacter.id}?campaignId=${id}`)}
+                      className="text-codex-gold/80 hover:text-codex-gold transition-colors max-w-[90px] truncate"
+                      title={gmCharacter.character_name}
+                    >
+                      {gmCharacter.character_name}
+                    </button>
+                    <button
+                      onClick={handleRemoveGMCharacter}
+                      className="text-codex-muted hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+                      title="Remove character"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleOpenCharPicker}
+                    className="flex items-center gap-1.5 text-xs text-codex-subtext hover:text-codex-text border border-codex-border hover:border-codex-gold/50 rounded-lg px-2.5 py-1.5 transition-all"
+                    title="Play a character as GM"
+                  >
+                    <Crown size={12} /> My Character
+                  </button>
+                )}
+
+                {/* Invite Player */}
+                <button
+                  onClick={() => { setShowInvite(v => !v); setInviteError(''); setInviteSuccess('') }}
+                  className="flex items-center gap-1.5 text-xs text-codex-subtext hover:text-codex-text border border-codex-border hover:border-codex-gold/50 rounded-lg px-2.5 py-1.5 transition-all"
+                >
+                  <UserPlus size={12} /> Invite Player
+                </button>
+              </div>
+            )}
           </div>
 
-          {activeMembers.length === 0 ? (
+          {isGM && showInvite && (
+            <form onSubmit={handleInvite} className="mb-4 flex items-center gap-2 p-3 bg-codex-surface border border-codex-border rounded-xl">
+              <input
+                type="text"
+                value={inviteUsername}
+                onChange={e => { setInviteUsername(e.target.value); setInviteError('') }}
+                placeholder="Enter username…"
+                disabled={inviteLoading}
+                autoFocus
+                className="flex-1 bg-codex-bg border border-codex-border rounded-lg px-3 py-1.5 text-sm text-codex-text placeholder-codex-muted focus:outline-none focus:border-codex-gold/50 transition-colors disabled:opacity-40"
+              />
+              <button
+                type="submit"
+                disabled={inviteLoading || !inviteUsername.trim()}
+                className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg bg-codex-gold text-codex-bg hover:bg-codex-goldHover disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                {inviteLoading
+                  ? <span className="w-4 h-4 border-2 border-codex-bg/30 border-t-codex-bg rounded-full animate-spin block" />
+                  : <UserPlus size={13} />}
+                Add
+              </button>
+            </form>
+          )}
+          {inviteError   && <p className="text-xs text-red-400 mb-3 -mt-1 pl-1">{inviteError}</p>}
+          {inviteSuccess && <p className="text-xs text-emerald-400 mb-3 -mt-1 pl-1">{inviteSuccess}</p>}
+
+          {activeMembers.length === 0 && !(isGM && gmCharacter) ? (
             <div className="border border-dashed border-codex-border rounded-xl p-12 text-center">
               <p className="text-codex-subtext text-sm">No players have joined yet.</p>
               {isGM && (
                 <p className="text-codex-muted text-xs mt-2">
-                  Share the join code <span className="font-mono text-codex-text">{campaign.join_code}</span> with your players.
+                  Invite players by username or share the join code{' '}
+                  <span className="font-mono text-codex-text">{campaign.join_code}</span>.
                 </p>
               )}
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {/* GM's own character — shown first when set */}
+              {isGM && gmCharacter && (
+                <PlayerCard
+                  key="gm-character"
+                  member={{
+                    id:             'gm-character',
+                    user_id:        campaign.gm_user_id,
+                    character_id:   gmCharacter.id,
+                    character_name: gmCharacter.character_name,
+                    portrait_url:   gmCharacter.portrait_url,
+                    username:       user?.username,
+                  }}
+                  isGM={isGM}
+                  gameSystem={campaign.game_system}
+                  currentUserId={user?.id}
+                  isGMEntry
+                  onClick={() => navigate(`/characters/${gmCharacter.id}?campaignId=${id}`)}
+                />
+              )}
               {activeMembers.map(m => (
                 <PlayerCard
                   key={m.id}
@@ -196,105 +384,126 @@ export default function CampaignDetail() {
           </div>
         )}
 
-        {/* ── Campaign Chat ── */}
-        <CampaignChat campaignId={id} isGM={isGM} />
-
-        {/* ── Danger Zone (GM only) ── */}
-        {isGM && (
-          <div className="border border-red-500/20 rounded-xl p-5 bg-red-950/10">
-            <h2 className="text-sm font-semibold text-red-400 mb-1">Danger Zone</h2>
-            <p className="text-xs text-codex-subtext mb-4">
-              Permanently delete this campaign and all associated data. Players will see a notification and can dismiss it from their dashboard.
-            </p>
-            <button
-              onClick={() => { setShowDeleteModal(true); setDeleteConfirm(''); setDeleteError('') }}
-              className="flex items-center gap-2 text-sm text-red-400 border border-red-500/30 rounded-lg px-4 py-2 hover:bg-red-500/10 hover:border-red-500/60 transition-all"
-            >
-              <Trash2 size={14} /> Delete Campaign
-            </button>
+        {/* ── Campaign Chat + Combat Tracker ── */}
+        {/* CombatTracker is ALWAYS mounted (never unmounts) so its socket               */}
+        {/* subscription survives the transition from inactive → active state.            */}
+        {/* When inactive: container collapses to 0 width — tracker is in DOM, invisible. */}
+        <div className="flex gap-4 items-start">
+          {/* Chat — full width when no combat, flex-1 when combat is live */}
+          <div className={combatActive ? 'flex-1 min-w-0' : 'w-full'}>
+            <CampaignChat campaignId={id} isGM={isGM} gameSystem={campaign.game_system} />
           </div>
-        )}
+          {/* Combat Tracker — collapses to 0 width when inactive, avoids unmount */}
+          <div
+            className={`shrink-0 overflow-hidden transition-all duration-300 ${combatActive ? 'w-80' : 'w-0'}`}
+            style={{ height: '520px' }}
+          >
+            <div className="w-80 h-full">
+              <MiniCombatTracker
+                ref={combatTrackerRef}
+                campaignId={id}
+                isGM={isGM}
+                gameSystem={campaign.game_system}
+                onActiveChange={(active) => setCombatActive(active)}
+              />
+            </div>
+          </div>
+        </div>
+
       </div>
 
-      {/* ── Delete Campaign Modal ── */}
-      {showDeleteModal && (
+      {/* ── Encounter Picker Modal (Start Combat) ── */}
+      {showPicker && (
+        <EncounterPickerModal
+          campaignId={id}
+          gameSystem={campaign.game_system}
+          onStart={handleStartCombat}
+          onClose={() => setShowPicker(false)}
+        />
+      )}
+
+      {/* ── GM Character Picker Modal ── */}
+      {showCharPicker && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-          onClick={e => { if (e.target === e.currentTarget && !deleting) setShowDeleteModal(false) }}
+          onClick={e => { if (e.target === e.currentTarget) setShowCharPicker(false) }}
         >
-          <div className="relative w-full max-w-md bg-codex-card border border-red-500/30 rounded-2xl overflow-hidden shadow-2xl">
-            <div className="h-px w-full bg-gradient-to-r from-transparent via-red-500 to-transparent opacity-60" />
+          <div className="relative w-full max-w-md bg-codex-card border border-codex-border rounded-2xl overflow-hidden shadow-2xl">
+            <div className="h-px w-full bg-gradient-to-r from-transparent via-codex-gold to-transparent opacity-60" />
 
-            <div className="flex items-start justify-between px-6 pt-5 pb-4">
+            <div className="flex items-center justify-between px-6 pt-5 pb-4">
               <div className="flex items-center gap-3">
-                <div className="flex-shrink-0 w-9 h-9 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center">
-                  <Trash2 size={16} className="text-red-400" />
+                <div className="flex-shrink-0 w-9 h-9 rounded-full bg-codex-gold/10 border border-codex-gold/30 flex items-center justify-center">
+                  <Crown size={16} className="text-codex-gold" />
                 </div>
                 <div>
-                  <h2 className="text-base font-semibold text-codex-text">Delete campaign?</h2>
-                  <p className="text-xs text-codex-subtext mt-0.5">This action is permanent and irreversible.</p>
+                  <h2 className="text-base font-semibold text-codex-text">Play a Character</h2>
+                  <p className="text-xs text-codex-subtext mt-0.5">
+                    Choose one of your {style.label} characters
+                  </p>
                 </div>
               </div>
-              {!deleting && (
-                <button
-                  onClick={() => setShowDeleteModal(false)}
-                  className="text-codex-muted hover:text-codex-text transition-colors p-1 rounded-lg hover:bg-codex-surface ml-2"
-                >
-                  <X size={16} />
-                </button>
-              )}
+              <button
+                onClick={() => setShowCharPicker(false)}
+                className="text-codex-muted hover:text-codex-text transition-colors p-1 rounded-lg hover:bg-codex-surface"
+              >
+                <X size={16} />
+              </button>
             </div>
 
-            <div className="px-6 pb-6 flex flex-col gap-4">
-              <p className="text-sm text-codex-subtext leading-relaxed">
-                You are about to permanently delete{' '}
-                <span className="font-semibold text-codex-text">{campaign.name}</span>.
-                All party members will receive a notification on their dashboard and will be able to dismiss it.
-              </p>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-codex-subtext">
-                  Type <span className="font-semibold text-codex-text">{campaign.name}</span> to confirm
-                </label>
-                <input
-                  type="text"
-                  value={deleteConfirm}
-                  onChange={e => { setDeleteConfirm(e.target.value); setDeleteError('') }}
-                  placeholder={campaign.name}
-                  disabled={deleting}
-                  autoFocus
-                  className="w-full bg-codex-surface border border-codex-border rounded-lg px-3 py-2 text-sm text-codex-text placeholder-codex-muted focus:outline-none focus:border-red-500/60 focus:ring-1 focus:ring-red-500/20 transition-colors disabled:opacity-40"
-                />
-              </div>
-
-              {deleteError && <p className="text-sm text-red-400">{deleteError}</p>}
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowDeleteModal(false)}
-                  disabled={deleting}
-                  className="flex-1 py-2.5 rounded-xl border border-codex-border text-codex-subtext text-sm hover:border-codex-text hover:text-codex-text transition-colors disabled:opacity-40"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDeleteCampaign}
-                  disabled={deleting || deleteConfirm !== campaign.name}
-                  className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-semibold text-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {deleting ? (
-                    <>
-                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Deleting…
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 size={13} />
-                      Delete forever
-                    </>
-                  )}
-                </button>
-              </div>
+            <div className="px-6 pb-6 flex flex-col gap-3">
+              {charPickerLoading ? (
+                <div className="text-center py-8 text-codex-muted text-sm animate-pulse">
+                  Loading characters…
+                </div>
+              ) : charPickerError ? (
+                <p className="text-sm text-red-400 text-center py-4">{charPickerError}</p>
+              ) : myCharacters.length === 0 ? (
+                <div className="text-center py-6">
+                  <p className="text-sm text-codex-subtext mb-4">
+                    You have no {style.label} characters yet.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setShowCharPicker(false)
+                      navigate(`/characters/new?system=${campaign.game_system}&campaignId=${id}`)
+                    }}
+                    className="flex items-center gap-1.5 text-sm text-codex-gold hover:text-codex-goldHover transition-colors mx-auto"
+                  >
+                    <Plus size={14} /> Create a new character
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
+                    {myCharacters.map(char => (
+                      <button
+                        key={char.id}
+                        onClick={() => handleSetGMCharacter(char.id)}
+                        className="flex flex-col items-center gap-2 p-3 bg-codex-surface border border-codex-border rounded-xl hover:border-codex-gold/50 hover:bg-codex-card transition-all"
+                      >
+                        <div className="w-12 h-12 rounded-full bg-codex-bg border border-codex-border overflow-hidden flex items-center justify-center">
+                          {char.portrait_url
+                            ? <img src={char.portrait_url} alt={char.character_name} className="w-full h-full object-cover" />
+                            : <DefaultPortrait system={campaign.game_system} />}
+                        </div>
+                        <span className="text-xs font-semibold text-codex-text text-center leading-tight line-clamp-2">
+                          {char.character_name}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowCharPicker(false)
+                      navigate(`/characters/new?system=${campaign.game_system}&campaignId=${id}`)
+                    }}
+                    className="text-xs text-codex-subtext hover:text-codex-gold transition-colors text-center mt-1"
+                  >
+                    + Create a new character instead
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -303,12 +512,13 @@ export default function CampaignDetail() {
   )
 }
 
-function PlayerCard({ member, isGM, gameSystem, currentUserId, onClick }) {
+
+function PlayerCard({ member, isGM, gameSystem, currentUserId, onClick, isGMEntry = false }) {
   const { openDM } = useDM()
   const isMe = member.user_id === currentUserId
 
   return (
-    <div className="relative flex flex-col items-center gap-2 p-4 bg-codex-surface border border-codex-border rounded-xl transition-all duration-150 group">
+    <div className={`relative flex flex-col items-center gap-2 p-4 bg-codex-surface border rounded-xl transition-all duration-150 group ${isGMEntry ? 'border-codex-gold/25' : 'border-codex-border'}`}>
       {/* Clickable overlay for sheet navigation */}
       {onClick && (
         <div
@@ -317,8 +527,15 @@ function PlayerCard({ member, isGM, gameSystem, currentUserId, onClick }) {
         />
       )}
 
+      {/* Crown badge — GM entry only */}
+      {isGMEntry && (
+        <div className="absolute top-2 left-2 z-10 w-4 h-4 rounded-full bg-codex-gold/20 border border-codex-gold/40 flex items-center justify-center">
+          <Crown size={8} className="text-codex-gold" />
+        </div>
+      )}
+
       {/* Portrait */}
-      <div className="relative z-10 w-16 h-16 rounded-full bg-codex-bg border-2 border-codex-border overflow-hidden flex items-center justify-center">
+      <div className={`relative z-10 w-16 h-16 rounded-full bg-codex-bg border-2 overflow-hidden flex items-center justify-center ${isGMEntry ? 'border-codex-gold/30' : 'border-codex-border'}`}>
         {member.portrait_url ? (
           <img src={member.portrait_url} alt={member.character_name} className="w-full h-full object-cover" />
         ) : (
@@ -401,9 +618,11 @@ function DefaultPortrait({ system }) {
 // Real-time chat panel scoped to a single campaign room.
 // Supports spectator mode: GM can open the session to public viewers,
 // with a per-player consent flow and 60-second timeout.
-function CampaignChat({ campaignId, isGM }) {
+function CampaignChat({ campaignId, isGM, gameSystem }) {
   const { user }              = useAuth()
   const { socket, connected } = useSocket()
+
+  const isSD = gameSystem === 'shadowdark'
 
   // Core chat state
   const [messages, setMessages]   = useState([])
@@ -424,6 +643,15 @@ function CampaignChat({ campaignId, isGM }) {
   const [lateJoinBanner,  setLateJoinBanner]         = useState(false)
   const [spectatorAction, setSpectatorAction]        = useState(false) // loading state for GM buttons
 
+  // Torch timer (Shadowdark only) — campaign-scoped, persists outside combat
+  // expiresAt is a UTC ISO string stored in the DB; remaining is computed live.
+  const [lightExpiresAt,  setLightExpiresAt]  = useState(null)   // ISO string | null
+  const [lightPausedSecs, setLightPausedSecs] = useState(3600)   // secs when paused
+  const [lightDisplay,    setLightDisplay]    = useState(3600)   // rendered countdown
+  // Derived from the live countdown so it flips false the instant the timer hits
+  // zero — not just at the next re-render from an inline Date comparison.
+  const lightRunning = Boolean(lightExpiresAt) && lightDisplay > 0
+
   const bottomRef         = useRef(null)
   const inputRef          = useRef(null)
   const countdownInterval = useRef(null)
@@ -439,8 +667,10 @@ function CampaignChat({ campaignId, isGM }) {
     setConsentPending(null)
     setLateJoinBanner(false)
     setSpectatorCount(0)
+    setLightExpiresAt(null)
+    setLightPausedSecs(3600)
 
-    socket.emit('join_campaign', { campaignId }, ({ messages: history, spectatorModeActive, error }) => {
+    socket.emit('join_campaign', { campaignId }, ({ messages: history, spectatorModeActive, lightTimerExpiresAt, lightTimerRemaining, error }) => {
       if (error) { setChatError(error); return }
       setMessages(history ?? [])
       setJoined(true)
@@ -448,6 +678,9 @@ function CampaignChat({ campaignId, isGM }) {
         setSpectatorStatus('active')
         setLateJoinBanner(true)
       }
+      // Hydrate torch timer from DB state
+      setLightExpiresAt(lightTimerExpiresAt ?? null)
+      setLightPausedSecs(lightTimerRemaining ?? 3600)
     })
 
     // ── Incoming messages ──────────────────────────────────────────────────
@@ -510,6 +743,12 @@ function CampaignChat({ campaignId, isGM }) {
       }, 1000)
     }
 
+    // ── Torch timer: real-time sync from GM actions ────────────────────────
+    function handleLightTimerUpdate({ expiresAt, remainingSecs }) {
+      setLightExpiresAt(expiresAt ?? null)
+      setLightPausedSecs(remainingSecs ?? 3600)
+    }
+
     socket.on('new_message',            handleNewMessage)
     socket.on('consent_update',         handleConsentUpdate)
     socket.on('spectator_active',       handleSpectatorActive)
@@ -517,6 +756,7 @@ function CampaignChat({ campaignId, isGM }) {
     socket.on('spectator_ended',        handleSpectatorEnded)
     socket.on('spectator_count_update', handleSpectatorCountUpdate)
     socket.on('consent_requested',      handleConsentRequested)
+    socket.on('light_timer_update',     handleLightTimerUpdate)
 
     return () => {
       socket.off('new_message',            handleNewMessage)
@@ -526,10 +766,35 @@ function CampaignChat({ campaignId, isGM }) {
       socket.off('spectator_ended',        handleSpectatorEnded)
       socket.off('spectator_count_update', handleSpectatorCountUpdate)
       socket.off('consent_requested',      handleConsentRequested)
+      socket.off('light_timer_update',     handleLightTimerUpdate)
       socket.emit('leave_campaign', { campaignId })
       clearInterval(countdownInterval.current)
     }
   }, [socket, connected, campaignId])
+
+  // ── Torch timer: live countdown display ────────────────────────────────────
+  // When expiresAt is set, tick every second; when null, show paused value.
+  useEffect(() => {
+    if (!lightExpiresAt) {
+      setLightDisplay(lightPausedSecs)
+      return
+    }
+    function tick() {
+      const rem = Math.max(0, Math.floor((new Date(lightExpiresAt) - Date.now()) / 1000))
+      setLightDisplay(rem)
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [lightExpiresAt, lightPausedSecs])
+
+  // ── Torch timer: GM action ──────────────────────────────────────────────────
+  // Sends the action to the socket server which persists to DB and broadcasts
+  // 'light_timer_update' back to ALL campaign room members including the GM.
+  function handleLightTimer(action, secs) {
+    if (!socket || !connected || !isGM) return
+    socket.emit('push_light_timer', { campaignId, action, secs })
+  }
 
   // ── Auto-scroll to latest message ──────────────────────────────────────────
   useEffect(() => {
@@ -539,16 +804,31 @@ function CampaignChat({ campaignId, isGM }) {
   // ── Send message ────────────────────────────────────────────────────────────
   const handleSend = useCallback((e) => {
     e.preventDefault()
-    const body = input.trim()
-    if (!body || !socket || !joined || sending) return
+    const raw = input.trim()
+    if (!raw || !socket || !joined || sending) return
     setSending(true)
     setChatError('')
-    socket.emit('send_message', { campaignId, body }, ({ ok, error }) => {
+
+    // Dice command: /XdY
+    const dice = parseDiceCommand(raw)
+    if (dice) {
+      const rolls    = rollDice(dice.count, dice.sides)
+      const metadata = buildDiceMetadata(dice.count, dice.sides, rolls)
+      const body     = formatDiceBody(user?.username ?? 'Someone', metadata)
+      socket.emit('send_message', { campaignId, body, metadata }, ({ ok, error }) => {
+        setSending(false)
+        if (error) setChatError(error)
+        else { setInput(''); inputRef.current?.focus() }
+      })
+      return
+    }
+
+    socket.emit('send_message', { campaignId, body: raw }, ({ ok, error }) => {
       setSending(false)
       if (error) { setChatError(error) }
       else { setInput(''); inputRef.current?.focus() }
     })
-  }, [input, socket, joined, sending, campaignId])
+  }, [input, socket, joined, sending, campaignId, user])
 
   function handleKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(e) }
@@ -675,6 +955,62 @@ function CampaignChat({ campaignId, isGM }) {
         )}
       </div>
 
+      {/* ── Torch timer strip — Shadowdark only, visible to everyone ── */}
+      {isSD && (
+        <div className="flex items-center gap-2.5 px-4 py-2 bg-amber-950/25 border-b border-amber-900/30">
+          <Flame
+            size={13}
+            className={`shrink-0 ${lightRunning ? 'text-amber-400 animate-pulse' : 'text-codex-muted'}`}
+          />
+          <span className="text-[11px] font-semibold text-codex-muted uppercase tracking-wide shrink-0">
+            Torch
+          </span>
+          <span className={`text-sm font-mono font-bold tabular-nums ${
+            lightDisplay <= 300 ? 'text-red-400 animate-pulse' :
+            lightDisplay <= 600 ? 'text-amber-400' :
+            'text-amber-200/80'
+          }`}>
+            {formatLightTimer(lightDisplay)}
+          </span>
+          {!isGM && (
+            <span className="text-[10px] text-codex-muted">
+              {lightRunning ? '— burning' : '— paused'}
+            </span>
+          )}
+
+          {/* GM controls — pushed right */}
+          {isGM && (
+            <div className="ml-auto flex items-center gap-1.5 flex-wrap">
+              {!lightRunning
+                ? <button
+                    onClick={() => handleLightTimer('start')}
+                    className="text-[10px] text-amber-400 hover:text-amber-300 px-2 py-0.5 border border-amber-400/30 hover:border-amber-400/60 rounded-full transition-colors"
+                  >Start</button>
+                : <button
+                    onClick={() => handleLightTimer('pause')}
+                    className="text-[10px] text-codex-muted hover:text-codex-subtext px-2 py-0.5 border border-codex-border rounded-full transition-colors"
+                  >Pause</button>
+              }
+              <button
+                onClick={() => handleLightTimer('reset', lightPausedSecs || 3600)}
+                className="text-[10px] text-codex-muted hover:text-codex-subtext px-1.5 py-0.5 border border-codex-border rounded-full transition-colors"
+              >Reset</button>
+              <div className="flex items-center gap-0.5">
+                {[600, 1800, 3600].map(s => (
+                  <button
+                    key={s}
+                    onClick={() => handleLightTimer('reset', s)}
+                    className="text-[9px] text-codex-muted hover:text-amber-400 px-1.5 py-0.5 border border-codex-border rounded transition-colors"
+                  >
+                    {s === 600 ? '10m' : s === 1800 ? '30m' : '1hr'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Connection / join status ── */}
       <StatusStrip />
 
@@ -744,6 +1080,11 @@ function CampaignChat({ campaignId, isGM }) {
         )}
 
         {messages.map((msg) => {
+          // Dice roll — full-width announcement bubble
+          if (msg.metadata?.type === 'dice') {
+            return <DiceRollBubble key={msg.id} message={msg} />
+          }
+
           const isMine = msg.user_id === user?.id
           return (
             <div key={msg.id} className={`flex gap-2 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -836,18 +1177,3 @@ function formatChatTime(ts) {
     ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-function PageShell({ children }) {
-  return (
-    <div className="min-h-screen bg-codex-bg">
-      <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center">
-          <Link to="/dashboard" className="flex items-center gap-2 text-codex-gold">
-            <BookOpen size={16} />
-            <span className="font-display text-sm tracking-wide">CampaignCodex</span>
-          </Link>
-        </div>
-      </header>
-      {children}
-    </div>
-  )
-}
