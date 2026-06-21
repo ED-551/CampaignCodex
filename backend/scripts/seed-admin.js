@@ -37,21 +37,14 @@ async function seedAdmin() {
     await pool.query(
       `INSERT INTO users
          (username, email, first_name, last_name,
-          password_hash,
-          security_q1, security_a1_hash,
-          security_q2, security_a2_hash,
-          supporter_tier, is_admin)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'platinum',true)`,
+          password_hash, supporter_tier, is_admin)
+       VALUES ($1,$2,$3,$4,$5,'black',true)`,
       [
         ADMIN_USERNAME,
         'admin@campaigncodex.internal',
         'Admin',
         'User',
         passwordHash,
-        'What is the admin recovery phrase?',
-        await bcrypt.hash('stored-in-obsidian', 12),
-        'What is the secondary recovery phrase?',
-        await bcrypt.hash('stored-in-obsidian-vault', 12),
       ]
     )
 
