@@ -457,7 +457,7 @@ export default function AdminDashboard() {
                               onChange={e => updateTier(u.id, e.target.value)}
                               className="bg-codex-bg border border-codex-border rounded px-2 py-1 text-xs text-codex-text focus:outline-none focus:border-codex-gold"
                             >
-                              {['free','bronze','silver','gold','platinum', ...(u.is_admin ? ['black'] : [])].map(t => (
+                              {['free','bronze','silver','gold','platinum', ...((u.is_admin || u.is_moderator) ? ['black'] : [])].map(t => (
                                 <option key={t} value={t}>{t}</option>
                               ))}
                             </select>

@@ -152,11 +152,12 @@ router.patch('/users/:id/tier', requireAdmin, async (req, res) => {
   }
 
   try {
-    // 'black' tier is reserved for admin accounts only
+    // 'black' tier is reserved for admin or moderator accounts only
     if (tier === 'black') {
-      const targetUser = await db.query('SELECT is_admin FROM users WHERE id = $1', [req.params.id])
-      if (!targetUser.rows[0]?.is_admin) {
-        return res.status(400).json({ error: "'black' tier is reserved for admin accounts." })
+      const targetUser = await db.query('SELECT is_admin, is_moderator FROM users WHERE id = $1', [req.params.id])
+      const t = targetUser.rows[0]
+      if (!t?.is_admin && !t?.is_moderator) {
+        return res.status(400).json({ error: "'black' tier is reserved for admin and moderator accounts." })
       }
     }
 
