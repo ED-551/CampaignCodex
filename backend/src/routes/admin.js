@@ -22,6 +22,7 @@ router.get('/stats', requireAdmin, async (req, res) => {
       recentUsers,
       recentCampaigns,
       adminRoster,
+      allUserCount,
     ] = await Promise.all([
 
       db.query('SELECT COUNT(*) AS count FROM users WHERE is_admin = false'),
@@ -68,6 +69,9 @@ router.get('/stats', requireAdmin, async (req, res) => {
                 FROM users
                 WHERE (is_admin = true OR is_moderator = true) AND id != $1
                 ORDER BY is_admin DESC, created_at ASC`, [req.user.sub]),
+
+      // Total user count for broadcast raven (everyone except adm_ sender)
+      db.query('SELECT COUNT(*) AS count FROM users WHERE id != $1', [req.user.sub]),
     ])
 
     res.json({
@@ -84,6 +88,7 @@ router.get('/stats', requireAdmin, async (req, res) => {
       recentUsers:     recentUsers.rows,
       recentCampaigns: recentCampaigns.rows,
       adminRoster:     adminRoster.rows,
+      totalAllUsers:   parseInt(allUserCount.rows[0].count),
     })
   } catch (err) {
     console.error('[admin/stats]', err)
@@ -120,11 +125,12 @@ router.get('/moderator/users', requireModerator, async (req, res) => {
   try {
     const result = await db.query(
       `SELECT id, username, email, created_at,
-              is_banned, ban_reason, banned_at, supporter_tier
+              is_banned, ban_reason, banned_at, banned_until, supporter_tier
        FROM users
        WHERE is_admin = false AND is_moderator = false
        ORDER BY created_at DESC
        LIMIT 200`
+      // Note: banned_until included so future UI can show ban expiry in moderator view
     )
     res.json({ users: result.rows })
   } catch (err) {
@@ -281,7 +287,8 @@ router.patch('/users/:id/ban', requireModerator, async (req, res) => {
              banned_at = null,
              ban_reason = null,
              banned_by_id = null,
-             banned_until = null
+             banned_until = null,
+             token_version = token_version + 1
          WHERE id = $1
          RETURNING id, username, is_banned, ban_reason, banned_until`,
         [req.params.id]
@@ -384,6 +391,53 @@ router.post('/broadcast-email', requireAdmin, async (req, res) => {
   }
 })
 
+// ─── POST /api/admin/broadcast-raven ─────────────────────────────────────────
+// Send an in-app raven message to every user on the platform (no opt-out).
+// A single INSERT ... SELECT fans out to all users in one round-trip.
+// Requires { subject, body, confirm: true } in request body.
+router.post('/broadcast-raven', requireAdmin, async (req, res) => {
+  const { subject, body, confirm } = req.body
+
+  if (!confirm) {
+    return res.status(400).json({ error: 'Send not confirmed. Set confirm: true to proceed.' })
+  }
+
+  const subjectStr = (subject || '').trim()
+  const bodyStr    = (body    || '').trim()
+
+  if (!subjectStr)             return res.status(400).json({ error: 'Subject is required.' })
+  if (subjectStr.length > 120) return res.status(400).json({ error: 'Subject must be 120 characters or fewer.' })
+  if (!bodyStr)                return res.status(400).json({ error: 'Message body is required.' })
+  if (bodyStr.length > 5000)   return res.status(400).json({ error: 'Message body must be 5,000 characters or fewer.' })
+
+  try {
+    // Batch-insert one raven per user (excluding the adm_ sender)
+    const result = await db.query(
+      `INSERT INTO raven_messages (sender_id, recipient_id, subject, body)
+       SELECT $1, id, $2, $3
+       FROM users
+       WHERE id != $1
+       RETURNING id`,
+      [req.user.sub, subjectStr, bodyStr]
+    )
+
+    const sent = result.rows.length
+
+    console.log(
+      `[admin/broadcast-raven] Admin: "${req.user?.username ?? 'unknown'}" | ` +
+      `Subject: "${subjectStr}" | Recipients: ${sent}`
+    )
+
+    res.json({
+      sent,
+      message: `Raven broadcast sent to ${sent} user${sent !== 1 ? 's' : ''}.`,
+    })
+  } catch (err) {
+    console.error('[admin/broadcast-raven]', err)
+    res.status(500).json({ error: 'Broadcast raven failed. Check server logs.' })
+  }
+})
+
 // ─── DELETE /api/admin/users/:id ─────────────────────────────────────────────
 // Permanently delete a non-admin user and all their data.
 router.delete('/users/:id', requireAdmin, async (req, res) => {
@@ -392,11 +446,11 @@ router.delete('/users/:id', requireAdmin, async (req, res) => {
   }
   try {
     const result = await db.query(
-      'DELETE FROM users WHERE id = $1 AND is_admin = false RETURNING id, username',
+      'DELETE FROM users WHERE id = $1 AND is_admin = false AND is_moderator = false RETURNING id, username',
       [req.params.id]
     )
     if (!result.rows[0]) {
-      return res.status(404).json({ error: 'User not found or is an administrator.' })
+      return res.status(404).json({ error: 'User not found or is a privileged account.' })
     }
     res.json({ message: `User "${result.rows[0].username}" permanently deleted.` })
   } catch (err) {

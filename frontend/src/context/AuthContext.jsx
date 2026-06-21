@@ -14,7 +14,11 @@ export function AuthProvider({ children }) {
 
     api.get('/auth/me')
       .then(({ user }) => setUser(user))
-      .catch(() => clearToken())          // bad/expired token — wipe it
+      .catch(err => {
+        // Only wipe the token on 401 (invalid/expired/revoked JWT).
+        // Any other error (500, network down) is transient — don't log the user out.
+        if (err.status === 401) clearToken()
+      })
       .finally(() => setLoading(false))
   }, [])
 

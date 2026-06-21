@@ -45,6 +45,14 @@ export default function AdminDashboard() {
   const [bError, setBError]       = useState('')
   const confirmTimer              = useRef(null)
 
+  // ── Broadcast raven state ──────────────────────────────────────────────────
+  const [rSubject, setRSubject]   = useState('')
+  const [rBody, setRBody]         = useState('')
+  const [rStep, setRStep]         = useState('idle')   // 'idle' | 'confirm' | 'sending' | 'done'
+  const [rResult, setRResult]     = useState(null)     // { sent, message }
+  const [rError, setRError]       = useState('')
+  const ravenTimer                = useRef(null)
+
   useEffect(() => {
     Promise.all([api.get('/admin/stats'), api.get('/admin/users')])
       .then(([statsRes, usersRes]) => { setData(statsRes); setUsers(usersRes.users) })
@@ -182,6 +190,42 @@ export default function AdminDashboard() {
     setBError('')
   }
 
+  // ── Raven broadcast helpers ────────────────────────────────────────────────
+  function handleRavenFirstClick() {
+    if (!rSubject.trim()) { setRError('Subject is required.'); return }
+    if (!rBody.trim())    { setRError('Message body is required.'); return }
+    setRError('')
+    setRStep('confirm')
+    clearTimeout(ravenTimer.current)
+    ravenTimer.current = setTimeout(() => setRStep('idle'), 8000)
+  }
+
+  async function handleRavenConfirm() {
+    clearTimeout(ravenTimer.current)
+    setRStep('sending')
+    setRError('')
+    try {
+      const result = await api.post('/admin/broadcast-raven', {
+        subject: rSubject.trim(),
+        body:    rBody.trim(),
+        confirm: true,
+      })
+      setRResult(result)
+      setRStep('done')
+    } catch (err) {
+      setRError(err.message || 'Broadcast failed.')
+      setRStep('idle')
+    }
+  }
+
+  function handleRavenReset() {
+    setRSubject('')
+    setRBody('')
+    setRStep('idle')
+    setRResult(null)
+    setRError('')
+  }
+
   return (
     <div className="min-h-screen bg-codex-bg">
       {/* Nav */}
@@ -230,6 +274,7 @@ export default function AdminDashboard() {
                 { id: 'overview',   label: 'Overview'  },
                 { id: 'users',      label: 'Users'     },
                 { id: 'broadcast',  label: '📧 Broadcast' },
+                { id: 'raven',      label: '🪶 Raven Broadcast' },
               ].map(t => (
                 <button key={t.id} onClick={() => setTab(t.id)}
                   className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
@@ -343,6 +388,21 @@ export default function AdminDashboard() {
                 onConfirm={handleBroadcastConfirm}
                 onCancel={() => { clearTimeout(confirmTimer.current); setBStep('idle'); setBError('') }}
                 onReset={handleBroadcastReset}
+              />
+            )}
+
+            {tab === 'raven' && (
+              <RavenBroadcastPanel
+                totalAllUsers={data?.totalAllUsers ?? 0}
+                subject={rSubject}   onSubjectChange={setRSubject}
+                body={rBody}         onBodyChange={setRBody}
+                step={rStep}
+                result={rResult}
+                error={rError}
+                onFirstClick={handleRavenFirstClick}
+                onConfirm={handleRavenConfirm}
+                onCancel={() => { clearTimeout(ravenTimer.current); setRStep('idle'); setRError('') }}
+                onReset={handleRavenReset}
               />
             )}
 
@@ -907,6 +967,173 @@ function BroadcastPanel({
           {' '}is set in your <code className="bg-codex-surface px-1 py-0.5 rounded text-codex-subtext">.env</code> file.
           See the Pre-Launch Email Setup checklist in your Obsidian vault.
         </span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Raven Broadcast Panel ─────────────────────────────────────────────────────
+function RavenBroadcastPanel({
+  totalAllUsers,
+  subject, onSubjectChange,
+  body,    onBodyChange,
+  step, result, error,
+  onFirstClick, onConfirm, onCancel, onReset,
+}) {
+  const BODY_MAX = 5000
+  const bodyLen  = body.length
+
+  // ── Done state ──────────────────────────────────────────────────────────────
+  if (step === 'done' && result) {
+    return (
+      <div className="max-w-2xl">
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-6 flex flex-col gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
+              <span className="text-emerald-400 text-base">✓</span>
+            </div>
+            <div>
+              <p className="font-semibold text-sm text-emerald-400">Raven sent</p>
+              <p className="text-codex-subtext text-sm mt-0.5">{result.message}</p>
+            </div>
+          </div>
+          <div className="flex gap-6 pl-12">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-emerald-400">{result.sent}</div>
+              <div className="text-xs text-codex-muted">Delivered</div>
+            </div>
+          </div>
+          <button
+            onClick={onReset}
+            className="ml-12 self-start px-4 py-2 rounded-lg border border-codex-border text-sm
+              text-codex-subtext hover:text-codex-text hover:border-codex-text/40 transition-colors"
+          >
+            Compose another
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-2xl flex flex-col gap-6">
+      {/* Header card */}
+      <div className="bg-codex-surface border border-codex-border rounded-xl p-5 flex items-start gap-4">
+        <div className="w-10 h-10 rounded-full bg-codex-gold/10 border border-codex-gold/30 flex items-center justify-center flex-shrink-0 text-lg">
+          🪶
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold text-codex-text">Raven Broadcast</h2>
+          <p className="text-xs text-codex-subtext mt-0.5 leading-relaxed">
+            Send an in-app raven message to every user on the platform.
+            {' '}
+            <span className="text-codex-gold font-medium">
+              {totalAllUsers} user{totalAllUsers !== 1 ? 's' : ''} will receive this.
+            </span>
+          </p>
+          <p className="text-xs text-amber-400 mt-1">
+            ⚠ This is a platform-wide announcement. Users cannot opt out.
+          </p>
+        </div>
+      </div>
+
+      {/* Compose form */}
+      <div className="bg-codex-surface border border-codex-border rounded-xl p-5 flex flex-col gap-4">
+        {/* Subject */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-codex-text">Subject</label>
+          <input
+            type="text"
+            value={subject}
+            onChange={e => onSubjectChange(e.target.value)}
+            maxLength={120}
+            placeholder="e.g. Important platform announcement"
+            disabled={step !== 'idle'}
+            className="w-full bg-codex-bg border border-codex-border rounded-lg px-4 py-2.5
+              text-codex-text placeholder-codex-muted text-sm
+              focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/30
+              transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          />
+          <p className="text-xs text-codex-muted text-right">{subject.length}/120</p>
+        </div>
+
+        {/* Body */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-codex-text">Message</label>
+          <textarea
+            value={body}
+            onChange={e => onBodyChange(e.target.value)}
+            maxLength={BODY_MAX}
+            rows={10}
+            placeholder={`Greetings, adventurers!\n\nWe have an important announcement...`}
+            disabled={step !== 'idle'}
+            className="w-full bg-codex-bg border border-codex-border rounded-lg px-4 py-3
+              text-codex-text placeholder-codex-muted text-sm leading-relaxed resize-y
+              focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/30
+              transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          />
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-codex-muted">Plain text — line breaks are preserved.</p>
+            <p className={`text-xs ${bodyLen > BODY_MAX * 0.9 ? 'text-amber-400' : 'text-codex-muted'}`}>
+              {bodyLen.toLocaleString()}/{BODY_MAX.toLocaleString()}
+            </p>
+          </div>
+        </div>
+
+        {error && (
+          <p className="text-sm text-red-400 bg-red-500/5 border border-red-500/20 rounded-lg px-4 py-2">
+            {error}
+          </p>
+        )}
+
+        {/* Actions */}
+        {step === 'idle' && (
+          <button
+            onClick={onFirstClick}
+            disabled={!subject.trim() || !body.trim() || totalAllUsers === 0}
+            className="self-start flex items-center gap-2 px-5 py-2.5 rounded-lg
+              bg-codex-gold hover:bg-codex-goldHover text-codex-bg font-semibold text-sm
+              transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            🪶 Send to {totalAllUsers} user{totalAllUsers !== 1 ? 's' : ''}
+          </button>
+        )}
+
+        {step === 'confirm' && (
+          <div className="flex flex-col gap-3 border border-amber-500/30 bg-amber-500/5 rounded-xl p-4">
+            <p className="text-sm font-semibold text-amber-400 flex items-center gap-2">
+              <span>⚠</span> Confirm raven broadcast
+            </p>
+            <p className="text-xs text-codex-subtext leading-relaxed">
+              This will deliver a raven to{' '}
+              <span className="text-codex-text font-semibold">{totalAllUsers} user{totalAllUsers !== 1 ? 's' : ''}</span>{' '}
+              immediately. Every user on the platform will see this in their inbox. This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={onCancel}
+                className="px-4 py-2 rounded-lg border border-codex-border text-codex-subtext text-sm
+                  hover:border-codex-text hover:text-codex-text transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onConfirm}
+                className="flex items-center gap-2 px-5 py-2 rounded-lg
+                  bg-amber-600 hover:bg-amber-500 text-white font-semibold text-sm transition-all"
+              >
+                🪶 Yes, send it
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 'sending' && (
+          <div className="flex items-center gap-3 text-codex-subtext text-sm">
+            <span className="w-4 h-4 border-2 border-codex-gold/30 border-t-codex-gold rounded-full animate-spin flex-shrink-0" />
+            Sending ravens to {totalAllUsers} user{totalAllUsers !== 1 ? 's' : ''}…
+          </div>
+        )}
       </div>
     </div>
   )

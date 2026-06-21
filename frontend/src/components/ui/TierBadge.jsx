@@ -1,7 +1,11 @@
 /**
  * TierBadge — small metallic coin/token SVG badge for supporter tiers.
  * Renders inline next to usernames. Returns null for 'free' (no badge shown).
+ *
+ * SVG gradient IDs are scoped per-instance using a counter to avoid ID collisions
+ * when multiple same-tier badges render on the same page (e.g. chat message lists).
  */
+let _tbgCounter = 0
 
 const TIER_CONFIG = {
   bronze: {
@@ -57,7 +61,10 @@ export default function TierBadge({ tier, size = 16 }) {
   const cfg = TIER_CONFIG[tier]
   if (!cfg) return null
 
-  const gradId = `tbg-${tier}`
+  // Unique gradient ID per instance — SVG IDs are document-global, so sharing
+  // one ID per tier causes incorrect gradient lookup when multiple same-tier
+  // badges exist on the same page.
+  const gradId = `tbg-${tier}-${++_tbgCounter}`
   const cx = size / 2
   const outerR = (size / 2) - 0.5
   const innerR = outerR - 1.5

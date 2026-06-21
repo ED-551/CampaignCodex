@@ -23,9 +23,9 @@ function validationErrors(req, res) {
   return false
 }
 
-// Tier limits
-const TIER_SHEET_LIMIT    = { free: 10, bronze: 30, silver: 30, gold: 30, platinum: 30 }
-const TIER_CAMPAIGN_LIMIT = { free: 6,  bronze: 12, silver: 12, gold: 12, platinum: 12 }
+// Tier limits — 'black' is admin-only, grant admin-equivalent limits
+const TIER_SHEET_LIMIT    = { free: 10, bronze: 30, silver: 30, gold: 30, platinum: 30, black: 30 }
+const TIER_CAMPAIGN_LIMIT = { free: 6,  bronze: 12, silver: 12, gold: 12, platinum: 12, black: 12 }
 
 // ─── POST /api/auth/signup ────────────────────────────────────────────────────
 router.post('/signup', authLimiter, [
@@ -79,7 +79,7 @@ router.post('/signup', authLimiter, [
           password_hash, newsletter_opt_in, terms_accepted_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
        RETURNING id, username, email, first_name, last_name,
-                 supporter_tier, is_admin, newsletter_opt_in, token_version, created_at`,
+                 supporter_tier, is_admin, is_moderator, newsletter_opt_in, token_version, created_at`,
       [username, email, firstName, lastName, middleInitial || null,
        passwordHash,
        newsletterOptIn === true || newsletterOptIn === 'true']
@@ -168,7 +168,7 @@ router.get('/me', requireAuth, async (req, res) => {
   try {
     const result = await db.query(
       `SELECT id, username, email, first_name, last_name,
-              supporter_tier, supporter_since, is_admin, newsletter_opt_in, created_at
+              supporter_tier, supporter_since, is_admin, is_moderator, newsletter_opt_in, created_at
        FROM users WHERE id = $1 LIMIT 1`,
       [req.user.sub]
     )
@@ -434,7 +434,8 @@ function sanitizeUser(user) {
     lastName:         user.last_name,
     supporterTier:    user.supporter_tier,
     supporterSince:   user.supporter_since,
-    isAdmin:          user.is_admin,
+    isAdmin:          user.is_admin    ?? false,
+    isModerator:      user.is_moderator ?? false,
     newsletterOptIn:  user.newsletter_opt_in ?? false,
     createdAt:        user.created_at,
     sheetLimit:       TIER_SHEET_LIMIT[user.supporter_tier]    ?? 10,

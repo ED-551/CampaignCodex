@@ -11,6 +11,8 @@ export default function ModeratorDashboard() {
   const [loading, setLoading]       = useState(true)
   const [banTarget, setBanTarget]   = useState(null)  // { id, username }
   const [banReason, setBanReason]   = useState('')
+  const [banDuration, setBanDuration] = useState('permanent')
+  const [banError, setBanError]     = useState('')
   const [error, setError]           = useState('')
 
   useEffect(() => {
@@ -21,16 +23,23 @@ export default function ModeratorDashboard() {
   }, [])
 
   async function handleBan(userId) {
+    if (!banReason.trim()) { setBanError('A reason is required.'); return }
+    setBanError('')
     setError('')
     try {
-      await api.patch(`/admin/users/${userId}/ban`, { isBanned: true, reason: banReason.trim() || null })
+      await api.patch(`/admin/users/${userId}/ban`, {
+        isBanned:  true,
+        reason:    banReason.trim(),
+        duration:  banDuration,
+      })
       setUsers(prev => prev.map(u =>
-        u.id === userId ? { ...u, is_banned: true, ban_reason: banReason.trim() || null } : u
+        u.id === userId ? { ...u, is_banned: true, ban_reason: banReason.trim() } : u
       ))
       setBanTarget(null)
       setBanReason('')
+      setBanDuration('permanent')
     } catch (err) {
-      setError(err.message ?? 'Ban failed.')
+      setBanError(err.message ?? 'Ban failed.')
     }
   }
 
@@ -134,26 +143,53 @@ export default function ModeratorDashboard() {
                         </button>
                       ) : banTarget?.id === u.id ? (
                         /* Inline ban confirmation */
-                        <div className="flex flex-col gap-1.5">
+                        <div className="flex flex-col gap-1.5 min-w-[200px]">
+                          {/* Duration */}
+                          <div className="grid grid-cols-4 gap-1">
+                            {[
+                              { value: '1day',      label: '1d'   },
+                              { value: '1week',     label: '1w'   },
+                              { value: '1month',    label: '1mo'  },
+                              { value: 'permanent', label: 'Perm' },
+                            ].map(opt => (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => setBanDuration(opt.value)}
+                                className={`py-1 rounded border text-[10px] font-medium transition-all ${
+                                  banDuration === opt.value
+                                    ? 'border-red-500/60 bg-red-500/15 text-red-300'
+                                    : 'border-codex-border text-codex-muted hover:border-red-500/30 hover:text-red-400'
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                          {/* Reason — required */}
                           <input
                             type="text"
                             value={banReason}
-                            onChange={e => setBanReason(e.target.value)}
-                            placeholder="Reason (optional)"
+                            onChange={e => { setBanReason(e.target.value); if (banError) setBanError('') }}
+                            placeholder="Reason (required)"
                             maxLength={200}
                             autoFocus
-                            className="w-40 bg-codex-bg border border-codex-border rounded px-2 py-1 text-xs
-                              text-codex-text placeholder-codex-muted focus:outline-none focus:border-red-500/50"
+                            className={`w-full bg-codex-bg border rounded px-2 py-1 text-xs
+                              text-codex-text placeholder-codex-muted focus:outline-none transition-colors ${
+                              banError ? 'border-red-500/60' : 'border-codex-border focus:border-red-500/50'
+                            }`}
                           />
+                          {banError && <p className="text-[10px] text-red-400">{banError}</p>}
                           <div className="flex gap-1.5">
                             <button
                               onClick={() => handleBan(u.id)}
-                              className="text-xs px-2.5 py-1 rounded bg-red-600 hover:bg-red-500 text-white font-semibold transition-colors"
+                              disabled={!banReason.trim()}
+                              className="text-xs px-2.5 py-1 rounded bg-red-600 hover:bg-red-500 text-white font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               Confirm
                             </button>
                             <button
-                              onClick={() => { setBanTarget(null); setBanReason('') }}
+                              onClick={() => { setBanTarget(null); setBanReason(''); setBanDuration('permanent'); setBanError('') }}
                               className="text-xs px-2.5 py-1 rounded border border-codex-border text-codex-muted hover:text-codex-text transition-colors"
                             >
                               Cancel
