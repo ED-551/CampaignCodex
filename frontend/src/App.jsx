@@ -23,6 +23,7 @@ import BestiaryPage       from './pages/BestiaryPage'
 import BestiarySharesPage from './pages/BestiarySharesPage'
 import SecretPage         from './pages/SecretPage'
 import SecretReviewPage   from './pages/SecretReviewPage'
+import DonatePage         from './pages/DonatePage'
 
 export default function App() {
   return (
@@ -41,8 +42,9 @@ export default function App() {
               <Route path="/forgot-password" element={<LandingPage />} />
               <Route path="/reset-password"  element={<LandingPage />} />
 
-              {/* ── Public: legal ── */}
-              <Route path="/terms" element={<TermsPage />} />
+              {/* ── Public: legal / support ── */}
+              <Route path="/terms"  element={<TermsPage />} />
+              <Route path="/donate" element={<DonatePage />} />
 
               {/* ── Secret: easter egg (auth required) ── */}
               <Route path="/eds-eats" element={

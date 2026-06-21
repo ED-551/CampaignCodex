@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { BookOpen, User, Mail, Lock, Bell, CheckCircle, AlertCircle, ArrowLeft, LogOut, Trash2, X } from 'lucide-react'
+import { BookOpen, User, Mail, Lock, Bell, CheckCircle, AlertCircle, ArrowLeft, LogOut, Trash2, X, Heart } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const INPUT_CLASS = `
@@ -360,6 +360,19 @@ export default function SettingsPage() {
               Delete account
             </button>
           </div>
+        </div>
+
+        {/* Support / Donate */}
+        <div className="flex flex-col items-center gap-2 pt-2 pb-2">
+          <Link
+            to="/donate"
+            className="inline-flex items-center gap-1.5 text-xs text-codex-muted hover:text-codex-gold
+              transition-colors border border-codex-border/50 hover:border-codex-gold/30
+              rounded-full px-3 py-1.5"
+          >
+            <Heart size={11} />
+            Support this project
+          </Link>
         </div>
 
         {/* Legal links */}

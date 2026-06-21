@@ -178,6 +178,12 @@ export default function Dashboard() {
               <span className="hidden sm:block">{user?.username}</span>
               <Settings size={14} className="text-codex-muted group-hover:text-codex-gold transition-colors" />
             </Link>
+            {user?.isModerator && !user?.isAdmin && (
+              <button onClick={() => navigate('/moderator')}
+                className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors border border-blue-400/30 rounded-full px-2.5 py-0.5">
+                <Shield size={11} /> Moderation
+              </button>
+            )}
             {user?.isAdmin && (
               <button onClick={() => navigate('/admin')}
                 className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 transition-colors border border-purple-400/30 rounded-full px-2.5 py-0.5">
