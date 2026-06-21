@@ -39,7 +39,11 @@ export default function AdminDashboard() {
   useEffect(() => {
     Promise.all([api.get('/admin/stats'), api.get('/admin/users')])
       .then(([statsRes, usersRes]) => { setData(statsRes); setUsers(usersRes.users) })
-      .catch(console.error)
+      .catch(err => {
+        // Gate stack trace behind DEV — production consoles should not expose API error shapes
+        if (import.meta.env.DEV) console.error('[AdminDashboard] load failed', err)
+        setLoading(false)  // ensure spinner clears even on error
+      })
       .finally(() => setLoading(false))
   }, [])
 

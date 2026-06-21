@@ -334,7 +334,7 @@ router.patch('/:id/hp', requireAuth, [
       [JSON.stringify({ hp_current: Number(hp_current), hp_max: Number(hp_max) }), req.params.id]
     )
 
-    res.json({ ok: true })
+    res.json({ message: 'HP updated.' })
   } catch (err) {
     console.error('[characters/hp]', err)
     res.status(500).json({ error: 'Failed to update HP.' })

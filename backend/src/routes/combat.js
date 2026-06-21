@@ -672,59 +672,10 @@ router.post('/:id/add-gm-character', requireAuth, async (req, res) => {
   }
 })
 
-// ─── PATCH /api/combat/:id/light-timer ───────────────────────────────────────
-// Persist torch/light timer state so it survives GM navigation and reconnects.
-// action: 'start' — begin countdown from current remaining
-//         'pause' — freeze remaining, clear expires_at
-//         'reset' — set duration (secs param) and clear running state
-// Returns updated session fields.
-router.patch('/:id/light-timer', requireAuth, [
-  body('action').isIn(['start', 'pause', 'reset']).withMessage('action must be start, pause, or reset.'),
-  body('secs').optional().isInt({ min: 0, max: 86400 }).withMessage('secs must be 0–86400.'),
-], async (req, res) => {
-  if (validationErrors(req, res)) return
-  const { action, secs } = req.body
-
-  try {
-    const sess = await db.query('SELECT campaign_id, light_timer_remaining_secs FROM combat_sessions WHERE id = $1', [req.params.id])
-    if (!sess.rows[0]) return res.status(404).json({ error: 'Session not found.' })
-    if (!await assertGM(sess.rows[0].campaign_id, req.user.sub, res)) return
-
-    let result
-    if (action === 'start') {
-      const remaining = sess.rows[0].light_timer_remaining_secs ?? 3600
-      result = await db.query(
-        `UPDATE combat_sessions
-         SET light_timer_expires_at    = NOW() + ($1 * interval '1 second'),
-             light_timer_remaining_secs = $1
-         WHERE id = $2 RETURNING id, light_timer_expires_at, light_timer_remaining_secs`,
-        [remaining > 0 ? remaining : 3600, req.params.id]
-      )
-    } else if (action === 'pause') {
-      result = await db.query(
-        `UPDATE combat_sessions
-         SET light_timer_remaining_secs = GREATEST(0, EXTRACT(EPOCH FROM (light_timer_expires_at - NOW()))::int),
-             light_timer_expires_at     = NULL
-         WHERE id = $1 RETURNING id, light_timer_expires_at, light_timer_remaining_secs`,
-        [req.params.id]
-      )
-    } else if (action === 'reset') {
-      const newSecs = (secs != null) ? secs : 3600
-      result = await db.query(
-        `UPDATE combat_sessions
-         SET light_timer_remaining_secs = $1,
-             light_timer_expires_at     = NULL
-         WHERE id = $2 RETURNING id, light_timer_expires_at, light_timer_remaining_secs`,
-        [newSecs, req.params.id]
-      )
-    }
-
-    res.json({ session: result.rows[0] })
-  } catch (err) {
-    console.error('[combat/light-timer]', err)
-    res.status(500).json({ error: 'Failed to update light timer.' })
-  }
-})
+// NOTE: PATCH /:id/light-timer has been removed.
+// The light timer was migrated to campaign-scoped socket events (push_light_timer in socket.js)
+// reading from campaigns.light_timer_* columns. The combat_sessions.light_timer_* columns
+// are deprecated — see schema.sql. This REST endpoint was dead from the frontend.
 
 // ─── POST /api/combat/:id/end ─────────────────────────────────────────────────
 router.post('/:id/end', requireAuth, async (req, res) => {

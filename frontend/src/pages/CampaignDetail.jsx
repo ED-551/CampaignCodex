@@ -126,7 +126,7 @@ export default function CampaignDetail() {
 
   async function handleSetGMCharacter(characterId) {
     try {
-      const { gmCharacter: updated } = await api.patch(`/campaigns/${id}/gm-character`, { characterId })
+      const { gm_character: updated } = await api.patch(`/campaigns/${id}/gm-character`, { characterId })
       setGmCharacter(updated)
       setShowCharPicker(false)
     } catch (err) {

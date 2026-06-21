@@ -399,7 +399,7 @@ router.patch('/:id/gm-character', requireAuth, [
         'UPDATE campaigns SET gm_character_id = $1 WHERE id = $2',
         [null, req.params.id]
       )
-      return res.json({ gmCharacter: null })
+      return res.json({ gm_character: null })
     }
 
     // Verify character exists, belongs to requesting user, and matches campaign game_system
@@ -429,7 +429,7 @@ router.patch('/:id/gm-character', requireAuth, [
     )
 
     res.json({
-      gmCharacter: {
+      gm_character: {
         id:             character.id,
         character_name: character.character_name,
         portrait_url:   character.portrait_url,
