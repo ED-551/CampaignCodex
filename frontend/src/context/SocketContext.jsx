@@ -51,22 +51,22 @@ export function SocketProvider({ children }) {
     })
 
     socket.on('connect', () => {
-      console.log('[socket] connected', socket.id)
+      if (import.meta.env.DEV) console.log('[socket] connected', socket.id)
       setConnected(true)
     })
 
     socket.on('disconnect', (reason) => {
-      console.log('[socket] disconnected:', reason)
+      if (import.meta.env.DEV) console.log('[socket] disconnected:', reason)
       setConnected(false)
     })
 
     socket.on('connect_error', (err) => {
       // AUTH_REQUIRED / AUTH_INVALID means token is gone or expired
       if (err.message === 'AUTH_REQUIRED' || err.message === 'AUTH_INVALID') {
-        console.warn('[socket] auth error — not reconnecting:', err.message)
+        if (import.meta.env.DEV) console.warn('[socket] auth error — not reconnecting:', err.message)
         socket.disconnect()
       } else {
-        console.error('[socket] connect error:', err.message)
+        if (import.meta.env.DEV) console.error('[socket] connect error:', err.message)
       }
       setConnected(false)
     })

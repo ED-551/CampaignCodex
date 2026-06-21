@@ -33,6 +33,14 @@ async function request(method, path, body) {
   const data = await res.json().catch(() => ({}))
 
   if (!res.ok) {
+    // Global 401 handler — token expired or revoked mid-session.
+    // Clear the stale token and reload to the landing page so AuthContext
+    // re-initialises cleanly rather than leaving the user in a broken state.
+    if (res.status === 401) {
+      clearToken()
+      window.location.href = '/'
+      return  // unreachable after redirect, but prevents the throw firing
+    }
     const err  = new Error(data.error || `Request failed: ${res.status}`)
     err.status = res.status
     throw err

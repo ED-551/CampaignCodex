@@ -81,6 +81,41 @@ setInterval(() => {
   }
 }, 5 * 60_000).unref() // .unref() so the interval doesn't keep the process alive
 
+// ─── Per-user action rate limiting ───────────────────────────────────────────
+// Separate bucket for DB-touching non-message events (join_campaign, open_dm,
+// join_combat, spectator_request). Prevents a valid authenticated user from
+// exhausting the DB connection pool via rapid event spam.
+// Limit: 30 actions per 60 seconds per user.
+const actionRateMap = new Map()
+const ACTION_RATE_LIMIT  = 30
+const ACTION_RATE_WINDOW = 60_000
+
+function checkActionRate(userId) {
+  const now   = Date.now()
+  const entry = actionRateMap.get(userId) ?? { count: 0, resetAt: now + ACTION_RATE_WINDOW }
+
+  if (now > entry.resetAt) {
+    entry.count   = 1
+    entry.resetAt = now + ACTION_RATE_WINDOW
+    actionRateMap.set(userId, entry)
+    return true
+  }
+
+  if (entry.count >= ACTION_RATE_LIMIT) return false
+
+  entry.count++
+  actionRateMap.set(userId, entry)
+  return true
+}
+
+// Prune stale action rate entries every 5 minutes
+setInterval(() => {
+  const now = Date.now()
+  for (const [id, entry] of actionRateMap) {
+    if (now > entry.resetAt) actionRateMap.delete(id)
+  }
+}, 5 * 60_000).unref()
+
 // ─── Membership helper ────────────────────────────────────────────────────────
 // Returns true if userId is an active member or the GM of the given campaign.
 async function isCampaignMember(campaignId, userId) {
@@ -266,6 +301,9 @@ function createSocketServer(httpServer) {
       if (!campaignId || !UUID_RE.test(campaignId)) {
         return callback({ error: 'Invalid campaign ID.' })
       }
+      if (!checkActionRate(socket.userId)) {
+        return callback({ error: 'Too many requests. Slow down.' })
+      }
 
       try {
         const member = await isCampaignMember(campaignId, socket.userId)
@@ -346,7 +384,23 @@ function createSocketServer(httpServer) {
 
         // Sanitize optional metadata — only allow known dice roll shape
         const safeMeta = (metadata && typeof metadata === 'object' && metadata.type === 'dice')
-          ? { type: 'dice', notation: String(metadata.notation ?? ''), count: Number(metadata.count), sides: Number(metadata.sides), rolls: Array.isArray(metadata.rolls) ? metadata.rolls.map(Number) : [], total: Number(metadata.total), variant: String(metadata.variant ?? 'standard') }
+          ? {
+              type:     'dice',
+              notation: String(metadata.notation ?? '').slice(0, 20),
+              count:    Math.max(1, Math.min(100, Math.floor(Number(metadata.count)  || 1))),
+              sides:    Math.max(2, Math.min(1000, Math.floor(Number(metadata.sides) || 6))),
+              rolls:    Array.isArray(metadata.rolls)
+                          ? metadata.rolls
+                              .map(Number)
+                              .filter(n => Number.isFinite(n))
+                              .map(n => Math.max(-9999, Math.min(9999, Math.floor(n))))
+                              .slice(0, 100)
+                          : [],
+              total:    Number.isFinite(Number(metadata.total)) ? Number(metadata.total) : 0,
+              variant:  ['standard', 'advantage', 'disadvantage'].includes(metadata.variant)
+                          ? metadata.variant
+                          : 'standard',
+            }
           : null
 
         const result = await db.query(
@@ -410,6 +464,9 @@ function createSocketServer(httpServer) {
       }
       if (targetUserId === socket.userId) {
         return callback({ error: 'Cannot DM yourself.' })
+      }
+      if (!checkActionRate(socket.userId)) {
+        return callback({ error: 'Too many requests. Slow down.' })
       }
 
       try {
@@ -486,7 +543,23 @@ function createSocketServer(httpServer) {
         const targetUser = userCheck.rows[0]
 
         const safeDMMeta = (metadata && typeof metadata === 'object' && metadata.type === 'dice')
-          ? { type: 'dice', notation: String(metadata.notation ?? ''), count: Number(metadata.count), sides: Number(metadata.sides), rolls: Array.isArray(metadata.rolls) ? metadata.rolls.map(Number) : [], total: Number(metadata.total), variant: String(metadata.variant ?? 'standard') }
+          ? {
+              type:     'dice',
+              notation: String(metadata.notation ?? '').slice(0, 20),
+              count:    Math.max(1, Math.min(100, Math.floor(Number(metadata.count)  || 1))),
+              sides:    Math.max(2, Math.min(1000, Math.floor(Number(metadata.sides) || 6))),
+              rolls:    Array.isArray(metadata.rolls)
+                          ? metadata.rolls
+                              .map(Number)
+                              .filter(n => Number.isFinite(n))
+                              .map(n => Math.max(-9999, Math.min(9999, Math.floor(n))))
+                              .slice(0, 100)
+                          : [],
+              total:    Number.isFinite(Number(metadata.total)) ? Number(metadata.total) : 0,
+              variant:  ['standard', 'advantage', 'disadvantage'].includes(metadata.variant)
+                          ? metadata.variant
+                          : 'standard',
+            }
           : null
 
         const result = await db.query(
@@ -639,7 +712,23 @@ function createSocketServer(httpServer) {
 
       // Ephemeral — no DB write
       const safePublicMeta = (metadata && typeof metadata === 'object' && metadata.type === 'dice')
-        ? { type: 'dice', notation: String(metadata.notation ?? ''), count: Number(metadata.count), sides: Number(metadata.sides), rolls: Array.isArray(metadata.rolls) ? metadata.rolls.map(Number) : [], total: Number(metadata.total), variant: String(metadata.variant ?? 'standard') }
+        ? {
+            type:     'dice',
+            notation: String(metadata.notation ?? '').slice(0, 20),
+            count:    Math.max(1, Math.min(100, Math.floor(Number(metadata.count)  || 1))),
+            sides:    Math.max(2, Math.min(1000, Math.floor(Number(metadata.sides) || 6))),
+            rolls:    Array.isArray(metadata.rolls)
+                        ? metadata.rolls
+                            .map(Number)
+                            .filter(n => Number.isFinite(n))
+                            .map(n => Math.max(-9999, Math.min(9999, Math.floor(n))))
+                            .slice(0, 100)
+                        : [],
+            total:    Number.isFinite(Number(metadata.total)) ? Number(metadata.total) : 0,
+            variant:  ['standard', 'advantage', 'disadvantage'].includes(metadata.variant)
+                        ? metadata.variant
+                        : 'standard',
+          }
         : null
       const message = {
         id:         randomUUID(),
@@ -777,6 +866,9 @@ function createSocketServer(httpServer) {
       if (!campaignId || !UUID_RE.test(campaignId)) {
         return callback({ error: 'Invalid campaign ID.' })
       }
+      if (!checkActionRate(socket.userId)) {
+        return callback({ error: 'Too many requests. Slow down.' })
+      }
 
       try {
         const ok = await isCampaignMember(campaignId, socket.userId)
@@ -875,6 +967,9 @@ function createSocketServer(httpServer) {
 
       if (!campaignId || !UUID_RE.test(campaignId)) {
         return callback({ error: 'Invalid campaign ID.' })
+      }
+      if (!checkActionRate(socket.userId)) {
+        return callback({ error: 'Too many requests. Slow down.' })
       }
 
       // Only the GM can initiate

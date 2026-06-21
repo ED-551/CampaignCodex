@@ -571,7 +571,7 @@ function BroadcastPanel({
         <span>
           Emails stub to the server console until{' '}
           <code className="bg-codex-surface px-1 py-0.5 rounded text-codex-subtext">RESEND_API_KEY</code>
-          {' '}is set in <code className="bg-codex-surface px-1 py-0.5 rounded text-codex-subtext">backend/.env</code>.
+          {' '}is set in your <code className="bg-codex-surface px-1 py-0.5 rounded text-codex-subtext">.env</code> file.
           See the Pre-Launch Email Setup checklist in your Obsidian vault.
         </span>
       </div>

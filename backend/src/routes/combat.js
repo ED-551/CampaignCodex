@@ -15,6 +15,25 @@ function validationErrors(req, res) {
   return false
 }
 
+// Allowlist of keys permitted on each combatant object written to the DB.
+// Any key not in this set is stripped before persistence.
+const COMBATANT_ALLOWED_KEYS = new Set([
+  'id', 'type', 'seatIndex', 'joinOrder', 'name', 'username', 'characterId',
+  'isGMCharacter', 'hp_current', 'hp_max', 'hp_label', 'ac', 'dex_mod',
+  'agility', 'initiative', 'conditions', 'is_active_turn', 'is_dead',
+  'has_gone', 'notes', 'monsterId', 'morale',
+  'is_legendary_boss', 'legendary_slots_gone',
+])
+
+function sanitizeCombatant(c) {
+  if (!c || typeof c !== 'object' || Array.isArray(c)) return null
+  const out = {}
+  for (const key of COMBATANT_ALLOWED_KEYS) {
+    if (key in c) out[key] = c[key]
+  }
+  return out
+}
+
 // Mirrors the calcArmor() function in NimbleSheet.jsx
 // armor: { type, formula } | null, shield: { formula } | null
 // dex/str: raw modifier values from sheet_data.stats
@@ -563,7 +582,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
          combat_mode  = COALESCE($3, combat_mode)
        WHERE id = $4 RETURNING *`,
       [
-        combatants ? JSON.stringify(combatants) : null,
+        combatants ? JSON.stringify(combatants.map(sanitizeCombatant).filter(Boolean)) : null,
         round_number || null,
         safeMode,
         req.params.id,

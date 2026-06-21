@@ -69,7 +69,11 @@ router.post('/', requireAuth, [
     .optional({ nullable: true }).trim()
     .isLength({ max: 200 }).withMessage('Tags must be 200 characters or fewer.'),
   body('statData')
-    .optional({ nullable: true }).isObject().withMessage('statData must be an object.'),
+    .optional({ nullable: true }).isObject().withMessage('statData must be an object.')
+    .custom(v => {
+      if (v && JSON.stringify(v).length > 65536) throw new Error('statData exceeds maximum size (64KB).')
+      return true
+    }),
 ], async (req, res) => {
   if (validationErrors(req, res)) return
 
@@ -122,7 +126,11 @@ router.patch('/:id', requireAuth, [
   body('tags')
     .optional({ nullable: true }).trim().isLength({ max: 200 }),
   body('statData')
-    .optional({ nullable: true }).isObject(),
+    .optional({ nullable: true }).isObject()
+    .custom(v => {
+      if (v && JSON.stringify(v).length > 65536) throw new Error('statData exceeds maximum size (64KB).')
+      return true
+    }),
 ], async (req, res) => {
   if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid monster ID.' })
   if (validationErrors(req, res)) return

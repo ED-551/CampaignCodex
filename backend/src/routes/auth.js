@@ -361,18 +361,6 @@ router.post('/forgot-password/reset', authLimiter, [
   }
 })
 
-// ─── GET /api/auth/security-questions ─────────────────────────────────────────
-// Always returns static placeholder question text — never real question labels.
-// Returning a user's actual questions leaks username existence: an attacker who
-// sees questions different from the placeholders knows the account is real.
-// The recovery UI now prompts users to recall their own questions instead.
-router.get('/security-questions/:username', authLimiter, (req, res) => {
-  res.json({
-    question1: 'What was the name of your first pet?',
-    question2: 'What city were you born in?',
-  })
-})
-
 // ─── DELETE /api/auth/account ─────────────────────────────────────────────────
 // Self-service account deletion. Admins cannot delete themselves this way.
 router.delete('/account', requireAuth, [

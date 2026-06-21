@@ -44,7 +44,11 @@ router.post('/', requireAuth, [
   body('gameSystem').isIn(GAME_SYSTEMS)
     .withMessage('Invalid game system.'),
   body('campaignId').optional().isUUID().withMessage('Invalid campaign ID.'),
-  body('sheetData').optional().isObject().withMessage('Sheet data must be an object.'),
+  body('sheetData').optional().isObject().withMessage('Sheet data must be an object.')
+    .custom(v => {
+      if (v && JSON.stringify(v).length > 65536) throw new Error('sheetData exceeds maximum size (64KB).')
+      return true
+    }),
 ], async (req, res) => {
   if (validationErrors(req, res)) return
 
@@ -165,8 +169,13 @@ router.get('/:id', requireAuth, async (req, res) => {
 // all sheet data and the character name but cannot swap another player's portrait.
 router.patch('/:id', requireAuth, [
   body('characterName').optional().trim().notEmpty().isLength({ max: 100 }),
-  body('sheetData').optional().isObject(),
-  body('portraitUrl').optional().isURL().withMessage('Invalid portrait URL.'),
+  body('sheetData').optional().isObject()
+    .custom(v => {
+      if (v && JSON.stringify(v).length > 65536) throw new Error('sheetData exceeds maximum size (64KB).')
+      return true
+    }),
+  body('portraitUrl').optional().isURL().withMessage('Invalid portrait URL.')
+    .isLength({ max: 500 }).withMessage('Portrait URL must be 500 characters or fewer.'),
 ], async (req, res) => {
   if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid character ID.' })
   if (validationErrors(req, res)) return

@@ -28,7 +28,11 @@ require('dotenv').config()
       warnings.push('RESEND_API_KEY not set — all emails will stub to console in production.')
     }
     if (!process.env.CLIENT_URL || process.env.CLIENT_URL.includes('localhost')) {
-      warnings.push('CLIENT_URL appears to be a localhost address in production.')
+      errors.push('CLIENT_URL must be set to a non-localhost URL in production — CORS will be misconfigured otherwise.')
+    }
+  } else {
+    if (!process.env.CLIENT_URL) {
+      warnings.push('CLIENT_URL not set — CORS defaulting to http://localhost:5173.')
     }
   }
 
@@ -68,7 +72,25 @@ const httpServer = http.createServer(app)
 const PORT       = process.env.PORT || 3001
 
 // ─── Security Headers ─────────────────────────────────────────────────────────
-app.use(helmet())
+// contentSecurityPolicy blocks inline script injection (XSS mitigation).
+// unsafe-inline for styles is required by Tailwind CSS.
+// wss: / ws: for Socket.io WebSocket connections.
+// https: for imgSrc to allow external portrait URLs.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc:  ["'self'"],
+      scriptSrc:   ["'self'"],
+      styleSrc:    ["'self'", "'unsafe-inline'"],
+      imgSrc:      ["'self'", "data:", "https:"],
+      connectSrc:  ["'self'", "wss:", "ws:"],
+      fontSrc:     ["'self'"],
+      objectSrc:   ["'none'"],
+      mediaSrc:    ["'self'"],
+      frameSrc:    ["'none'"],
+    },
+  },
+}))
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 app.use(cors({
