@@ -25,6 +25,9 @@ backend/uploads/
 logs/
 backend/logs/
 
+# ─── Database seed scripts (contain personal UUIDs / local test data) ────────
+backend/src/db/seed-*.js
+
 # ─── OS / Editor ──────────────────────────────────────────────────────────────
 .DS_Store
 .cursor/

@@ -78,7 +78,7 @@ router.get('/inbox', requireAuth, [
            rm.read_at,
            rm.character_id,
            u.id             AS sender_id,
-           u.username       AS sender_username,
+           CASE WHEN u.is_admin THEN 'Site Administrator' ELSE u.username END AS sender_username,
            u.supporter_tier AS sender_supporter_tier,
            u.is_admin       AS sender_is_admin,
            ch.character_name,
@@ -132,7 +132,7 @@ router.get('/sent', requireAuth, [
            rm.read_at,
            rm.character_id,
            u.id         AS recipient_id,
-           u.username   AS recipient_username,
+           CASE WHEN u.is_admin THEN 'Site Administrator' ELSE u.username END AS recipient_username,
            ch.character_name,
            ch.game_system AS character_game_system
          FROM raven_messages rm
@@ -175,10 +175,10 @@ router.get('/:id', requireAuth, async (req, res) => {
     const result = await db.query(
       `SELECT
          rm.*,
-         s.username       AS sender_username,
+         CASE WHEN s.is_admin THEN 'Site Administrator' ELSE s.username END AS sender_username,
          s.supporter_tier AS sender_supporter_tier,
          s.is_admin       AS sender_is_admin,
-         r.username       AS recipient_username,
+         CASE WHEN r.is_admin THEN 'Site Administrator' ELSE r.username END AS recipient_username,
          ch.character_name,
          ch.game_system AS character_game_system
        FROM raven_messages rm

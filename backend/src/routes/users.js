@@ -28,16 +28,41 @@ router.get('/search', requireAuth, [
   }
 
   try {
+    const q = req.query.q.trim()
+
+    // Exclude is_admin accounts from normal search results — the admin username
+    // is never exposed. Admins are surfaced only as the "Site Administrator" alias.
     const result = await db.query(
       `SELECT id, username
        FROM users
        WHERE username ILIKE $1
          AND id != $2
+         AND is_admin = false
        ORDER BY username
        LIMIT 8`,
-      [`${req.query.q}%`, req.user.sub]
+      [`${q}%`, req.user.sub]
     )
-    res.json({ users: result.rows })
+
+    let users = result.rows
+
+    // Synthetic alias: if the query prefix-matches "administrator" or
+    // "site administrator", surface the primary admin as "Site Administrator"
+    // so users can still send ravens to the admin team without knowing the
+    // real login username.
+    const ql = q.toLowerCase()
+    if ('administrator'.startsWith(ql) || 'site administrator'.startsWith(ql)) {
+      const adminRow = await db.query(
+        `SELECT id FROM users WHERE is_admin = true LIMIT 1`
+      )
+      if (adminRow.rows[0]) {
+        users = [
+          { id: adminRow.rows[0].id, username: 'Site Administrator' },
+          ...users,
+        ].slice(0, 8)
+      }
+    }
+
+    res.json({ users })
   } catch (err) {
     console.error('[users/search]', err)
     res.status(500).json({ error: 'Search failed.' })
@@ -50,7 +75,9 @@ router.get('/search', requireAuth, [
 router.get('/contacts', requireAuth, async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT DISTINCT u.id, u.username
+      `SELECT DISTINCT
+         u.id,
+         CASE WHEN u.is_admin THEN 'Site Administrator' ELSE u.username END AS username
        FROM users u
        WHERE u.id IN (
          SELECT sender_id    FROM raven_messages WHERE recipient_id = $1
@@ -58,7 +85,7 @@ router.get('/contacts', requireAuth, async (req, res) => {
          SELECT recipient_id FROM raven_messages WHERE sender_id    = $1
        )
          AND u.id != $1
-       ORDER BY u.username
+       ORDER BY username
        LIMIT 50`,
       [req.user.sub]
     )

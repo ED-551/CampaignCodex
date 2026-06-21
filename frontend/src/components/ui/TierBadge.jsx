@@ -46,11 +46,11 @@ const TIER_CONFIG = {
   },
   black: {
     label:       'Administrator',
-    outerFill:   '#1a1a1a',
-    gradFrom:    '#3a1f5c',
-    gradTo:      '#1a0a2e',
-    rimStroke:   '#4a2a6e',
-    textColor:   '#c084fc',
+    outerFill:   '#0a0a0a',
+    gradFrom:    '#2e2e2e',
+    gradTo:      '#060606',
+    rimStroke:   '#4a4a4a',
+    textColor:   '#c8c8c8',
     letter:      'A',
   },
 }
@@ -106,9 +106,21 @@ export default function TierBadge({ tier, size = 16 }) {
           strokeOpacity="0.5"
         />
 
+        {/* Specular highlight — top-left gloss to simulate light on coin face */}
+        {tier === 'black' && (
+          <ellipse
+            cx={cx * 0.68}
+            cy={cx * 0.58}
+            rx={innerR * 0.55}
+            ry={innerR * 0.28}
+            fill="white"
+            fillOpacity="0.10"
+          />
+        )}
+
         {/* Center glyph */}
         {tier === 'black' ? (
-          /* Admin crown — small "A" with a tiny crown accent */
+          /* Silver "A" — administrator mark on dark coin */
           <text
             x={cx}
             y={cx + size * 0.17}

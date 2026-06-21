@@ -70,7 +70,7 @@ router.get('/stats', requireAdmin, async (req, res) => {
                 WHERE (is_admin = true OR is_moderator = true) AND id != $1
                 ORDER BY is_admin DESC, created_at ASC`, [req.user.sub]),
 
-      // Total user count for broadcast raven (everyone except adm_ sender)
+      // Total user count for broadcast raven (everyone except the sending admin)
       db.query('SELECT COUNT(*) AS count FROM users WHERE id != $1', [req.user.sub]),
     ])
 
@@ -97,7 +97,7 @@ router.get('/stats', requireAdmin, async (req, res) => {
 })
 
 // ─── GET /api/admin/users ─────────────────────────────────────────────────────
-// Primary admin (adm_) account is hidden from its own list via WHERE id != $1
+// Primary admin account is hidden from its own list via WHERE id != $1
 router.get('/users', requireAdmin, async (req, res) => {
   try {
     const result = await db.query(
@@ -162,7 +162,7 @@ router.patch('/users/:id/tier', requireAdmin, async (req, res) => {
     }
 
     const result = await db.query(
-      `UPDATE users SET supporter_tier = $1,
+      `UPDATE users SET supporter_tier = $1::text,
          supporter_since = CASE WHEN $1::text != 'free' THEN NOW() ELSE NULL END
        WHERE id = $2
        RETURNING id, username, supporter_tier`,
@@ -412,7 +412,7 @@ router.post('/broadcast-raven', requireAdmin, async (req, res) => {
   if (bodyStr.length > 5000)   return res.status(400).json({ error: 'Message body must be 5,000 characters or fewer.' })
 
   try {
-    // Batch-insert one raven per user (excluding the adm_ sender)
+    // Batch-insert one raven per user (excluding the sending admin)
     const result = await db.query(
       `INSERT INTO raven_messages (sender_id, recipient_id, subject, body)
        SELECT $1, id, $2, $3
