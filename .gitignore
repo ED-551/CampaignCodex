@@ -4,6 +4,7 @@
 .env.production
 *.pem
 *.key
+*.pfx
 
 # ─── Dependencies ─────────────────────────────────────────────────────────────
 node_modules/
@@ -13,9 +14,16 @@ backend/node_modules/
 # ─── Build output ─────────────────────────────────────────────────────────────
 frontend/dist/
 frontend/.vite/
+backend/dist/
+backend/build/
 
 # ─── Uploads (user content — not in git) ─────────────────────────────────────
 backend/uploads/
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+backend/logs/
 
 # ─── OS / Editor ──────────────────────────────────────────────────────────────
 .DS_Store
