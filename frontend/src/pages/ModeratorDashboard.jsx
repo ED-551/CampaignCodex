@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Shield, ArrowLeft, BookOpen } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../utils/api'
+import TierBadge from '../components/ui/TierBadge'
 
 export default function ModeratorDashboard() {
   const { logout }                  = useAuth()
@@ -114,7 +115,10 @@ export default function ModeratorDashboard() {
                 {users.map((u, i) => (
                   <tr key={u.id} className={`border-b border-codex-border/40 ${i % 2 === 0 ? '' : 'bg-codex-card/30'}`}>
                     <Td>
-                      <span className="text-codex-text font-medium">{u.username}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-codex-text font-medium">{u.username}</span>
+                        <TierBadge tier={u.supporter_tier ?? 'free'} size={13} />
+                      </div>
                     </Td>
                     <Td><span className="text-codex-subtext">{u.email}</span></Td>
                     <Td>{new Date(u.created_at).toLocaleDateString()}</Td>

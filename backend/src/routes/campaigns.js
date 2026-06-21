@@ -105,6 +105,8 @@ router.get('/:id', requireAuth, async (req, res) => {
   try {
     const camp = await db.query(
       `SELECT c.*, u.username AS gm_username,
+              u.supporter_tier AS gm_supporter_tier,
+              u.is_admin       AS gm_is_admin,
               ch.character_name AS gm_character_name,
               ch.portrait_url   AS gm_portrait_url,
               (SELECT COUNT(*)::int FROM combat_sessions cs
@@ -118,7 +120,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 
     const members = await db.query(
       `SELECT cm.id, cm.user_id, cm.character_id, cm.joined_at, cm.left_at,
-              u.username,
+              u.username, u.supporter_tier, u.is_admin,
               ch.character_name, ch.portrait_url, ch.game_system
        FROM campaign_members cm
        JOIN users u ON u.id = cm.user_id

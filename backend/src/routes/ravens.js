@@ -77,8 +77,10 @@ router.get('/inbox', requireAuth, [
            rm.created_at,
            rm.read_at,
            rm.character_id,
-           u.id         AS sender_id,
-           u.username   AS sender_username,
+           u.id             AS sender_id,
+           u.username       AS sender_username,
+           u.supporter_tier AS sender_supporter_tier,
+           u.is_admin       AS sender_is_admin,
            ch.character_name,
            ch.game_system AS character_game_system
          FROM raven_messages rm
@@ -173,8 +175,10 @@ router.get('/:id', requireAuth, async (req, res) => {
     const result = await db.query(
       `SELECT
          rm.*,
-         s.username  AS sender_username,
-         r.username  AS recipient_username,
+         s.username       AS sender_username,
+         s.supporter_tier AS sender_supporter_tier,
+         s.is_admin       AS sender_is_admin,
+         r.username       AS recipient_username,
          ch.character_name,
          ch.game_system AS character_game_system
        FROM raven_messages rm

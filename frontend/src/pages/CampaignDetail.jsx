@@ -571,7 +571,10 @@ function PlayerCard({ member, isGM, gameSystem, currentUserId, onClick, isGMEntr
         <p className={`text-sm font-semibold text-codex-text leading-tight ${onClick ? 'group-hover:text-codex-gold transition-colors' : ''}`}>
           {member.character_name || '—'}
         </p>
-        <p className="text-xs text-codex-muted mt-0.5">{member.username}</p>
+        <div className="flex items-center justify-center gap-1 mt-0.5">
+          <p className="text-xs text-codex-muted">{member.username}</p>
+          <TierBadge tier={member.supporter_tier ?? 'free'} size={11} />
+        </div>
       </div>
 
       {!member.character_id && (

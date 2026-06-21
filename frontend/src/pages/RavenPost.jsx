@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../utils/api'
+import TierBadge from '../components/ui/TierBadge'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -54,8 +55,9 @@ function MessageListItem({ message, isSelected, onClick, isInbox }) {
         }`}
     >
       <div className="flex items-start justify-between gap-2 mb-1">
-        <span className={`text-sm truncate ${isUnread ? 'font-semibold text-codex-text' : 'text-codex-subtext'}`}>
+        <span className={`flex items-center gap-1 text-sm truncate ${isUnread ? 'font-semibold text-codex-text' : 'text-codex-subtext'}`}>
           {otherUser}
+          {isInbox && <TierBadge tier={message.sender_supporter_tier ?? 'free'} size={12} />}
         </span>
         <span className="text-[11px] text-codex-muted shrink-0">{formatDate(message.created_at)}</span>
       </div>
@@ -169,9 +171,10 @@ function MessageView({ messageId, isInbox, onReply, onDelete, onBack }) {
         </div>
 
         <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-codex-muted">
-          <span>
+          <span className="flex items-center gap-1.5">
             <span className="text-codex-subtext">From:</span>{' '}
             <span className="text-codex-text font-medium">{message.sender_username}</span>
+            <TierBadge tier={message.sender_supporter_tier ?? 'free'} size={12} />
           </span>
           <span>
             <span className="text-codex-subtext">To:</span>{' '}

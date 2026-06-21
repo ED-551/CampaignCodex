@@ -22,6 +22,7 @@ import { ArrowLeft, BookOpen, Send, Users, Eye } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
 import DiceRollBubble from '../components/chat/DiceRollBubble'
+import TierBadge from '../components/ui/TierBadge'
 import { parseDiceCommand, rollDice, buildDiceMetadata, formatDiceBody } from '../utils/dice'
 
 // ─── Room metadata (mirrors the server's PUBLIC_ROOMS map) ───────────────────
@@ -433,9 +434,12 @@ function RoomView({ room, socket, connected, user, onExit }) {
 
                   {/* Bubble */}
                   <div className={`max-w-[70%] flex flex-col gap-0.5 ${isMine ? 'items-end' : 'items-start'}`}>
-                    <div className="flex items-baseline gap-1.5">
+                    <div className="flex items-center gap-1.5">
                       {!isMine && (
-                        <span className="text-[11px] font-medium text-codex-subtext">{msg.username}</span>
+                        <>
+                          <span className="text-[11px] font-medium text-codex-subtext">{msg.username}</span>
+                          <TierBadge tier={msg.supporter_tier ?? 'free'} size={12} />
+                        </>
                       )}
                       <span className="text-[10px] text-codex-muted">{formatTime(msg.created_at)}</span>
                     </div>
@@ -507,11 +511,12 @@ function RoomView({ room, socket, connected, user, onExit }) {
                 <li className="text-xs text-codex-muted italic px-1">Nobody yet…</li>
               )}
               {occupants.map(occ => (
-                <li key={occ.userId} className="flex items-center gap-2">
+                <li key={occ.userId} className="flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
                   <span className={`text-xs truncate ${occ.userId === user?.id ? 'text-codex-gold font-medium' : 'text-codex-subtext'}`}>
                     {occ.username}{occ.userId === user?.id ? ' (you)' : ''}
                   </span>
+                  <TierBadge tier={occ.tier ?? 'free'} size={11} />
                 </li>
               ))}
             </ul>

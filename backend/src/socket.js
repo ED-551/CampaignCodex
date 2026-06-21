@@ -316,6 +316,8 @@ function createSocketServer(httpServer) {
       }
       socket.userId   = payload.sub
       socket.username = payload.username
+      socket.tier     = payload.tier    ?? 'free'
+      socket.isAdmin  = payload.isAdmin ?? false
       next()
     } catch {
       next(new Error('AUTH_INVALID'))
@@ -693,6 +695,8 @@ function createSocketServer(httpServer) {
       roomOccupants.get(roomId).set(socket.id, {
         userId:   socket.userId,
         username: socket.username,
+        tier:     socket.tier,
+        isAdmin:  socket.isAdmin,
       })
 
       // Push updated occupant list to everyone in the room
@@ -779,12 +783,14 @@ function createSocketServer(httpServer) {
           }
         : null
       const message = {
-        id:         randomUUID(),
-        username:   socket.username,
-        user_id:    socket.userId,
-        body:       trimmed,
-        metadata:   safePublicMeta,
-        created_at: new Date().toISOString(),
+        id:             randomUUID(),
+        username:       socket.username,
+        user_id:        socket.userId,
+        supporter_tier: socket.tier,
+        is_admin:       socket.isAdmin,
+        body:           trimmed,
+        metadata:       safePublicMeta,
+        created_at:     new Date().toISOString(),
       }
 
       io.to(`public:${roomId}`).emit('room_message', message)
