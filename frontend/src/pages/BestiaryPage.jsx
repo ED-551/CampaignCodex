@@ -98,6 +98,15 @@ function sortMonsters(arr, order) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function BestiaryPage() {
+  // The URL param (:system) is the single source of truth for which game system
+  // is being viewed. It maps directly into SYSTEM_META to get display labels,
+  // theme colours, and field-formatting rules. An unrecognised slug produces
+  // meta = undefined, which the effect below redirects away from immediately.
+  //
+  // There is no "All Systems" view at this route — the dashboard links each
+  // system separately (/bestiary/shadowdark, /bestiary/morkborg, etc.). The API
+  // call at /bestiary?system=<slug> already filters server-side, so the client
+  // never loads monsters for other systems on this page.
   const { system }  = useParams()
   const navigate    = useNavigate()
   const meta        = SYSTEM_META[system]
@@ -106,7 +115,23 @@ export default function BestiaryPage() {
   const [loading,       setLoading]       = useState(true)
   const [error,         setError]         = useState('')
 
-  // Full-page form (Shadowdark only)
+  // Full-page form (systems in FULL_FORM_SYSTEMS: shadowdark, morkborg, nimble)
+  //
+  // Two pieces of state are needed here, not one, because they carry orthogonal
+  // information:
+  //   formView   — a boolean gate: should the list view be replaced by a form?
+  //   formTarget — the identity of what the form is editing (null = create new,
+  //                monster object = editing an existing record).
+  //
+  // A single combined value (e.g. { open, target }) would work but makes the
+  // conditional renders noisier. Keeping them separate also lets handleSaved
+  // reset both independently without a spread-and-mutate pattern.
+  //
+  // Transitions:
+  //   openCreate()  → formTarget = null,    formView = true   (blank form)
+  //   openEdit(m)   → formTarget = monster, formView = true   (pre-filled form)
+  //   handleSaved() → formTarget = null,    formView = false  (back to list)
+  //   formBack()    → formTarget = null,    formView = false  (user cancelled)
   const [formView,      setFormView]      = useState(false)
   const [formTarget,    setFormTarget]    = useState(null)   // null = create, object = edit
 
@@ -124,7 +149,9 @@ export default function BestiaryPage() {
   const [selectedIds,    setSelectedIds]    = useState(new Set())
   const [showShareModal, setShowShareModal] = useState(false)
 
-  // Redirect unknown system slugs
+  // Guards against manually typed or bookmarked URLs with invalid system slugs
+  // (e.g. /bestiary/dnd5e). replace:true keeps the history stack clean so the
+  // user doesn't land back here if they press Back from the dashboard.
   useEffect(() => {
     if (!meta) navigate('/dashboard', { replace: true })
   }, [meta, navigate])
@@ -143,6 +170,9 @@ export default function BestiaryPage() {
     }
   }, [system])
 
+  // Re-fetches whenever the system slug changes (navigation between systems).
+  // Wrapped in useCallback so this effect only fires when system truly changes,
+  // not on every parent re-render.
   useEffect(() => { loadMonsters() }, [loadMonsters])
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -701,6 +731,8 @@ function MonsterFormModal({ system, meta, existing, onClose, onSaved }) {
   const [error,     setError]     = useState('')
   const [loading,   setLoading]   = useState(false)
 
+  // Escape closes the form unless a save is in flight, preventing data loss on
+  // accidental dismissal (the form state would be destroyed on unmount).
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape' && !loading) onClose() }
     window.addEventListener('keydown', onKey)
@@ -823,6 +855,8 @@ function MonsterFormModal({ system, meta, existing, onClose, onSaved }) {
 // ─── Delete Confirmation Modal ────────────────────────────────────────────────
 
 function DeleteModal({ monster, loading, onConfirm, onCancel }) {
+  // Escape is blocked while the DELETE request is in flight so the modal can't
+  // be dismissed in a half-deleted state.
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape' && !loading) onCancel() }
     window.addEventListener('keydown', onKey)
@@ -891,14 +925,18 @@ function ShareModal({ monsters, selectedIds, system, meta, onClose, onShared }) 
   const searchRef  = useRef(null)
   const timerRef   = useRef(null)
 
-  // Close on Escape
+  // Escape is blocked while a share is in flight (loading=true) to prevent
+  // accidental dismissal while the POST is pending.
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape' && !loading) onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [loading, onClose])
 
-  // Load raven contacts on mount
+  // Pre-loads the user's raven contacts (people they've previously shared with
+  // or campaigned with) to show as quick-pick chips above the search field.
+  // Empty dep array = once on modal open; failure is silently swallowed because
+  // contacts are a convenience shortcut, not a required flow.
   useEffect(() => {
     api.get('/users/contacts')
       .then(({ contacts: list }) => setContacts(list))
@@ -906,7 +944,10 @@ function ShareModal({ monsters, selectedIds, system, meta, onClose, onShared }) 
       .finally(() => setContactsLoaded(true))
   }, [])
 
-  // Debounced username search
+  // Debounces the username search input (300 ms) to avoid hammering the API on
+  // every keystroke. Short queries (< 2 chars) are ignored to prevent returning
+  // too many results. The timer is cleared both on the next keystroke and on
+  // unmount via the returned cleanup function.
   useEffect(() => {
     clearTimeout(timerRef.current)
     if (!searchQuery.trim() || searchQuery.length < 2) {
@@ -929,7 +970,10 @@ function ShareModal({ monsters, selectedIds, system, meta, onClose, onShared }) 
     return () => clearTimeout(timerRef.current)
   }, [searchQuery])
 
-  // Click outside to close results
+  // Closes the search results dropdown when the user clicks anywhere outside the
+  // search container (tracked via searchRef). Uses mousedown rather than click
+  // so the handler fires before the button's onClick, preventing a race where the
+  // dropdown is still open when a result is selected.
   useEffect(() => {
     function handleClickOutside(e) {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
@@ -947,6 +991,11 @@ function ShareModal({ monsters, selectedIds, system, meta, onClose, onShared }) 
     setShowResults(false)
   }
 
+  // Sharing is a server-side inbox model, not a public URL/token link.
+  // POSTing to /bestiary/shares creates a share record owned by the recipient
+  // (identified by their user ID). The recipient sees it in their /bestiary/shares
+  // inbox and can choose to import individual monsters into their own bestiary.
+  // No share token or expiry is involved — the sender keeps their originals.
   async function handleShare() {
     if (!recipient) return
     setError('')

@@ -10,6 +10,13 @@
  *   • Death timer — countdown badge on dying PCs (1d4+CON rounds)
  *   • Morale check prompt — shown when ≥50% of initial monsters are dead/dead-toggle
  *   • Light timer — optional real-time torch countdown (1 hour default)
+ *       NOT YET IMPLEMENTED in this file. The feature is planned: a wall-clock
+ *       interval (setInterval, not turn-based) would decrement a seconds counter
+ *       stored in state. It would start when the GM activates it, pause when combat
+ *       is ended or the component unmounts, and reset to 3600 s on manual reset.
+ *       Because the countdown is time-based rather than action-based it cannot live
+ *       in the combatants array; it would need its own state + a separate useEffect
+ *       to drive the interval.
  *   • Surprise phase indicator
  */
 
@@ -63,6 +70,13 @@ const CombatTracker = forwardRef(function CombatTracker({ campaignId, isGM, game
   const [liveConn,     setLiveConn]     = useState(false)
 
   // Shadowdark extras
+  //
+  // NOTE — lightRunning (torch/light timer active flag) is a planned feature.
+  // When implemented it will be a derived boolean — true while a session exists
+  // AND the GM has started the timer AND combat hasn't ended — rather than a
+  // separate boolean state. Deriving it avoids the possibility of the running flag
+  // getting out of sync with the session or the timer seconds counter, which would
+  // require extra cleanup logic in every code path that ends combat.
   const [moraleTriggered,  setMoraleTriggered]  = useState(false)
   const [moraleDismissed,  setMoraleDismissed]  = useState(false)
   const [initMonsterCount, setInitMonsterCount] = useState(0)
@@ -80,11 +94,18 @@ const CombatTracker = forwardRef(function CombatTracker({ campaignId, isGM, game
 
   const isSD = gameSystem === 'shadowdark'
   const sessionRef = useRef(session)
+  // Keeps sessionRef in sync so async callbacks (pushUpdate, startCombat) always
+  // read the latest session without being listed as effect dependencies.
   useEffect(() => { sessionRef.current = session }, [session])
   const combatantsRef = useRef(combatants)
+  // Same pattern for combatants — addNPC and handleDrop read the live array
+  // without triggering re-renders each time combatants change.
   useEffect(() => { combatantsRef.current = combatants }, [combatants])
 
   // ── Load initial session ─────────────────────────────────────────────────────
+  // Runs once on mount (and if campaignId ever changes). Fetches the currently
+  // active combat session from the REST API and seeds all local state; if no
+  // session exists the catch branch leaves everything blank and notifies the parent.
   useEffect(() => {
     let mounted = true
     api.get(`/combat/${campaignId}/active`)
@@ -108,6 +129,10 @@ const CombatTracker = forwardRef(function CombatTracker({ campaignId, isGM, game
   }, [campaignId]) // eslint-disable-line
 
   // ── Socket: join combat room ─────────────────────────────────────────────────
+  // Runs whenever the socket connection becomes available. Emits 'join_combat' to
+  // subscribe this client to the campaign's combat room, then registers the
+  // 'combat_update' listener that applies live GM changes to all connected players.
+  // Cleanup leaves the room and removes the listener on disconnect or unmount.
   useEffect(() => {
     if (!socket || !connected) return
 
@@ -183,9 +208,26 @@ const CombatTracker = forwardRef(function CombatTracker({ campaignId, isGM, game
   }, [campaignId, socket, connected, onActiveChange])
 
   // ── Expose startCombat to parent via ref ─────────────────────────────────────
+  // CombatTracker is a deeply nested child; the parent (CampaignDetail) needs to
+  // trigger combat from its own "Start Encounter" button — which lives outside
+  // this component tree. Passing startCombat as a prop would require threading it
+  // through multiple intermediaries. The ref/imperative handle pattern lets the
+  // parent call trackerRef.current.startCombat(opts) directly without adding props
+  // to every layer, while keeping the function's full async logic here where all
+  // the state lives.
   useImperativeHandle(ref, () => ({ startCombat }), [startCombat])
 
   // ── Morale check monitor (Shadowdark) ────────────────────────────────────────
+  // Re-runs every time the combatants array changes. In Shadowdark, the rules
+  // require a DC 15 WIS morale check when monsters suffer ≥50% casualties —
+  // but the rulebook doesn't tell the GM when to call it mid-combat, so this
+  // effect watches for that threshold automatically.
+  //
+  // initMonsterCount is set at combat start (and on a 'started' socket event) to
+  // capture the original enemy headcount before any are killed. That baseline
+  // lets us compute the 50% threshold correctly even after mid-combat additions.
+  // moraleDismissed lets the GM acknowledge and close the banner without the
+  // effect firing it again for the remainder of the encounter.
   useEffect(() => {
     if (!isSD || initMonsterCount === 0 || moraleDismissed) return
     const dead = combatants.filter(c => c.type !== 'pc' && c.is_dead).length
@@ -651,6 +693,8 @@ function CombatantRow({ combatant: c, isGM, isSD, isDragTarget, isDragging,
   // Single-click on name → stat popup; double-click → rename (GM)
   // 220 ms delay lets us distinguish single from double without jitter
   const clickTimerRef = useRef(null)
+  // Clears any pending single-click timeout if the row unmounts mid-wait,
+  // preventing a state update on an unmounted component.
   useEffect(() => () => clearTimeout(clickTimerRef.current), [])
   function handleNameClick() {
     if (!onOpenPopup) return
@@ -960,7 +1004,8 @@ function StatPill({ label, val }) {
 function StatBlockPopup({ popup, onClose }) {
   const { combatant: c, statData: sd, loading } = popup
 
-  // Close on Escape
+  // Attaches a global keydown listener so Escape closes the popup without
+  // requiring focus to be inside the modal element; cleans up on unmount.
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -1072,7 +1117,8 @@ function BestiaryPickerModal({ monsters, loading, search, onSearch, onAdd, onClo
     !search.trim() || m.name.toLowerCase().includes(search.trim().toLowerCase())
   )
 
-  // Close on Escape
+  // Same global Escape-to-close pattern as StatBlockPopup — needed because the
+  // picker renders in a fixed overlay that may not hold keyboard focus naturally.
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)

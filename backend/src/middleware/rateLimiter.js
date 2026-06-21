@@ -1,5 +1,11 @@
 const rateLimit = require('express-rate-limit')
 
+// standardHeaders: true  → emit the modern RateLimit-* headers (RFC draft 7)
+//                           so clients can read limit / remaining / reset.
+// legacyHeaders:   false → suppress the old X-RateLimit-* headers to avoid
+//                           sending duplicate / conflicting information.
+// These two settings appear on every limiter below for the same reason.
+
 /**
  * Strict limiter for auth endpoints — 10 attempts per 15 minutes per IP.
  * Prevents brute-force on login and password recovery.
@@ -16,6 +22,8 @@ const authLimiter = rateLimit({
 
 /**
  * General API limiter — 200 requests per minute per IP.
+ * Applied globally to cap any single client from hammering the API
+ * regardless of which endpoint they target.
  */
 const apiLimiter = rateLimit({
   windowMs:        60 * 1000,

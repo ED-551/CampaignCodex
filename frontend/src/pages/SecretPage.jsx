@@ -1,3 +1,29 @@
+/**
+ * SecretPage — /eds-eats
+ *
+ * Eddie's restaurant review easter egg. This page displays Ed's personal ratings
+ * for a handful of San Gabriel Valley restaurants, written in a noir detective
+ * voice. It is entirely cosmetic and has no connection to campaign or bestiary data.
+ *
+ * HOW IT'S TRIGGERED
+ * The entry point is buried in the Account Settings "Danger Zone" section. The
+ * phrase "be sure" is rendered so that clicking the word "be" (a styled <span>
+ * with an onClick) navigates here. Nothing in the UI labels or hints at its
+ * existence — it is found by accident or word of mouth.
+ *
+ * AUTHENTICATION
+ * The route is wrapped in <ProtectedRoute>, so only logged-in users can reach it.
+ * Unauthenticated visitors are redirected to the login page, keeping the page off
+ * the public internet entirely.
+ *
+ * EXCLUDED FROM NAVIGATION & SITEMAP
+ * The route is not linked from any nav bar, footer, or sitemap.xml. It does not
+ * appear in the dashboard or any user-facing menu. Search engines won't index it
+ * because ProtectedRoute redirects unauthenticated crawlers before they see content.
+ * The restaurant data lives in src/data/edsEats.js (a plain JS array) so it doesn't
+ * create any API surface or DB entries.
+ */
+
 import { useNavigate } from 'react-router-dom'
 import { RESTAURANTS } from '../data/edsEats'
 

@@ -55,6 +55,19 @@ const msgRateMap = new Map()
 const MSG_RATE_LIMIT  = 30       // messages per window
 const MSG_RATE_WINDOW = 60_000   // 60 seconds in ms
 
+// Sliding-window rate limiter for chat messages.
+//
+// Algorithm: each user gets a single { count, resetAt } bucket. On the first
+// message after the window has expired, the bucket resets and the message is
+// allowed. Within a live window, count is incremented on each allowed message;
+// once count reaches MSG_RATE_LIMIT the function returns false and the caller
+// emits an error back to the sender only (no broadcast).
+//
+// 30 msg / 60 s was chosen as a generous but meaningful cap — a human typing
+// quickly tops out around 10–15 messages per minute; 30 gives real-time dice
+// rollers and combat callers plenty of headroom while still blocking a scripted
+// flood. The bucket is keyed on userId (not socket.id) so rate limits survive
+// reconnects and apply across all open tabs of the same account.
 function checkMsgRate(userId) {
   const now   = Date.now()
   const entry = msgRateMap.get(userId) ?? { count: 0, resetAt: now + MSG_RATE_WINDOW }
@@ -90,6 +103,17 @@ const actionRateMap = new Map()
 const ACTION_RATE_LIMIT  = 30
 const ACTION_RATE_WINDOW = 60_000
 
+// Same sliding-window algorithm as checkMsgRate, but governs DB-touching
+// non-message events (join_campaign, open_dm, join_combat, spectator_request).
+//
+// Why a separate bucket? Message volume and action volume are independent
+// signals. A user should be able to chat freely while also doing a campaign
+// join — sharing one bucket would cause legitimate chat to consume the action
+// allowance. Keeping them separate lets the server throttle DB queries without
+// impacting the chat UX, and vice versa.
+//
+// 30 actions / 60 s is generous for normal navigation; rapid-fire joins or
+// spectator requests by an automated client would hit this within seconds.
 function checkActionRate(userId) {
   const now   = Date.now()
   const entry = actionRateMap.get(userId) ?? { count: 0, resetAt: now + ACTION_RATE_WINDOW }
@@ -261,8 +285,22 @@ function createSocketServer(httpServer) {
   // Every socket must present a valid JWT in socket.handshake.auth.token.
   // This runs before connection is established — no socket event is possible
   // for an unauthenticated caller.
-  // Also verifies token_version so a password-change invalidates open sockets
-  // at the next reconnect (Socket.io reconnects automatically on error).
+  //
+  // Full verification flow:
+  //  1. Extract token from socket.handshake.auth.token (set by the client
+  //     immediately before calling io.connect()).
+  //  2. Call verifyToken() — this checks the JWT signature and expiry using
+  //     the shared secret. If the token is tampered with or expired, it throws
+  //     and we call next(AUTH_INVALID).
+  //  3. Pull the user's current token_version from the DB (single indexed
+  //     lookup by primary key — negligible latency).
+  //  4. Compare payload.tv (token version baked in at login) against the DB
+  //     value. If they differ the user has changed their password since this
+  //     token was issued, and we reject with AUTH_INVALID. Socket.io will
+  //     automatically attempt to reconnect the client, at which point it must
+  //     supply a fresh token from the REST /auth/refresh endpoint.
+  //  5. On success, attach userId and username to the socket object so every
+  //     event handler can trust socket.userId without re-querying the DB.
   io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token
     if (!token) return next(new Error('AUTH_REQUIRED'))
@@ -618,6 +656,10 @@ function createSocketServer(httpServer) {
     })
 
     // ── leave_lobby ──────────────────────────────────────────────────────────
+    // Who sends: any authenticated client navigating away from the room-selection screen.
+    // What it does: removes the socket from the `lobby` Socket.io room so it
+    //   no longer receives room_counts_update or spectator_sessions_update pushes.
+    // What it emits: nothing. Purely a cleanup call.
     socket.on('leave_lobby', () => socket.leave('lobby'))
 
     // ── join_public_room ──────────────────────────────────────────────────────
@@ -678,6 +720,12 @@ function createSocketServer(httpServer) {
       io.to('lobby').emit('room_counts_update', getRoomCounts())
     }
 
+    // Who sends: any authenticated client clicking Back or navigating away from a public room.
+    //   Also called internally from the disconnect handler.
+    // What it does: calls leavePublicRoom(), which removes the socket from the
+    //   `public:<roomId>` Socket.io room and erases the socket's occupant entry.
+    // What it emits: broadcasts `room_occupants` (updated list) to `public:<roomId>`
+    //   and `room_counts_update` to `lobby`.
     socket.on('leave_public_room', ({ roomId } = {}) => leavePublicRoom(roomId))
 
     // ── send_public_message ───────────────────────────────────────────────────
@@ -902,8 +950,12 @@ function createSocketServer(httpServer) {
     })
 
     // ── leave_combat ──────────────────────────────────────────────────────────
-    // Explicit leave (player navigates away).
-    // Socket.io also handles cleanup automatically on disconnect.
+    // Who sends: GM or any authenticated player navigating away from the combat tracker.
+    // What it does: removes the socket from the `combat:<campaignId>` room and
+    //   clears socket.currentCombatCampaignId. Socket.io also auto-cleans on disconnect,
+    //   but explicit leave keeps the room membership accurate while the tab is still open.
+    // What it emits: nothing directly. The GM's next push_combat_update will simply
+    //   reach one fewer recipient.
     socket.on('leave_combat', ({ campaignId } = {}) => {
       if (!campaignId || !UUID_RE.test(campaignId)) return
       socket.leave(`combat:${campaignId}`)
@@ -1160,7 +1212,15 @@ function createSocketServer(httpServer) {
     })
 
     // ── leave_spectator ───────────────────────────────────────────────────────
-    // Public user leaves a spectator session.
+    // Who sends: any authenticated user who was watching a spectator session
+    //   (e.g., SpectatorView.jsx unmount or clicking Leave).
+    // What it does: removes the socket from `spectator:<campaignId>`, decrements
+    //   session.spectatorCount, and clears socket.currentSpectatorCampaignId.
+    // What it emits:
+    //   - `spectator_count_update` → `campaign:<campaignId>` (so the GM sees live
+    //     watcher numbers drop)
+    //   - `spectator_sessions_update` → `lobby` (updates the watcher count on the
+    //     room-selection screen)
     //
     // Payload: { campaignId: string }
     socket.on('leave_spectator', ({ campaignId } = {}) => {
@@ -1182,6 +1242,23 @@ function createSocketServer(httpServer) {
     })
 
     // ── disconnect ────────────────────────────────────────────────────────────
+    // Fired automatically by Socket.io when the underlying transport closes
+    // (tab closed, network drop, server-initiated kick via AUTH_INVALID, etc.).
+    // Not sent by the client explicitly.
+    //
+    // What it does (in order):
+    //  1. Calls leavePublicRoom() if the socket was in a public chat room —
+    //     removes them from occupant tracking and updates all lobby screens.
+    //  2. If the socket was a spectator, decrements the watcher count and
+    //     pushes the updated count to the campaign room and lobby.
+    //  3. If the socket belonged to a GM who owned a spectator session:
+    //     - 'pending' → cancelSpectatorSession() (notifies players, removes lobby entry)
+    //     - 'active'  → endSpectatorSession() (notifies campaign room + spectators + lobby)
+    //     A GM can only own one session at a time, so we break after the first match.
+    //
+    // Note: campaign and combat room memberships (socket.currentCampaignId /
+    // socket.currentCombatCampaignId) are cleaned up automatically by Socket.io
+    // room bookkeeping — no manual action needed for those.
     socket.on('disconnect', () => {
       console.log(`[socket] - uid=${socket.userId} (${socket.username})`)
 
