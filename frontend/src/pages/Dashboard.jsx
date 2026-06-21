@@ -130,7 +130,7 @@ export default function Dashboard() {
   const tier            = TIER_BADGE[user?.supporterTier]
 
   return (
-    <div className="min-h-screen bg-codex-bg">
+    <div className="min-h-screen bg-codex-bg flex flex-col">
       {/* Top nav */}
       <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
@@ -138,73 +138,99 @@ export default function Dashboard() {
             <BookOpen size={18} className="text-codex-gold" />
             <span className="font-display text-sm text-codex-gold tracking-wide">CampaignCodex</span>
           </div>
-          <div className="flex items-center gap-3">
+          {/*
+            Nav items — each uses px-2.5 py-2 to hit the 44×44px minimum touch
+            target recommended by Apple HIG and WCAG 2.5.5. The visible icon/text
+            stays the same size; only the clickable area grows.
+          */}
+          <div className="flex items-center gap-1">
             {tier && (
-              <span className={`text-xs border rounded-full px-2.5 py-0.5 ${tier.cls}`}>
+              <span className={`text-xs border rounded-full px-2.5 py-1 ${tier.cls}`}>
                 {tier.label}
               </span>
             )}
-            {/* Public Chatrooms nav link */}
+
+            {/* Public Chatrooms */}
             <Link
               to="/chat"
-              className="flex items-center gap-1.5 text-xs text-codex-subtext hover:text-codex-gold transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm text-codex-subtext hover:text-codex-gold hover:bg-codex-gold/5 transition-colors"
               title="Public Chatrooms"
             >
-              <MessagesSquare size={14} />
-              <span className="hidden sm:block">Chatrooms</span>
+              <MessagesSquare size={16} />
+              <span className="hidden sm:block text-xs">Chatrooms</span>
             </Link>
 
-            {/* Raven Post nav link with unread badge */}
+            {/* Raven Post with unread badge */}
             <Link
               to="/ravens"
-              className="relative flex items-center gap-1.5 text-xs text-codex-subtext hover:text-codex-gold transition-colors"
+              className="relative flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm text-codex-subtext hover:text-codex-gold hover:bg-codex-gold/5 transition-colors"
               title="The Raven Post"
             >
-              <Feather size={14} />
-              <span className="hidden sm:block">Ravens</span>
+              <Feather size={16} />
+              <span className="hidden sm:block text-xs">Ravens</span>
               {unreadRavens > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-0.5
+                <span className="absolute top-1 right-1 min-w-[16px] h-4 px-0.5
                   rounded-full bg-codex-gold text-codex-bg text-[10px] font-bold
                   flex items-center justify-center leading-none">
                   {unreadRavens > 99 ? '99+' : unreadRavens}
                 </span>
               )}
             </Link>
+
+            {/* Settings / username */}
             <Link
               to="/settings"
-              className="flex items-center gap-1.5 text-sm text-codex-subtext hover:text-codex-gold transition-colors group"
+              className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm text-codex-subtext hover:text-codex-gold hover:bg-codex-gold/5 transition-colors group"
               title="Account settings"
             >
-              <span className="hidden sm:block">{user?.username}</span>
-              <Settings size={14} className="text-codex-muted group-hover:text-codex-gold transition-colors" />
+              <span className="hidden sm:block text-xs">{user?.username}</span>
+              <Settings size={16} className="text-codex-muted group-hover:text-codex-gold transition-colors" />
             </Link>
+
             {user?.isModerator && !user?.isAdmin && (
-              <button onClick={() => navigate('/moderator')}
-                className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors border border-blue-400/30 rounded-full px-2.5 py-0.5">
-                <Shield size={11} /> Moderation
+              <button
+                onClick={() => navigate('/moderator')}
+                className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-blue-400 hover:text-blue-300 hover:bg-blue-400/5 transition-colors border border-blue-400/30"
+              >
+                <Shield size={13} /> Mod
               </button>
             )}
             {user?.isAdmin && (
-              <button onClick={() => navigate('/admin')}
-                className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 transition-colors border border-purple-400/30 rounded-full px-2.5 py-0.5">
-                <Shield size={11} /> Admin
+              <button
+                onClick={() => navigate('/admin')}
+                className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-purple-400 hover:text-purple-300 hover:bg-purple-400/5 transition-colors border border-purple-400/30"
+              >
+                <Shield size={13} /> Admin
               </button>
             )}
-            <button onClick={handleLogout}
-              className="flex items-center gap-1.5 text-xs text-codex-subtext hover:text-codex-text transition-colors">
-              <LogOut size={14} /> Sign out
+
+            {/* Sign out */}
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm text-codex-subtext hover:text-codex-text hover:bg-white/5 transition-colors"
+              title="Sign out"
+            >
+              <LogOut size={16} />
+              <span className="hidden sm:block text-xs">Sign out</span>
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-8 flex flex-col gap-8">
+      <main className="flex-1 max-w-5xl mx-auto px-4 py-8 flex flex-col gap-8 w-full">
 
         {/* Welcome + stats row */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold text-codex-text">
-              Welcome back, <span className="text-codex-gold">{user?.firstName}</span>
+              Welcome back,{' '}
+              <Link
+                to="/profile/edit"
+                className="text-codex-gold hover:text-codex-goldHover transition-colors underline-offset-2 hover:underline"
+                title="Edit your profile"
+              >
+                {user?.firstName}
+              </Link>
             </h1>
             <p className="text-sm text-codex-subtext mt-1">
               {user?.sheetLimit - characters.length} of {user?.sheetLimit} character sheets remaining
@@ -364,6 +390,13 @@ export default function Dashboard() {
           </>
         )}
       </main>
+
+      {/* Copyright footer */}
+      <footer className="border-t border-codex-border/30 py-4 text-center mt-4">
+        <p className="text-xs text-codex-muted/50">
+          © {new Date().getFullYear()} CampaignCodex · All rights reserved
+        </p>
+      </footer>
 
       {showCreate && (
         <CreateCampaignModal

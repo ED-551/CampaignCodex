@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 
-export default function PasswordInput({ id, label, value, onChange, placeholder = 'Enter password', autoComplete }) {
+export default function PasswordInput({
+  id, label, value, onChange, onBlur,
+  placeholder = 'Enter password', autoComplete, error,
+}) {
   const [visible, setVisible] = useState(false)
 
   return (
@@ -17,18 +20,23 @@ export default function PasswordInput({ id, label, value, onChange, placeholder 
           type={visible ? 'text' : 'password'}
           value={value}
           onChange={onChange}
+          onBlur={onBlur}
           placeholder={placeholder}
           autoComplete={autoComplete}
-          className="
-            w-full bg-codex-surface border border-codex-border rounded-lg
+          className={`
+            w-full bg-codex-surface border rounded-lg
             px-4 py-2.5 pr-11
             text-codex-text placeholder-codex-muted
             text-sm font-body
-            focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/30
+            focus:outline-none focus:ring-1
             transition-colors duration-150
             [&::-ms-reveal]:hidden [&::-webkit-contacts-auto-fill-button]:hidden
             [&::-webkit-credentials-auto-fill-button]:hidden [&::-moz-reveal]:hidden
-          "
+            ${error
+              ? 'border-red-500/70 focus:border-red-500 focus:ring-red-500/30'
+              : 'border-codex-border focus:border-codex-gold focus:ring-codex-gold/30'
+            }
+          `}
         />
         <button
           type="button"
@@ -44,6 +52,7 @@ export default function PasswordInput({ id, label, value, onChange, placeholder 
           {visible ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>
       </div>
+      {error && <p className="text-xs text-red-400 mt-0.5">{error}</p>}
     </div>
   )
 }

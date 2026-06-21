@@ -35,6 +35,10 @@ export default function LoginForm() {
       const user = await login(username.trim(), password)
       navigate(user.isAdmin ? '/admin' : '/dashboard', { replace: true })
     } catch (err) {
+      // Always clear the password on failure — user should retype it.
+      // Username is intentionally kept so they don't have to re-enter it.
+      setPassword('')
+
       // Structured ban response — api.js attaches err.data = full JSON body
       if (err.status === 403 && err.data?.error === 'banned') {
         setBanInfo({
@@ -43,6 +47,8 @@ export default function LoginForm() {
           bannedByUsername: err.data.bannedByUsername,
           isPermanent:      err.data.isPermanent,
         })
+      } else if (err.status === 429) {
+        setError('Too many login attempts from this IP. Please wait 15 minutes before trying again.')
       } else {
         setError(err.message || 'Sign in failed. Please try again.')
       }

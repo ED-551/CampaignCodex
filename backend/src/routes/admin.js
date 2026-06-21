@@ -124,7 +124,7 @@ router.get('/users', requireAdmin, async (req, res) => {
 router.get('/moderator/users', requireModerator, async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT id, username, email, created_at,
+      `SELECT id, username, email, first_name, last_name, created_at,
               is_banned, ban_reason, banned_at, banned_until, supporter_tier
        FROM users
        WHERE is_admin = false AND is_moderator = false

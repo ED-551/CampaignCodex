@@ -32,12 +32,19 @@ router.get('/search', requireAuth, [
 
     // Exclude is_admin accounts from normal search results — the admin username
     // is never exposed. Admins are surfaced only as the "Site Administrator" alias.
+    // Also exclude users who have blocked the searcher OR who the searcher has blocked
+    // so blocked parties are invisible to each other in search.
     const result = await db.query(
       `SELECT id, username
        FROM users
        WHERE username ILIKE $1
          AND id != $2
          AND is_admin = false
+         AND id NOT IN (
+           SELECT blocked_id FROM user_blocks WHERE blocker_id = $2
+           UNION
+           SELECT blocker_id FROM user_blocks WHERE blocked_id = $2
+         )
        ORDER BY username
        LIMIT 8`,
       [`${q}%`, req.user.sub]

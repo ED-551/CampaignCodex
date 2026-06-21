@@ -5,12 +5,27 @@ const { body, validationResult } = require('express-validator')
 const db       = require('../db')
 const { signToken }              = require('../utils/jwt')
 const { sendPasswordResetEmail, sendUsernameReminderEmail } = require('../utils/email')
-const { authLimiter }            = require('../middleware/rateLimiter')
+const { authLimiter, signupLimiter } = require('../middleware/rateLimiter')
 const { requireAuth }            = require('../middleware/auth')
 
 const router = express.Router()
 
 const SALT_ROUNDS = 12
+
+// ─── Disposable email domain blocklist ───────────────────────────────────────
+// Common throwaway / spam-inbox services. Extend as needed.
+// We reject at signup to keep the user base reachable for password recovery.
+const BLOCKED_EMAIL_DOMAINS = new Set([
+  'mailinator.com', 'guerrillamail.com', 'guerrillamail.info', 'guerrillamail.biz',
+  'guerrillamail.de', 'guerrillamail.net', 'guerrillamail.org', 'guerrillamailblock.com',
+  'sharklasers.com', 'grr.la', 'spam4.me', 'trashmail.com', 'trashmail.me',
+  'trashmail.at', 'trashmail.io', 'trashmail.net', 'fakeinbox.com', 'yopmail.com',
+  'dispostable.com', 'mailnull.com', 'spamgourmet.com', 'maildrop.cc',
+  'discard.email', 'dodgit.com', 'spamex.com', 'mailexpire.com', 'spamfree24.org',
+  'spammotel.com', 'weg-werf-email.de', 'mailnesia.com', 'tempinbox.com',
+  'tempr.email', 'disposablemail.com', 'throwaway.email', 'tempmail.com',
+  'throwam.com', 'spamzilla.net',
+])
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -28,7 +43,7 @@ const TIER_SHEET_LIMIT    = { free: 10, bronze: 30, silver: 30, gold: 30, platin
 const TIER_CAMPAIGN_LIMIT = { free: 6,  bronze: 12, silver: 12, gold: 12, platinum: 12, black: 12 }
 
 // ─── POST /api/auth/signup ────────────────────────────────────────────────────
-router.post('/signup', authLimiter, [
+router.post('/signup', authLimiter, signupLimiter, [
   body('username')
     .trim()
     .isLength({ min: 3, max: 20 }).withMessage('Username must be 3–20 characters.')
@@ -58,8 +73,21 @@ router.post('/signup', authLimiter, [
 ], async (req, res) => {
   if (validationErrors(req, res)) return
 
+  // Honeypot check — the _hp field is hidden from real users via CSS.
+  // If it's filled, a bot almost certainly submitted the form.
+  // We return a plausible 201 to avoid tipping off the bot that it was detected.
+  if (req.body._hp && req.body._hp.trim() !== '') {
+    return res.status(201).json({ token: 'ok', user: {} })
+  }
+
   const { username, email, firstName, lastName, middleInitial,
           password, newsletterOptIn } = req.body
+
+  // Reject disposable/throwaway email domains
+  const emailDomain = email.split('@')[1]?.toLowerCase()
+  if (emailDomain && BLOCKED_EMAIL_DOMAINS.has(emailDomain)) {
+    return res.status(400).json({ error: 'Please use a permanent email address to sign up.' })
+  }
 
   try {
     // Check uniqueness

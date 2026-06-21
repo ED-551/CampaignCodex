@@ -5,27 +5,106 @@ import Input from '../ui/Input'
 import PasswordInput from '../ui/PasswordInput'
 import { ExternalLink } from 'lucide-react'
 
-const INPUT_CLASS = `w-full bg-codex-surface border border-codex-border rounded-lg px-4 py-2.5 text-codex-text placeholder-codex-muted text-sm focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/30 transition-colors duration-150`
+// Base input classes reused for the inline name-row inputs
+const INPUT_BASE = `w-full bg-codex-surface border rounded-lg px-4 py-2.5 text-codex-text placeholder-codex-muted text-sm focus:outline-none focus:ring-1 transition-colors duration-150`
+const INPUT_OK   = `${INPUT_BASE} border-codex-border focus:border-codex-gold focus:ring-codex-gold/30`
+const INPUT_ERR  = `${INPUT_BASE} border-red-500/70 focus:border-red-500 focus:ring-red-500/30`
+
+// ─── Per-field validation (mirrors backend rules exactly) ─────────────────────
+function validateField(name, value, allValues) {
+  switch (name) {
+    case 'firstName':
+      return value.trim() ? '' : 'First name is required.'
+    case 'lastName':
+      return value.trim() ? '' : 'Last name is required.'
+    case 'username':
+      if (!value.trim()) return 'Username is required.'
+      if (value.length < 3 || value.length > 20) return 'Must be 3–20 characters.'
+      if (!/^[a-zA-Z0-9_]+$/.test(value)) return 'Letters, numbers, and underscores only.'
+      return ''
+    case 'email':
+      if (!value.trim()) return 'Email address is required.'
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Please enter a valid email address.'
+      return ''
+    case 'password':
+      if (!value) return 'Password is required.'
+      if (value.length < 8) return 'Must be at least 8 characters.'
+      if (!/\d/.test(value)) return 'Must contain at least one number.'
+      if (!/[^a-zA-Z0-9]/.test(value)) return 'Must contain at least one special character.'
+      return ''
+    case 'confirmPassword':
+      if (!value) return 'Please confirm your password.'
+      if (value !== (allValues?.password ?? '')) return 'Passwords do not match.'
+      return ''
+    default:
+      return ''
+  }
+}
+
+const VALIDATED_FIELDS = ['firstName', 'lastName', 'username', 'email', 'password', 'confirmPassword']
 
 export default function SignupForm() {
   const { signup }  = useAuth()
   const navigate    = useNavigate()
+
   const [form, setForm] = useState({
     username: '', email: '', firstName: '', lastName: '', middleInitial: '',
     password: '', confirmPassword: '',
-    agreedToTerms:  false,
+    agreedToTerms:   false,
     newsletterOptIn: false,
+    _hp: '',   // honeypot — real users never fill this; bots usually do
   })
-  const [error, setError]     = useState('')
-  const [loading, setLoading] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState({})
+  const [error, setError]             = useState('')
+  const [loading, setLoading]         = useState(false)
 
-  const set = field => e => setForm(f => ({ ...f, [field]: e.target.value }))
+  // Generic field setter — clears the field's inline error as soon as the user
+  // starts correcting, and re-validates confirmPassword live when password changes.
+  function set(field) {
+    return e => {
+      const val = e.target.value
+      setForm(prev => {
+        const next = { ...prev, [field]: val }
+        // Keep confirmPassword error in sync if user is editing password
+        if (field === 'password' && fieldErrors.confirmPassword) {
+          const err = validateField('confirmPassword', next.confirmPassword, next)
+          setFieldErrors(fe => ({ ...fe, confirmPassword: err }))
+        }
+        return next
+      })
+      if (fieldErrors[field]) {
+        setFieldErrors(fe => ({ ...fe, [field]: '' }))
+      }
+    }
+  }
+
+  // Validate on blur — fires when the user tabs or clicks away from a field
+  function handleBlur(field) {
+    return () => {
+      const err = validateField(field, form[field], form)
+      setFieldErrors(fe => ({ ...fe, [field]: err }))
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
-    if (!form.agreedToTerms)                   { setError('You must read and accept the Terms & Conditions to create an account.'); return }
-    if (form.password !== form.confirmPassword) { setError('Passwords do not match.'); return }
+
+    // Run all field validations up front so every error is visible at once
+    const errors = {}
+    VALIDATED_FIELDS.forEach(f => {
+      const err = validateField(f, form[f], form)
+      if (err) errors[f] = err
+    })
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors)
+      return
+    }
+
+    if (!form.agreedToTerms) {
+      setError('You must read and accept the Terms & Conditions to create an account.')
+      return
+    }
 
     setLoading(true)
     try {
@@ -39,6 +118,7 @@ export default function SignupForm() {
         confirmPassword: form.confirmPassword,
         agreedToTerms:   form.agreedToTerms,
         newsletterOptIn: form.newsletterOptIn,
+        _hp:             form._hp,  // backend silently rejects if non-empty
       })
       navigate('/dashboard', { replace: true })
     } catch (err) {
@@ -50,35 +130,91 @@ export default function SignupForm() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-      {/* Name row */}
+
+      {/*
+        Honeypot trap — visually hidden, off-screen, never autofilled.
+        Real users: never see it, never fill it.
+        Most form-filling bots: fill every visible text input, trip this, get silently rejected.
+        aria-hidden keeps screen readers from announcing it.
+      */}
+      <div
+        aria-hidden="true"
+        style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}
+      >
+        <label htmlFor="hp-field">Leave this blank</label>
+        <input
+          id="hp-field"
+          type="text"
+          name="_hp"
+          value={form._hp}
+          onChange={e => setForm(f => ({ ...f, _hp: e.target.value }))}
+          autoComplete="off"
+          tabIndex={-1}
+        />
+      </div>
+
+      {/* ── Name row ─────────────────────────────────────────────────────────── */}
       <div className="flex gap-3">
         <div className="flex-1 flex flex-col gap-1.5">
           <label className="text-sm font-medium text-codex-text">First Name</label>
-          <input type="text" value={form.firstName} onChange={set('firstName')}
-            placeholder="First" autoComplete="given-name" required className={INPUT_CLASS} />
+          <input
+            type="text" value={form.firstName}
+            onChange={set('firstName')} onBlur={handleBlur('firstName')}
+            placeholder="First" autoComplete="given-name"
+            className={fieldErrors.firstName ? INPUT_ERR : INPUT_OK}
+          />
+          {fieldErrors.firstName && (
+            <p className="text-xs text-red-400 mt-0.5">{fieldErrors.firstName}</p>
+          )}
         </div>
         <div className="w-16 flex flex-col gap-1.5">
           <label className="text-sm font-medium text-codex-text">M.I.</label>
-          <input type="text" value={form.middleInitial} onChange={set('middleInitial')}
-            placeholder="M" maxLength={1} className={INPUT_CLASS} />
+          <input
+            type="text" value={form.middleInitial} onChange={set('middleInitial')}
+            placeholder="M" maxLength={1} className={INPUT_OK}
+          />
         </div>
         <div className="flex-1 flex flex-col gap-1.5">
           <label className="text-sm font-medium text-codex-text">Last Name</label>
-          <input type="text" value={form.lastName} onChange={set('lastName')}
-            placeholder="Last" autoComplete="family-name" required className={INPUT_CLASS} />
+          <input
+            type="text" value={form.lastName}
+            onChange={set('lastName')} onBlur={handleBlur('lastName')}
+            placeholder="Last" autoComplete="family-name"
+            className={fieldErrors.lastName ? INPUT_ERR : INPUT_OK}
+          />
+          {fieldErrors.lastName && (
+            <p className="text-xs text-red-400 mt-0.5">{fieldErrors.lastName}</p>
+          )}
         </div>
       </div>
 
-      <Input id="su-username" label="Username" value={form.username} onChange={set('username')}
-        placeholder="Choose a username (3–20 chars)" autoComplete="username" required />
-      <Input id="su-email" label="Email Address" type="email" value={form.email} onChange={set('email')}
-        placeholder="you@example.com" autoComplete="email" required />
-      <PasswordInput id="su-pass" label="Password" value={form.password} onChange={set('password')}
-        placeholder="Min. 8 chars, 1 number, 1 symbol" autoComplete="new-password" />
-      <PasswordInput id="su-confirm" label="Confirm Password" value={form.confirmPassword} onChange={set('confirmPassword')}
-        placeholder="Re-enter your password" autoComplete="new-password" />
+      {/* ── Remaining fields — use shared Input/PasswordInput with error prop ── */}
+      <Input
+        id="su-username" label="Username"
+        value={form.username} onChange={set('username')} onBlur={handleBlur('username')}
+        placeholder="Choose a username (3–20 chars)" autoComplete="username"
+        error={fieldErrors.username}
+      />
+      <Input
+        id="su-email" label="Email Address" type="email"
+        value={form.email} onChange={set('email')} onBlur={handleBlur('email')}
+        placeholder="you@example.com" autoComplete="email"
+        error={fieldErrors.email}
+      />
+      <PasswordInput
+        id="su-pass" label="Password"
+        value={form.password} onChange={set('password')} onBlur={handleBlur('password')}
+        placeholder="Min. 8 chars, 1 number, 1 symbol" autoComplete="new-password"
+        error={fieldErrors.password}
+      />
+      <PasswordInput
+        id="su-confirm" label="Confirm Password"
+        value={form.confirmPassword} onChange={set('confirmPassword')} onBlur={handleBlur('confirmPassword')}
+        placeholder="Re-enter your password" autoComplete="new-password"
+        error={fieldErrors.confirmPassword}
+      />
 
-      {/* Legal & newsletter */}
+      {/* ── Legal & newsletter ────────────────────────────────────────────────── */}
       <div className="border-t border-codex-border pt-4 flex flex-col gap-3">
 
         {/* Required: Terms & Conditions */}
@@ -152,8 +288,11 @@ export default function SignupForm() {
 
       {error && <p className="text-sm text-red-400 text-center">{error}</p>}
 
-      <button type="submit" disabled={loading || !form.agreedToTerms}
-        className="w-full py-2.5 px-4 rounded-lg mt-1 bg-codex-gold hover:bg-codex-goldHover text-codex-bg font-semibold text-sm tracking-wide transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed shadow-glow">
+      <button
+        type="submit"
+        disabled={loading || !form.agreedToTerms}
+        className="w-full py-2.5 px-4 rounded-lg mt-1 bg-codex-gold hover:bg-codex-goldHover text-codex-bg font-semibold text-sm tracking-wide transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed shadow-glow"
+      >
         {loading ? 'Creating account…' : 'Create Account'}
       </button>
 

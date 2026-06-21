@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { Sword, ExternalLink } from 'lucide-react'
 import { useSocket } from '../../context/SocketContext'
 import { api } from '../../utils/api'
@@ -116,11 +116,11 @@ const MiniCombatTracker = forwardRef(function MiniCombatTracker(
     }
   }, [socket, campaignId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 6. useImperativeHandle — references startCombat which is hoisted below
-  useImperativeHandle(ref, () => ({ startCombat }), []) // eslint-disable-line
-
-  // 7. startCombat — MUST be function declaration for hoisting
-  async function startCombat(opts = {}) {
+  // 6. startCombat as useCallback — correct deps, no stale closure.
+  // Previously a hoisted function declaration so useImperativeHandle could
+  // reference it before its definition. Converted to useCallback so the ref
+  // always reflects current campaignId/socket/onActiveChange values.
+  const startCombat = useCallback(async (opts = {}) => {
     const data = await api.post('/combat/start', { campaignId, ...opts })
     if (data.session) {
       setSession(data.session)
@@ -137,7 +137,11 @@ const MiniCombatTracker = forwardRef(function MiniCombatTracker(
       }
     }
     return data.session
-  }
+  }, [campaignId, socket, onActiveChange])
+
+  // 7. useImperativeHandle — expose startCombat to parent via ref.
+  // Dep array includes startCombat so the ref updates when its deps change.
+  useImperativeHandle(ref, () => ({ startCombat }), [startCombat])
 
   // 8. sort/derive
   const isNimble   = gameSystem === 'nimble'

@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider }   from './context/AuthContext'
 import { SocketProvider } from './context/SocketContext'
 import { DMProvider }     from './context/DMContext'
+import { SocialProvider } from './context/SocialContext'
 import DMWidget           from './components/dm/DMWidget'
 import ProtectedRoute     from './components/layout/ProtectedRoute'
 import ErrorBoundary      from './components/layout/ErrorBoundary'
@@ -24,12 +25,15 @@ import BestiarySharesPage from './pages/BestiarySharesPage'
 import SecretPage         from './pages/SecretPage'
 import SecretReviewPage   from './pages/SecretReviewPage'
 import DonatePage         from './pages/DonatePage'
+import ProfilePage       from './pages/ProfilePage'
+import ProfileEditPage   from './pages/ProfileEditPage'
 
 export default function App() {
   return (
     <AuthProvider>
       <SocketProvider>
         <DMProvider>
+          <SocialProvider>
           <BrowserRouter>
             {/* Top-level ErrorBoundary: catches any unhandled JS crash in any page.
                 A second per-route boundary wraps CombatPage to isolate combat crashes
@@ -99,6 +103,14 @@ export default function App() {
                 <ProtectedRoute><CharacterPage /></ProtectedRoute>
               } />
 
+              {/* ── Profile pages — /edit must precede /:username to avoid param collision ── */}
+              <Route path="/profile/edit" element={
+                <ProtectedRoute><ProfileEditPage /></ProtectedRoute>
+              } />
+              <Route path="/profile/:username" element={
+                <ProtectedRoute><ProfilePage /></ProtectedRoute>
+              } />
+
               {/* ── Admin only ── */}
               <Route path="/admin" element={
                 <ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>
@@ -117,6 +129,7 @@ export default function App() {
             <DMWidget />
             </ErrorBoundary>
           </BrowserRouter>
+          </SocialProvider>
         </DMProvider>
       </SocketProvider>
     </AuthProvider>

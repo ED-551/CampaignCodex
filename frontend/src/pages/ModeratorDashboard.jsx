@@ -4,6 +4,7 @@ import { Shield, ArrowLeft, BookOpen, Search, Users, UserX, CheckCircle, X } fro
 import { useAuth } from '../context/AuthContext'
 import { api } from '../utils/api'
 import TierBadge from '../components/ui/TierBadge'
+import { usePresence } from '../hooks/usePresence'
 
 const PAGE_SIZE = 25
 
@@ -29,15 +30,26 @@ export default function ModeratorDashboard() {
       .finally(() => setLoading(false))
   }, [])
 
-  // ── Client-side filter + paginate ────────────────────────────────────────────
+  // ── Real-time presence ────────────────────────────────────────────────────
+  const onlineSet = usePresence()
+
+  // ── Client-side filter + sort + paginate ──────────────────────────────────
+  // Sort: online users first (alpha), then offline (alpha). Filter happens after.
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return users
-    return users.filter(u =>
-      u.username.toLowerCase().includes(q) ||
-      u.email.toLowerCase().includes(q)
-    )
-  }, [users, search])
+    const base = q
+      ? users.filter(u =>
+          u.username.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q) ||
+          (u.first_name ?? '').toLowerCase().includes(q) ||
+          (u.last_name  ?? '').toLowerCase().includes(q)
+        )
+      : users
+
+    const online  = base.filter(u =>  onlineSet.has(u.id)).sort((a, b) => a.username.localeCompare(b.username))
+    const offline = base.filter(u => !onlineSet.has(u.id)).sort((a, b) => a.username.localeCompare(b.username))
+    return [...online, ...offline]
+  }, [users, search, onlineSet])
 
   const totalPages  = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const currentPage = Math.min(page, totalPages)
@@ -110,7 +122,7 @@ export default function ModeratorDashboard() {
             <span className="font-display text-sm text-codex-gold tracking-wide">CampaignCodex</span>
             <span className="text-codex-border">·</span>
             <span className="flex items-center gap-1 text-xs text-blue-400">
-              <Shield size={11} /> Moderation Panel
+              <Shield size={11} /> Moderator Dashboard
             </span>
           </div>
           <div className="flex items-center gap-4">
@@ -132,7 +144,7 @@ export default function ModeratorDashboard() {
         <div className="flex items-center gap-3">
           <Shield size={20} className="text-blue-400" />
           <div>
-            <h1 className="text-2xl font-semibold text-codex-text">Moderation Panel</h1>
+            <h1 className="text-2xl font-semibold text-codex-text">Moderator Dashboard</h1>
             <p className="text-sm text-codex-subtext mt-0.5">Review and moderate user accounts</p>
           </div>
         </div>
@@ -198,16 +210,30 @@ export default function ModeratorDashboard() {
                     </td>
                   </tr>
                 )}
-                {pageSlice.map((u, i) => (
+                {pageSlice.map((u, i) => {
+                  const online   = onlineSet.has(u.id)
+                  const fullName = [u.first_name, u.last_name].filter(Boolean).join(' ')
+                  return (
                   <tr
                     key={u.id}
                     className={`border-b border-codex-border/40 ${i % 2 === 0 ? '' : 'bg-codex-card/30'}`}
                   >
-                    {/* Username */}
+                    {/* Username + real name + online dot */}
                     <Td>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-codex-text font-medium">{u.username}</span>
-                        <TierBadge tier={u.supporter_tier ?? 'free'} size={13} />
+                      <div className="flex items-center gap-2">
+                        <span
+                          title={online ? 'Online' : 'Offline'}
+                          className={`flex-shrink-0 w-2 h-2 rounded-full ${online ? 'bg-emerald-400' : 'bg-codex-border'}`}
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-codex-text font-medium">{u.username}</span>
+                            <TierBadge tier={u.supporter_tier ?? 'free'} size={13} />
+                          </div>
+                          {fullName && (
+                            <p className="text-[10px] text-codex-muted mt-0.5">{fullName}</p>
+                          )}
+                        </div>
                       </div>
                     </Td>
 
@@ -329,7 +355,8 @@ export default function ModeratorDashboard() {
                       )}
                     </Td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

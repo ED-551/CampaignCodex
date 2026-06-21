@@ -185,6 +185,33 @@ function getRoomCounts() {
   return counts
 }
 
+// ─── Global presence tracking ─────────────────────────────────────────────────
+// Map<userId, Set<socketId>>
+// A user is "online" if their Set is non-empty. Multi-tab/reconnect safe —
+// each tab gets its own socketId entry; the last one to close marks them offline.
+// Only admins and moderators ever join the 'admin:presence' room, so broadcast
+// volume is effectively zero in production.
+const presenceMap = new Map()
+
+function addPresence(userId, socketId) {
+  if (!presenceMap.has(userId)) presenceMap.set(userId, new Set())
+  presenceMap.get(userId).add(socketId)
+}
+
+// Returns true if the user just went offline (their Set became empty)
+function removePresence(userId, socketId) {
+  const sockets = presenceMap.get(userId)
+  if (!sockets) return false
+  sockets.delete(socketId)
+  if (sockets.size === 0) { presenceMap.delete(userId); return true }
+  return false
+}
+
+// Snapshot for newly-joined admin:presence subscribers — array of online userIds
+function getPresenceSnapshot() {
+  return [...presenceMap.keys()].map(userId => ({ userId, online: true }))
+}
+
 // ─── Spectator Mode session state ────────────────────────────────────────────
 //
 // Map<campaignId, SpectatorSession>
@@ -327,6 +354,16 @@ function createSocketServer(httpServer) {
   // ── Connection handler ───────────────────────────────────────────────────
   io.on('connection', (socket) => {
     console.log(`[socket] + uid=${socket.userId} (${socket.username})`)
+
+    // ── Presence: register socket, broadcast if first tab coming online ──────
+    addPresence(socket.userId, socket.id)
+    if (presenceMap.get(socket.userId).size === 1) {
+      // First socket for this user — they just came online
+      io.to('admin:presence').emit('admin:presence_update', {
+        userId: socket.userId,
+        online: true,
+      })
+    }
 
     // ── join_campaign ────────────────────────────────────────────────────────
     // Emitted by the client when entering a campaign page.
@@ -520,6 +557,18 @@ function createSocketServer(httpServer) {
         }
         const targetUser = userCheck.rows[0]
 
+        // Block check — reject silently if either party has blocked the other
+        const blockCheck = await db.query(
+          `SELECT 1 FROM user_blocks
+           WHERE (blocker_id = $1 AND blocked_id = $2)
+              OR (blocker_id = $2 AND blocked_id = $1)
+           LIMIT 1`,
+          [socket.userId, targetUserId]
+        )
+        if (blockCheck.rows.length > 0) {
+          return callback({ error: 'Unable to open conversation.' })
+        }
+
         // Deterministic room key: always lower UUID first
         const roomKey = [socket.userId, targetUserId].sort().join(':')
         socket.join(`dm:${roomKey}`)
@@ -581,6 +630,18 @@ function createSocketServer(httpServer) {
           return callback({ error: 'User not found.' })
         }
         const targetUser = userCheck.rows[0]
+
+        // Block check — reject silently if either party has blocked the other
+        const blockCheck = await db.query(
+          `SELECT 1 FROM user_blocks
+           WHERE (blocker_id = $1 AND blocked_id = $2)
+              OR (blocker_id = $2 AND blocked_id = $1)
+           LIMIT 1`,
+          [socket.userId, targetUserId]
+        )
+        if (blockCheck.rows.length > 0) {
+          return callback({ error: 'Unable to send message.' })
+        }
 
         const safeDMMeta = (metadata && typeof metadata === 'object' && metadata.type === 'dice')
           ? {
@@ -1247,6 +1308,42 @@ function createSocketServer(httpServer) {
       }
     })
 
+    // ────────────────────────────────────────────────────────────────────────
+    // ── ADMIN PRESENCE EVENTS ────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────
+
+    // ── admin:watch_presence ──────────────────────────────────────────────────
+    // Called by admin/moderator dashboards on mount. Joins the 'admin:presence'
+    // Socket.io room and returns a full snapshot of currently online users.
+    // Only admins and moderators are admitted — all others get ACCESS_DENIED.
+    //
+    // Callback: { snapshot: { userId }[] } | { error: string }
+    socket.on('admin:watch_presence', async (_, callback) => {
+      const cb = typeof callback === 'function' ? callback : () => {}
+      try {
+        const result = await db.query(
+          'SELECT is_admin, is_moderator FROM users WHERE id = $1 LIMIT 1',
+          [socket.userId]
+        )
+        const u = result.rows[0]
+        if (!u || (!u.is_admin && !u.is_moderator)) {
+          return cb({ error: 'Access denied.' })
+        }
+        socket.join('admin:presence')
+        cb({ snapshot: getPresenceSnapshot() })
+      } catch (err) {
+        console.error('[socket:admin:watch_presence]', err)
+        cb({ error: 'Failed to load presence data.' })
+      }
+    })
+
+    // ── admin:unwatch_presence ────────────────────────────────────────────────
+    // Called when an admin/moderator navigates away from their dashboard.
+    // Removes the socket from the broadcast room so they stop receiving updates.
+    socket.on('admin:unwatch_presence', () => {
+      socket.leave('admin:presence')
+    })
+
     // ── disconnect ────────────────────────────────────────────────────────────
     // Fired automatically by Socket.io when the underlying transport closes
     // (tab closed, network drop, server-initiated kick via AUTH_INVALID, etc.).
@@ -1267,6 +1364,15 @@ function createSocketServer(httpServer) {
     // room bookkeeping — no manual action needed for those.
     socket.on('disconnect', () => {
       console.log(`[socket] - uid=${socket.userId} (${socket.username})`)
+
+      // ── Global presence: remove socket, broadcast if last tab went offline ──
+      const wentOffline = removePresence(socket.userId, socket.id)
+      if (wentOffline) {
+        io.to('admin:presence').emit('admin:presence_update', {
+          userId: socket.userId,
+          online: false,
+        })
+      }
 
       // Clean up presence from any public room
       if (socket.currentPublicRoomId) {

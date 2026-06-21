@@ -66,7 +66,7 @@ export default function LandingPage() {
         <div className="h-px w-full bg-gradient-to-r from-transparent via-codex-gold to-transparent opacity-60" />
 
         {/* Header */}
-        <div className="px-8 pt-8 pb-6 text-center">
+        <div className="px-8 pt-12 pb-6 text-center">
           {/* Logo */}
           <div className="mb-5 flex flex-col items-center gap-2">
             <div className="w-10 h-10 rounded-lg bg-codex-gold/10 border border-codex-gold/30 flex items-center justify-center">
@@ -96,9 +96,12 @@ export default function LandingPage() {
         </div>
 
         {/* Footer */}
-        <div className="px-8 pb-6 pt-1 text-center">
+        <div className="px-8 pb-6 pt-1 text-center flex flex-col gap-1">
           <p className="text-xs text-codex-muted">
             Your TTRPG campaign hub · Shadowdark · Mörk Borg · Nimble RPG
+          </p>
+          <p className="text-xs text-codex-muted/50">
+            © {new Date().getFullYear()} CampaignCodex · All rights reserved
           </p>
         </div>
 

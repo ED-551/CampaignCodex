@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BookOpen, Users, Scroll, Trophy, Swords, ArrowLeft, Shield, Trash2, X, Mail, Send, ShieldOff } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../utils/api'
 import TierBadge from '../components/ui/TierBadge'
+import { usePresence } from '../hooks/usePresence'
 
 const TIER_COLORS = {
   bronze:   'text-amber-600',
@@ -44,6 +45,16 @@ export default function AdminDashboard() {
   const [bResult, setBResult]     = useState(null)     // { sent, failed, total, stub, message }
   const [bError, setBError]       = useState('')
   const confirmTimer              = useRef(null)
+
+  // ── Real-time presence ────────────────────────────────────────────────────
+  const onlineSet = usePresence()
+
+  // Sort users: online first (alpha by username), then offline (alpha by username)
+  const sortedUsers = useMemo(() => {
+    const online  = users.filter(u =>  onlineSet.has(u.id)).sort((a, b) => a.username.localeCompare(b.username))
+    const offline = users.filter(u => !onlineSet.has(u.id)).sort((a, b) => a.username.localeCompare(b.username))
+    return [...online, ...offline]
+  }, [users, onlineSet])
 
   // ── Broadcast raven state ──────────────────────────────────────────────────
   const [rSubject, setRSubject]   = useState('')
@@ -421,21 +432,36 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {users.map((u, i) => (
+                    {sortedUsers.map((u, i) => {
+                      const online   = onlineSet.has(u.id)
+                      const fullName = [u.first_name, u.last_name].filter(Boolean).join(' ')
+                      return (
                       <tr key={u.id}
                         className={`border-b border-codex-border/40 ${i % 2 === 0 ? '' : 'bg-codex-card/30'}`}>
                         <Td>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-codex-text font-medium">{u.username}</span>
-                            {u.is_admin     && <span className="text-[9px] font-bold text-codex-gold   bg-codex-gold/10   border border-codex-gold/30   rounded px-1 py-0.5 uppercase tracking-wide">Admin</span>}
-                            {u.is_moderator && <span className="text-[9px] font-bold text-blue-400    bg-blue-400/10    border border-blue-400/30    rounded px-1 py-0.5 uppercase tracking-wide">Mod</span>}
-                            {u.is_banned    && <span className="text-[9px] font-bold text-red-400     bg-red-400/10     border border-red-400/30     rounded px-1 py-0.5 uppercase tracking-wide">Banned</span>}
+                          <div className="flex items-center gap-2">
+                            {/* Online dot */}
+                            <span
+                              title={online ? 'Online' : 'Offline'}
+                              className={`flex-shrink-0 w-2 h-2 rounded-full ${online ? 'bg-emerald-400' : 'bg-codex-border'}`}
+                            />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-codex-text font-medium">{u.username}</span>
+                                {u.is_admin     && <span className="text-[9px] font-bold text-codex-gold   bg-codex-gold/10   border border-codex-gold/30   rounded px-1 py-0.5 uppercase tracking-wide">Admin</span>}
+                                {u.is_moderator && <span className="text-[9px] font-bold text-blue-400    bg-blue-400/10    border border-blue-400/30    rounded px-1 py-0.5 uppercase tracking-wide">Mod</span>}
+                                {u.is_banned    && <span className="text-[9px] font-bold text-red-400     bg-red-400/10     border border-red-400/30     rounded px-1 py-0.5 uppercase tracking-wide">Banned</span>}
+                              </div>
+                              {fullName && (
+                                <p className="text-[10px] text-codex-muted mt-0.5">{fullName}</p>
+                              )}
+                              {u.is_banned && u.ban_reason && (
+                                <p className="text-[10px] text-red-400/70 mt-0.5 max-w-[140px] truncate" title={u.ban_reason}>
+                                  ⛔ {u.ban_reason}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          {u.is_banned && u.ban_reason && (
-                            <p className="text-[10px] text-codex-muted mt-0.5 max-w-[140px] truncate" title={u.ban_reason}>
-                              {u.ban_reason}
-                            </p>
-                          )}
                         </Td>
                         <Td><span className="text-codex-subtext">{u.email}</span></Td>
                         <Td>
@@ -519,7 +545,8 @@ export default function AdminDashboard() {
                           </div>
                         </Td>
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>

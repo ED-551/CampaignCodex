@@ -34,9 +34,10 @@ async function request(method, path, body) {
 
   if (!res.ok) {
     // Global 401 handler — token expired or revoked mid-session.
-    // Clear the stale token and reload to the landing page so AuthContext
-    // re-initialises cleanly rather than leaving the user in a broken state.
-    if (res.status === 401) {
+    // IMPORTANT: Only redirect if the user had an active token. A login attempt
+    // with wrong credentials also returns 401, but there is no token to expire —
+    // redirecting there would wipe the login form and swallow the error message.
+    if (res.status === 401 && getToken()) {
       clearToken()
       window.location.href = '/'
       return  // unreachable after redirect, but prevents the throw firing

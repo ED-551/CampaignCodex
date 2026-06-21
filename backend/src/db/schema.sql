@@ -448,3 +448,62 @@ CREATE INDEX IF NOT EXISTS idx_bestiary_shares_from
 CREATE OR REPLACE TRIGGER trg_bestiary_shares_updated
   BEFORE UPDATE ON bestiary_shares
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ─── SAFE MIGRATIONS: user profiles ─────────────────────────────────────────
+-- display_name_pref : whether to show first name alongside username on profile
+-- about_text        : user-authored bio, ~200 words / 1200 chars
+-- role_pref         : how the user wants to play (player / dm / both)
+-- game_interests    : which game systems they're interested in (TEXT array)
+-- profile_theme     : visual skin for their profile card
+ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name_pref VARCHAR(20) NOT NULL DEFAULT 'username';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS about_text        VARCHAR(1200);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role_pref         VARCHAR(10) NOT NULL DEFAULT 'both';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS game_interests    TEXT[]      NOT NULL DEFAULT '{}';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_theme     VARCHAR(20) NOT NULL DEFAULT 'default';
+
+-- ─── FRIEND REQUESTS ──────────────────────────────────────────────────────────
+-- Directed: sender_id initiates; receiver_id accepts or denies.
+-- The UNIQUE constraint means A can only ever have one request row with B
+-- (prevents re-sending after a deny without the deny being cleared first).
+-- Once accepted the row status flips to 'accepted' — the row IS the friendship.
+-- Querying friends: SELECT the other user_id from rows where status = 'accepted'
+-- and either side matches the current user.
+CREATE TABLE IF NOT EXISTS friend_requests (
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  sender_id   UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  receiver_id UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status      VARCHAR(10) NOT NULL DEFAULT 'pending'
+              CHECK (status IN ('pending','accepted','denied')),
+  created_at  TIMESTAMP   NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMP   NOT NULL DEFAULT NOW(),
+  CONSTRAINT  no_self_friend CHECK (sender_id != receiver_id),
+  UNIQUE(sender_id, receiver_id)
+);
+
+-- Fast lookup for incoming request tab + friends list
+CREATE INDEX IF NOT EXISTS idx_friend_requests_receiver
+  ON friend_requests(receiver_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_friend_requests_sender
+  ON friend_requests(sender_id, status, created_at DESC);
+
+CREATE OR REPLACE TRIGGER trg_friend_requests_updated
+  BEFORE UPDATE ON friend_requests
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ─── USER BLOCKS ──────────────────────────────────────────────────────────────
+-- One-directional: blocker_id has blocked blocked_id.
+-- Enforced server-side in every query that returns user data or accepts messages.
+-- Primary key is composite (no separate id needed — the pair is unique by definition).
+CREATE TABLE IF NOT EXISTS user_blocks (
+  blocker_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  blocked_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (blocker_id, blocked_id),
+  CONSTRAINT no_self_block CHECK (blocker_id != blocked_id)
+);
+
+-- Fast lookup in both directions (needed for symmetric block checks in DM/search)
+CREATE INDEX IF NOT EXISTS idx_user_blocks_blocker
+  ON user_blocks(blocker_id, blocked_id);
+CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked
+  ON user_blocks(blocked_id, blocker_id);

@@ -63,4 +63,20 @@ const shareLimiter = rateLimit({
   },
 })
 
-module.exports = { authLimiter, apiLimiter, ravensLimiter, shareLimiter }
+/**
+ * Signup-specific limiter — 5 account creations per hour per IP.
+ * Stacked on top of authLimiter on the /signup route to create a
+ * two-layer defence: authLimiter handles burst (10/15 min) while
+ * signupLimiter handles sustained bot runs (5/hr).
+ */
+const signupLimiter = rateLimit({
+  windowMs:        60 * 60 * 1000, // 1 hour
+  max:             5,
+  standardHeaders: true,
+  legacyHeaders:   false,
+  message: {
+    error: 'Too many account creation attempts from this IP. Please try again in an hour.',
+  },
+})
+
+module.exports = { authLimiter, apiLimiter, ravensLimiter, shareLimiter, signupLimiter }

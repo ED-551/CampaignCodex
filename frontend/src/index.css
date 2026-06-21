@@ -27,6 +27,17 @@
     display: flex;
     flex-direction: column;
   }
+
+  /*
+   * Mobile zoom prevention — iOS Safari auto-zooms on any input with
+   * font-size < 16px. Setting 16px here prevents the zoom from ever
+   * triggering, eliminating the "stuck zoomed" bug on form exit.
+   * This has no visible effect on desktop where inputs already render
+   * at approximately 14–16px depending on Tailwind's text-sm class.
+   */
+  input, select, textarea {
+    font-size: 16px;
+  }
 }
 
 @layer components {
