@@ -622,7 +622,10 @@ router.post('/:id/add-gm-character', requireAuth, async (req, res) => {
        WHERE c.id = $1`,
       [campaignId]
     )
-    const { gm_character_id: gmCharacterId, gm_username: gmUsername } = campRow.rows[0] ?? {}
+    // Explicit campaign-not-found guard before destructuring — avoids the ?? {} fallback
+    // masking a missing campaign row with a misleading "No GM character linked" message.
+    if (!campRow.rows[0]) return res.status(404).json({ error: 'Campaign not found.' })
+    const { gm_character_id: gmCharacterId, gm_username: gmUsername } = campRow.rows[0]
     if (!gmCharacterId) return res.status(404).json({ error: 'No GM character linked to this campaign. Set one in Campaign Settings.' })
 
     const charRow = await db.query(

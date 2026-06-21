@@ -96,23 +96,40 @@ router.post('/', requireAuth, [
       }
     }
 
-    const result = await db.query(
-      `INSERT INTO characters (user_id, campaign_id, game_system, character_name, sheet_data)
-       VALUES ($1,$2,$3,$4,$5)
-       RETURNING *`,
-      [req.user.sub, campaignId || null, gameSystem, characterName, sheetData || {}]
-    )
+    // Wrap INSERT + campaign-member link in a transaction so both succeed or neither does.
+    // Without this, a DB failure on the UPDATE would leave a character row with no
+    // campaign_members link, causing a silent data inconsistency.
+    const client = await db.getClient()
+    let newChar
+    try {
+      await client.query('BEGIN')
 
-    // If campaign is set, link character in campaign_members
-    if (campaignId) {
-      await db.query(
-        `UPDATE campaign_members SET character_id = $1
-         WHERE campaign_id = $2 AND user_id = $3`,
-        [result.rows[0].id, campaignId, req.user.sub]
+      const result = await client.query(
+        `INSERT INTO characters (user_id, campaign_id, game_system, character_name, sheet_data)
+         VALUES ($1,$2,$3,$4,$5)
+         RETURNING *`,
+        [req.user.sub, campaignId || null, gameSystem, characterName, sheetData || {}]
       )
+      newChar = result.rows[0]
+
+      // If campaign is set, link character in campaign_members atomically
+      if (campaignId) {
+        await client.query(
+          `UPDATE campaign_members SET character_id = $1
+           WHERE campaign_id = $2 AND user_id = $3`,
+          [newChar.id, campaignId, req.user.sub]
+        )
+      }
+
+      await client.query('COMMIT')
+    } catch (txErr) {
+      await client.query('ROLLBACK')
+      throw txErr
+    } finally {
+      client.release()
     }
 
-    res.status(201).json({ character: result.rows[0] })
+    res.status(201).json({ character: newChar })
   } catch (err) {
     console.error('[characters/create]', err)
     res.status(500).json({ error: 'Failed to create character.' })
@@ -212,46 +229,63 @@ router.patch('/:id', requireAuth, [
       return res.status(403).json({ error: 'Only the character owner can change their portrait.' })
     }
 
-    const updated = await db.query(
-      `UPDATE characters SET
-         character_name = COALESCE($1, character_name),
-         sheet_data     = COALESCE($2, sheet_data),
-         portrait_url   = COALESCE($3, portrait_url)
-       WHERE id = $4
-       RETURNING *`,
-      [characterName || null, sheetData ? JSON.stringify(sheetData) : null,
-       portraitUrl || null, req.params.id]
-    )
+    // Wrap character UPDATE + combat-session HP sync in a transaction.
+    // Without this, a failure on the combat sync after the character update succeeds
+    // leaves the live combat tracker showing stale HP with no error surfaced to the client.
+    const client = await db.getClient()
+    let updatedChar
+    try {
+      await client.query('BEGIN')
 
-    // Sync HP to active combat session if this character is a PC combatant
-    const combatSync = await db.query(
-      `SELECT cs.id, cs.combatants FROM combat_sessions cs
-       JOIN campaign_members cm ON cm.campaign_id = cs.campaign_id
-       WHERE cm.character_id = $1 AND cs.is_active = true
-       LIMIT 1`,
-      [req.params.id]
-    )
-    if (combatSync.rows[0] && req.body.sheetData) {
-      const sess = combatSync.rows[0]
-      const newHpCurrent = req.body.sheetData.hp_current
-      const newHpMax     = req.body.sheetData.hp_max
-      if (newHpCurrent !== undefined || newHpMax !== undefined) {
-        const syncedCombatants = (sess.combatants ?? []).map(c => {
-          if (c.characterId !== req.params.id) return c
-          return {
-            ...c,
-            ...(newHpCurrent !== undefined ? { hp_current: newHpCurrent } : {}),
-            ...(newHpMax     !== undefined ? { hp_max:     newHpMax     } : {}),
-          }
-        })
-        await db.query(
-          'UPDATE combat_sessions SET combatants = $1 WHERE id = $2',
-          [JSON.stringify(syncedCombatants), sess.id]
-        )
+      const updated = await client.query(
+        `UPDATE characters SET
+           character_name = COALESCE($1, character_name),
+           sheet_data     = COALESCE($2, sheet_data),
+           portrait_url   = COALESCE($3, portrait_url)
+         WHERE id = $4
+         RETURNING *`,
+        [characterName || null, sheetData ? JSON.stringify(sheetData) : null,
+         portraitUrl || null, req.params.id]
+      )
+      updatedChar = updated.rows[0]
+
+      // Sync HP to active combat session if this character is a PC combatant
+      const combatSync = await client.query(
+        `SELECT cs.id, cs.combatants FROM combat_sessions cs
+         JOIN campaign_members cm ON cm.campaign_id = cs.campaign_id
+         WHERE cm.character_id = $1 AND cs.is_active = true
+         LIMIT 1`,
+        [req.params.id]
+      )
+      if (combatSync.rows[0] && req.body.sheetData) {
+        const sess = combatSync.rows[0]
+        const newHpCurrent = req.body.sheetData.hp_current
+        const newHpMax     = req.body.sheetData.hp_max
+        if (newHpCurrent !== undefined || newHpMax !== undefined) {
+          const syncedCombatants = (sess.combatants ?? []).map(c => {
+            if (c.characterId !== req.params.id) return c
+            return {
+              ...c,
+              ...(newHpCurrent !== undefined ? { hp_current: newHpCurrent } : {}),
+              ...(newHpMax     !== undefined ? { hp_max:     newHpMax     } : {}),
+            }
+          })
+          await client.query(
+            'UPDATE combat_sessions SET combatants = $1 WHERE id = $2',
+            [JSON.stringify(syncedCombatants), sess.id]
+          )
+        }
       }
+
+      await client.query('COMMIT')
+    } catch (txErr) {
+      await client.query('ROLLBACK')
+      throw txErr
+    } finally {
+      client.release()
     }
 
-    res.json({ character: updated.rows[0] })
+    res.json({ character: updatedChar })
   } catch (err) {
     console.error('[characters/update]', err)
     res.status(500).json({ error: 'Failed to update character.' })

@@ -1,4 +1,5 @@
-const express = require('express')
+const express    = require('express')
+const { randomInt } = require('crypto')
 const { body, validationResult } = require('express-validator')
 const db      = require('../db')
 const { requireAuth } = require('../middleware/auth')
@@ -21,12 +22,14 @@ function validationErrors(req, res) {
   return false
 }
 
+// Uses crypto.randomInt — cryptographically secure, unlike Math.random().
+// Join codes are short-lived access credentials; predictability is a real risk.
 function generateJoinCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // no ambiguous chars
   let code = ''
   for (let i = 0; i < 7; i++) {
     if (i === 3) code += '-'
-    code += chars[Math.floor(Math.random() * chars.length)]
+    code += chars[randomInt(chars.length)]
   }
   return code // e.g. "XKF-9TRA"
 }
@@ -68,13 +71,19 @@ router.post('/', requireAuth, [
   const { name, description, gameSystem } = req.body
 
   try {
-    // Generate a unique join code
+    // Generate a unique join code — crypto.randomInt makes collisions exceedingly rare,
+    // but we loop up to 10 times as a safety net against DB duplicates.
     let joinCode, tries = 0
     do {
       joinCode = generateJoinCode()
       const exists = await db.query('SELECT id FROM campaigns WHERE join_code = $1', [joinCode])
       if (!exists.rows.length) break
     } while (++tries < 10)
+
+    if (tries >= 10) {
+      console.error('[campaigns/create] Failed to generate unique join code after 10 attempts')
+      return res.status(503).json({ error: 'Could not generate a unique join code. Please try again.' })
+    }
 
     const result = await db.query(
       `INSERT INTO campaigns (name, description, game_system, gm_user_id, join_code)

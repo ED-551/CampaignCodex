@@ -210,7 +210,9 @@ export default function CombatPage() {
       return
     }
     setStatBlock(null)
-  }, [selectedId]) // eslint-disable-line react-hooks/exhaustive-deps
+  // selectedCombatant?.monsterId: if the same combatant slot is reassigned to a different
+  // monster (edge case: remove + re-add while still selected), the fetch must re-fire.
+  }, [selectedId, selectedCombatant?.monsterId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Push update helper ────────────────────────────────────────────────────────
   const pushUpdate = useCallback(async (newCombatants, newRound, eventType = 'update') => {

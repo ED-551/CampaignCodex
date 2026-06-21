@@ -698,7 +698,7 @@ function MonsterRow({ row, onChange, onRemove, onDuplicate }) {
           type="number"
           min={1}
           value={row.hp}
-          onChange={e => { onChange('hp', e.target.value); onChange('maxHp', e.target.value) }}
+          onChange={e => onChange('hp', e.target.value)}
           placeholder="HP"
           title="Hit Points (per creature)"
           className={CELL}

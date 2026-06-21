@@ -4,6 +4,7 @@ import { SocketProvider } from './context/SocketContext'
 import { DMProvider }     from './context/DMContext'
 import DMWidget           from './components/dm/DMWidget'
 import ProtectedRoute     from './components/layout/ProtectedRoute'
+import ErrorBoundary      from './components/layout/ErrorBoundary'
 import LandingPage        from './pages/LandingPage'
 import Dashboard          from './pages/Dashboard'
 import CampaignDetail     from './pages/CampaignDetail'
@@ -28,6 +29,10 @@ export default function App() {
       <SocketProvider>
         <DMProvider>
           <BrowserRouter>
+            {/* Top-level ErrorBoundary: catches any unhandled JS crash in any page.
+                A second per-route boundary wraps CombatPage to isolate combat crashes
+                from the rest of the app (DMWidget, navigation etc. stay alive). */}
+            <ErrorBoundary>
             <Routes>
               {/* ── Public: auth pages ── */}
               <Route path="/"                element={<LandingPage />} />
@@ -81,7 +86,11 @@ export default function App() {
                 <ProtectedRoute><EncounterBuilder /></ProtectedRoute>
               } />
               <Route path="/campaigns/:id/combat" element={
-                <ProtectedRoute><CombatPage /></ProtectedRoute>
+                <ProtectedRoute>
+                  {/* Isolated boundary: a CombatTracker crash shows the fallback UI
+                      without nuking the DMWidget or forcing a full-page reload. */}
+                  <ErrorBoundary><CombatPage /></ErrorBoundary>
+                </ProtectedRoute>
               } />
               <Route path="/characters/:id" element={
                 <ProtectedRoute><CharacterPage /></ProtectedRoute>
@@ -98,6 +107,7 @@ export default function App() {
 
             {/* ── DM Widget — persists across all routes ── */}
             <DMWidget />
+            </ErrorBoundary>
           </BrowserRouter>
         </DMProvider>
       </SocketProvider>

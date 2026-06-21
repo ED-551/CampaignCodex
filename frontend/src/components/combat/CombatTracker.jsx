@@ -161,8 +161,29 @@ const CombatTracker = forwardRef(function CombatTracker({ campaignId, isGM, game
     }
   }, [socket, connected, campaignId]) // eslint-disable-line
 
+  // ── Start combat ─────────────────────────────────────────────────────────────
+  // Defined before useImperativeHandle (no hoisting needed — useCallback is stable).
+  const startCombat = useCallback(async (opts = {}) => {
+    const payload = { campaignId }
+    if (opts.encounterId) payload.encounterId = opts.encounterId
+    const { session: s } = await api.post('/combat/start', payload)
+    const c = s.combatants ?? []
+    setSession(s)
+    setCombatants(c)
+    setMoraleTriggered(false)
+    setMoraleDismissed(false)
+    onActiveChange?.(true, s)
+    const monsters = c.filter(x => x.type !== 'pc')
+    setInitMonsterCount(monsters.length)
+    if (socket && connected) {
+      socket.emit('push_combat_update', {
+        campaignId, combatants: c, roundNumber: 1, eventType: 'started',
+      })
+    }
+  }, [campaignId, socket, connected, onActiveChange])
+
   // ── Expose startCombat to parent via ref ─────────────────────────────────────
-  useImperativeHandle(ref, () => ({ startCombat }), [startCombat]) // eslint-disable-line
+  useImperativeHandle(ref, () => ({ startCombat }), [startCombat])
 
   // ── Morale check monitor (Shadowdark) ────────────────────────────────────────
   useEffect(() => {
@@ -200,29 +221,6 @@ const CombatTracker = forwardRef(function CombatTracker({ campaignId, isGM, game
       setSaving(false)
     }
   }, [isGM, socket, connected, campaignId])
-
-  // ── Start combat ─────────────────────────────────────────────────────────────
-  // NOTE: must remain a `function` declaration (not const/useCallback) so it is
-  // hoisted and accessible by the useImperativeHandle call above without hitting
-  // the temporal dead zone.
-  async function startCombat(opts = {}) {
-    const payload = { campaignId }
-    if (opts.encounterId) payload.encounterId = opts.encounterId
-    const { session: s } = await api.post('/combat/start', payload)
-    const c = s.combatants ?? []
-    setSession(s)
-    setCombatants(c)
-    setMoraleTriggered(false)
-    setMoraleDismissed(false)
-    onActiveChange?.(true, s)
-    const monsters = c.filter(x => x.type !== 'pc')
-    setInitMonsterCount(monsters.length)
-    if (socket && connected) {
-      socket.emit('push_combat_update', {
-        campaignId, combatants: c, roundNumber: 1, eventType: 'started',
-      })
-    }
-  }
 
   // ── End combat ───────────────────────────────────────────────────────────────
   async function endCombat() {
@@ -460,6 +458,10 @@ const CombatTracker = forwardRef(function CombatTracker({ campaignId, isGM, game
     return (b.initiative ?? -999) - (a.initiative ?? -999)
   })
 
+  // Pre-build a Map<id → originalIndex> for O(1) lookups in the sorted render loop.
+  // Without this, sorted.map() calls combatants.findIndex() for each row → O(n²).
+  const origIdxMap = new Map(combatants.map((c, i) => [c.id, i]))
+
   // ── Render: loading ──────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -560,8 +562,8 @@ const CombatTracker = forwardRef(function CombatTracker({ campaignId, isGM, game
           </div>
         ) : (
           sorted.map((c, sortedIdx) => {
-            // Find original index for mutations
-            const origIdx = combatants.findIndex(x => x.id === c.id)
+            // O(1) Map lookup — avoids O(n²) findIndex inside the sorted render loop
+            const origIdx = origIdxMap.get(c.id) ?? -1
             return (
               <CombatantRow
                 key={c.id}
