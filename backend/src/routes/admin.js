@@ -163,7 +163,7 @@ router.patch('/users/:id/tier', requireAdmin, async (req, res) => {
 
     const result = await db.query(
       `UPDATE users SET supporter_tier = $1,
-         supporter_since = CASE WHEN $1 != 'free' THEN NOW() ELSE NULL END
+         supporter_since = CASE WHEN $1::text != 'free' THEN NOW() ELSE NULL END
        WHERE id = $2
        RETURNING id, username, supporter_tier`,
       [tier, req.params.id]
