@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { BookOpen, Users, Scroll, Trophy, Swords, ArrowLeft, Shield, Trash2, X, Mail, Send } from 'lucide-react'
+import { BookOpen, Users, Scroll, Trophy, Swords, ArrowLeft, Shield, Trash2, X, Mail, Send, ShieldOff } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../utils/api'
+import TierBadge from '../components/ui/TierBadge'
 
 const TIER_COLORS = {
   bronze:   'text-amber-600',
@@ -27,6 +28,14 @@ export default function AdminDashboard() {
   const [deleteTarget, setDeleteTarget] = useState(null)   // { id, username }
   const [deleteError, setDeleteError] = useState('')
   const [deleting, setDeleting]       = useState(false)
+  const [banTarget, setBanTarget]     = useState(null)     // { id, username, isAdmin }
+  const [banReason, setBanReason]     = useState('')
+  const [banDuration, setBanDuration] = useState('permanent')
+  const [banError, setBanError]       = useState('')
+  const [banning, setBanning]         = useState(false)
+  const [revokeTarget, setRevokeTarget] = useState(null)  // { id, username } — revoke admin modal
+  const [revoking, setRevoking]         = useState(false)
+  const [revokeError, setRevokeError]   = useState('')
 
   // ── Broadcast email state ──────────────────────────────────────────────────
   const [bSubject, setBSubject]   = useState('')
@@ -51,6 +60,69 @@ export default function AdminDashboard() {
     try {
       await api.patch(`/admin/users/${userId}/tier`, { tier })
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, supporter_tier: tier } : u))
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  async function toggleModerator(userId, currentValue) {
+    try {
+      await api.patch(`/admin/users/${userId}/moderator`, { isModerator: !currentValue })
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_moderator: !currentValue } : u))
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  async function confirmBanUser() {
+    if (!banTarget) return
+    if (!banReason.trim()) { setBanError('A reason is required.'); return }
+    setBanning(true)
+    setBanError('')
+    try {
+      await api.patch(`/admin/users/${banTarget.id}/ban`, {
+        isBanned: true,
+        reason:   banReason.trim(),
+        duration: banDuration,
+      })
+      setUsers(prev => prev.map(u =>
+        u.id === banTarget.id ? { ...u, is_banned: true, ban_reason: banReason.trim() } : u
+      ))
+      setBanTarget(null)
+      setBanReason('')
+      setBanDuration('permanent')
+    } catch (err) {
+      setBanError(err.message || 'Ban failed.')
+    } finally {
+      setBanning(false)
+    }
+  }
+
+  async function confirmRevokeAdmin() {
+    if (!revokeTarget) return
+    setRevoking(true)
+    setRevokeError('')
+    try {
+      await api.patch(`/admin/users/${revokeTarget.id}/admin`, { isAdmin: false })
+      setUsers(prev => prev.map(u =>
+        u.id === revokeTarget.id
+          ? { ...u, is_admin: false, is_moderator: false, supporter_tier: u.supporter_tier === 'black' ? 'free' : u.supporter_tier }
+          : u
+      ))
+      setRevokeTarget(null)
+    } catch (err) {
+      setRevokeError(err.message || 'Failed to revoke admin.')
+    } finally {
+      setRevoking(false)
+    }
+  }
+
+  async function handleUnban(userId) {
+    try {
+      await api.patch(`/admin/users/${userId}/ban`, { isBanned: false })
+      setUsers(prev => prev.map(u =>
+        u.id === userId ? { ...u, is_banned: false, ban_reason: null } : u
+      ))
     } catch (err) {
       alert(err.message)
     }
@@ -227,6 +299,35 @@ export default function AdminDashboard() {
                     ))}
                   </div>
                 </Section>
+
+                {/* Admin / Moderator roster */}
+                <Section title="Admin & Moderator Accounts">
+                  {(!data?.adminRoster || data.adminRoster.length === 0) ? (
+                    <p className="text-codex-muted text-sm">No admin or moderator accounts found.</p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {data.adminRoster.map(u => (
+                        <div key={u.id} className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-sm text-codex-text truncate">{u.username}</span>
+                            {u.is_admin && (
+                              <span className="text-[9px] font-bold text-codex-gold bg-codex-gold/10 border border-codex-gold/30 rounded px-1 py-0.5 uppercase tracking-wide flex-shrink-0">Admin</span>
+                            )}
+                            {u.is_moderator && !u.is_admin && (
+                              <span className="text-[9px] font-bold text-blue-400 bg-blue-400/10 border border-blue-400/30 rounded px-1 py-0.5 uppercase tracking-wide flex-shrink-0">Mod</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <TierBadge tier={u.supporter_tier} size={13} />
+                            <span className={`text-xs capitalize ${TIER_COLORS[u.supporter_tier] ?? 'text-codex-muted'}`}>
+                              {u.supporter_tier}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Section>
               </div>
             )}
 
@@ -246,7 +347,7 @@ export default function AdminDashboard() {
             )}
 
             {tab === 'users' && (
-              <div className="bg-codex-surface border border-codex-border rounded-xl overflow-hidden">
+              <div className="bg-codex-surface border border-codex-border rounded-xl overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-codex-border text-left">
@@ -263,27 +364,90 @@ export default function AdminDashboard() {
                     {users.map((u, i) => (
                       <tr key={u.id}
                         className={`border-b border-codex-border/40 ${i % 2 === 0 ? '' : 'bg-codex-card/30'}`}>
-                        <Td><span className="text-codex-text font-medium">{u.username}</span></Td>
+                        <Td>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-codex-text font-medium">{u.username}</span>
+                            {u.is_admin     && <span className="text-[9px] font-bold text-codex-gold   bg-codex-gold/10   border border-codex-gold/30   rounded px-1 py-0.5 uppercase tracking-wide">Admin</span>}
+                            {u.is_moderator && <span className="text-[9px] font-bold text-blue-400    bg-blue-400/10    border border-blue-400/30    rounded px-1 py-0.5 uppercase tracking-wide">Mod</span>}
+                            {u.is_banned    && <span className="text-[9px] font-bold text-red-400     bg-red-400/10     border border-red-400/30     rounded px-1 py-0.5 uppercase tracking-wide">Banned</span>}
+                          </div>
+                          {u.is_banned && u.ban_reason && (
+                            <p className="text-[10px] text-codex-muted mt-0.5 max-w-[140px] truncate" title={u.ban_reason}>
+                              {u.ban_reason}
+                            </p>
+                          )}
+                        </Td>
                         <Td><span className="text-codex-subtext">{u.email}</span></Td>
                         <Td>
-                          <span className={`capitalize text-xs font-medium ${TIER_COLORS[u.supporter_tier] ?? 'text-codex-muted'}`}>
-                            {u.supporter_tier}
-                          </span>
+                          <div className="flex items-center gap-1">
+                            <span className={`capitalize text-xs font-medium ${TIER_COLORS[u.supporter_tier] ?? 'text-codex-muted'}`}>
+                              {u.supporter_tier}
+                            </span>
+                            <TierBadge tier={u.supporter_tier} size={14} />
+                          </div>
                         </Td>
                         <Td>{new Date(u.created_at).toLocaleDateString()}</Td>
                         <Td>{u.character_count}</Td>
                         <Td>{u.campaign_count}</Td>
                         <Td>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {/* Tier select */}
                             <select
                               value={u.supporter_tier}
                               onChange={e => updateTier(u.id, e.target.value)}
                               className="bg-codex-bg border border-codex-border rounded px-2 py-1 text-xs text-codex-text focus:outline-none focus:border-codex-gold"
                             >
-                              {['free','bronze','silver','gold','platinum'].map(t => (
+                              {['free','bronze','silver','gold','platinum', ...(u.is_admin ? ['black'] : [])].map(t => (
                                 <option key={t} value={t}>{t}</option>
                               ))}
                             </select>
+
+                            {/* Moderator toggle — not available for admins */}
+                            {!u.is_admin && (
+                              <button
+                                onClick={() => toggleModerator(u.id, u.is_moderator)}
+                                title={u.is_moderator ? 'Remove moderator role' : 'Assign moderator role'}
+                                className={`text-[10px] px-2 py-1 rounded border transition-all ${
+                                  u.is_moderator
+                                    ? 'border-red-500/40 text-red-400 hover:bg-red-500/10'
+                                    : 'border-codex-border text-codex-muted hover:text-blue-400 hover:border-blue-400/40'
+                                }`}
+                              >
+                                {u.is_moderator ? 'Remove Mod' : 'Make Mod'}
+                              </button>
+                            )}
+
+                            {/* Revoke Admin — only shown for admin rows (primary adm_ only) */}
+                            {u.is_admin && (
+                              <button
+                                onClick={() => { setRevokeError(''); setRevokeTarget({ id: u.id, username: u.username }) }}
+                                title="Revoke admin status"
+                                className="text-[10px] px-2 py-1 rounded border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/60 transition-colors flex items-center gap-1"
+                              >
+                                <ShieldOff size={10} /> Revoke
+                              </button>
+                            )}
+
+                            {/* Ban / Unban */}
+                            {u.is_banned ? (
+                              <button
+                                onClick={() => handleUnban(u.id)}
+                                title="Unban this user"
+                                className="text-[10px] px-2 py-1 rounded border border-codex-border text-codex-muted hover:text-codex-text hover:border-codex-text/40 transition-colors"
+                              >
+                                Unban
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => { setBanError(''); setBanDuration('permanent'); setBanReason(''); setBanTarget({ id: u.id, username: u.username, isAdmin: u.is_admin }) }}
+                                title="Ban this user"
+                                className="text-[10px] px-2 py-1 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-500/60 transition-colors"
+                              >
+                                Ban
+                              </button>
+                            )}
+
+                            {/* Delete */}
                             <button
                               onClick={() => { setDeleteError(''); setDeleteTarget({ id: u.id, username: u.username }) }}
                               title={`Delete ${u.username}`}
@@ -303,6 +467,171 @@ export default function AdminDashboard() {
           </>
         )}
       </main>
+
+      {/* Ban user modal */}
+      {banTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          onClick={e => { if (e.target === e.currentTarget && !banning) setBanTarget(null) }}
+        >
+          <div className="relative w-full max-w-md bg-codex-card border border-red-500/30 rounded-2xl overflow-hidden shadow-2xl">
+            <div className="h-px w-full bg-gradient-to-r from-transparent via-red-500 to-transparent opacity-60" />
+            <div className="flex items-start justify-between px-6 pt-5 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-9 h-9 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center">
+                  <Shield size={16} className="text-red-400" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-codex-text">Ban user?</h2>
+                  <p className="text-xs text-codex-subtext mt-0.5">
+                    @{banTarget.username}{banTarget.isAdmin && <span className="text-codex-gold"> (admin)</span>} will lose access to the platform.
+                  </p>
+                </div>
+              </div>
+              {!banning && (
+                <button onClick={() => setBanTarget(null)}
+                  className="text-codex-muted hover:text-codex-text transition-colors p-1 rounded-lg hover:bg-codex-surface ml-2">
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+            <div className="px-6 pb-6 flex flex-col gap-4">
+              {/* Duration */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-codex-text">Duration</label>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[
+                    { value: '1day',      label: '1 Day'   },
+                    { value: '1week',     label: '1 Week'  },
+                    { value: '1month',    label: '1 Month' },
+                    { value: 'permanent', label: 'Perm.'   },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      disabled={banning}
+                      onClick={() => setBanDuration(opt.value)}
+                      className={`py-1.5 rounded-lg border text-xs font-medium transition-all disabled:opacity-40 ${
+                        banDuration === opt.value
+                          ? 'border-red-500/60 bg-red-500/15 text-red-300'
+                          : 'border-codex-border text-codex-muted hover:border-red-500/30 hover:text-red-400'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reason — required */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-codex-text">
+                  Reason <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={banReason}
+                  onChange={e => setBanReason(e.target.value)}
+                  placeholder="e.g. Violated community guidelines"
+                  maxLength={200}
+                  disabled={banning}
+                  autoFocus
+                  className="w-full bg-codex-bg border border-codex-border rounded-lg px-3 py-2 text-sm
+                    text-codex-text placeholder-codex-muted focus:outline-none focus:border-red-500/50 transition-colors disabled:opacity-40"
+                />
+                <p className="text-[10px] text-codex-muted">This reason will be shown to the banned user.</p>
+              </div>
+
+              {banError && <p className="text-sm text-red-400">{banError}</p>}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setBanTarget(null)}
+                  disabled={banning}
+                  className="flex-1 py-2.5 rounded-xl border border-codex-border text-codex-subtext text-sm
+                    hover:border-codex-text hover:text-codex-text transition-colors disabled:opacity-40"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmBanUser}
+                  disabled={banning || !banReason.trim()}
+                  className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-semibold text-sm
+                    transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {banning ? (
+                    <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Shield size={13} />
+                  )}
+                  {banning ? 'Banning…' : 'Ban user'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Revoke admin modal */}
+      {revokeTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          onClick={e => { if (e.target === e.currentTarget && !revoking) setRevokeTarget(null) }}
+        >
+          <div className="relative w-full max-w-md bg-codex-card border border-amber-500/30 rounded-2xl overflow-hidden shadow-2xl">
+            <div className="h-px w-full bg-gradient-to-r from-transparent via-amber-500 to-transparent opacity-60" />
+            <div className="flex items-start justify-between px-6 pt-5 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-9 h-9 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
+                  <ShieldOff size={16} className="text-amber-400" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-codex-text">Revoke admin status?</h2>
+                  <p className="text-xs text-codex-subtext mt-0.5">
+                    @{revokeTarget.username} will lose all admin/moderator privileges.
+                  </p>
+                </div>
+              </div>
+              {!revoking && (
+                <button onClick={() => setRevokeTarget(null)}
+                  className="text-codex-muted hover:text-codex-text transition-colors p-1 rounded-lg hover:bg-codex-surface ml-2">
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+            <div className="px-6 pb-6 flex flex-col gap-4">
+              <p className="text-sm text-codex-subtext leading-relaxed">
+                This will demote{' '}
+                <span className="font-semibold text-codex-text">@{revokeTarget.username}</span>{' '}
+                to a regular user account. Their black tier will be reset to free. This action is immediate and cannot be undone here.
+              </p>
+              {revokeError && <p className="text-sm text-red-400">{revokeError}</p>}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setRevokeTarget(null)}
+                  disabled={revoking}
+                  className="flex-1 py-2.5 rounded-xl border border-codex-border text-codex-subtext text-sm
+                    hover:border-codex-text hover:text-codex-text transition-colors disabled:opacity-40"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmRevokeAdmin}
+                  disabled={revoking}
+                  className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-semibold text-sm
+                    transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {revoking ? (
+                    <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <ShieldOff size={13} />
+                  )}
+                  {revoking ? 'Revoking…' : 'Revoke admin'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Admin delete user modal */}
       {deleteTarget && (

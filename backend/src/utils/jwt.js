@@ -16,11 +16,12 @@ if (!SECRET) {
 function signToken(user) {
   return jwt.sign(
     {
-      sub:      user.id,
-      username: user.username,
-      isAdmin:  user.is_admin,
-      tier:     user.supporter_tier,
-      tv:       user.token_version ?? 1,
+      sub:         user.id,
+      username:    user.username,
+      isAdmin:     user.is_admin,
+      isModerator: user.is_moderator ?? false,
+      tier:        user.supporter_tier,
+      tv:          user.token_version ?? 1,
     },
     SECRET,
     { expiresIn: EXPIRES_IN }

@@ -5,9 +5,13 @@ import { useAuth } from '../../context/AuthContext'
  * Wraps routes that require authentication.
  * Shows nothing while auth is loading (prevents flash of login page).
  * Redirects to / if no user is found.
+ *
+ * Props:
+ *   adminOnly     — only admins may access
+ *   moderatorOnly — admins and moderators may access
  */
-export default function ProtectedRoute({ children, adminOnly = false }) {
-  const { user, loading } = useAuth()
+export default function ProtectedRoute({ children, adminOnly = false, moderatorOnly = false }) {
+  const { user, loading, isAdmin, isModerator } = useAuth()
 
   if (loading) {
     return (
@@ -18,7 +22,8 @@ export default function ProtectedRoute({ children, adminOnly = false }) {
   }
 
   if (!user) return <Navigate to="/" replace />
-  if (adminOnly && !user.isAdmin) return <Navigate to="/dashboard" replace />
+  if (adminOnly     && !isAdmin)                  return <Navigate to="/dashboard" replace />
+  if (moderatorOnly && !isAdmin && !isModerator)  return <Navigate to="/dashboard" replace />
 
   return children
 }

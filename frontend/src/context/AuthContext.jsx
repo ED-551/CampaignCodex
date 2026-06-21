@@ -53,8 +53,12 @@ export function AuthProvider({ children }) {
     setUser(null)
   }, [])
 
+  // Derived convenience flags so consumers don't have to do user?.isAdmin checks
+  const isAdmin     = Boolean(user?.isAdmin)
+  const isModerator = Boolean(user?.isModerator)
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout, updateSettings, changePassword, deleteAccount }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, logout, updateSettings, changePassword, deleteAccount, isAdmin, isModerator }}>
       {children}
     </AuthContext.Provider>
   )

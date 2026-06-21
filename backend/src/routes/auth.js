@@ -106,9 +106,14 @@ router.post('/login', authLimiter, [
 
   try {
     const result = await db.query(
-      `SELECT id, username, email, first_name, last_name,
-              password_hash, supporter_tier, is_admin, token_version, created_at
-       FROM users WHERE username = $1 LIMIT 1`,
+      `SELECT u.id, u.username, u.email, u.first_name, u.last_name,
+              u.password_hash, u.supporter_tier, u.is_admin, u.is_moderator,
+              u.is_banned, u.banned_at, u.ban_reason, u.banned_until,
+              u.token_version, u.created_at,
+              b.username AS banned_by_username
+       FROM users u
+       LEFT JOIN users b ON b.id = u.banned_by_id
+       WHERE u.username = $1 LIMIT 1`,
       [username]
     )
 
@@ -121,6 +126,33 @@ router.post('/login', authLimiter, [
 
     if (!user || !valid) {
       return res.status(401).json({ error: 'Invalid username or password.' })
+    }
+
+    // Check if user is banned (after password verify — don't reveal account existence)
+    if (user.is_banned) {
+      const now = new Date()
+      const bannedUntil = user.banned_until ? new Date(user.banned_until) : null
+
+      // Auto-lift expired timed bans
+      if (bannedUntil && bannedUntil <= now) {
+        // Fire-and-forget: clear ban fields asynchronously
+        db.query(
+          `UPDATE users SET is_banned = false, banned_at = null,
+           ban_reason = null, banned_by_id = null, banned_until = null
+           WHERE id = $1`,
+          [user.id]
+        ).catch(e => console.error('[login] auto-unban failed', e))
+        // Fall through and allow login
+      } else {
+        // Active ban — return detailed rejection
+        return res.status(403).json({
+          error:            'banned',
+          banReason:        user.ban_reason ?? null,
+          bannedUntil:      bannedUntil ? bannedUntil.toISOString() : null,
+          bannedByUsername: user.banned_by_username ?? null,
+          isPermanent:      bannedUntil === null,
+        })
+      }
     }
 
     const token = signToken(user)

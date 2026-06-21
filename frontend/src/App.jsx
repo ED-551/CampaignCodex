@@ -14,6 +14,7 @@ import EncounterBuilder   from './pages/EncounterBuilder'
 import CharacterPage      from './pages/CharacterPage'
 import CombatPage         from './pages/CombatPage'
 import AdminDashboard     from './pages/AdminDashboard'
+import ModeratorDashboard from './pages/ModeratorDashboard'
 import TermsPage          from './pages/TermsPage'
 import SettingsPage       from './pages/SettingsPage'
 import RavenPost          from './pages/RavenPost'
@@ -99,6 +100,11 @@ export default function App() {
               {/* ── Admin only ── */}
               <Route path="/admin" element={
                 <ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>
+              } />
+
+              {/* ── Moderator (admins + moderators) ── */}
+              <Route path="/moderator" element={
+                <ProtectedRoute moderatorOnly><ModeratorDashboard /></ProtectedRoute>
               } />
 
               {/* ── Catch-all ── */}

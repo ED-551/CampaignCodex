@@ -43,6 +43,7 @@ async function request(method, path, body) {
     }
     const err  = new Error(data.error || `Request failed: ${res.status}`)
     err.status = res.status
+    err.data   = data          // full JSON body — consumers can inspect structured errors
     throw err
   }
 

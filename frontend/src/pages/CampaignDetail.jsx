@@ -9,6 +9,7 @@ import PageShell from '../components/layout/PageShell'
 import MiniCombatTracker from '../components/combat/MiniCombatTracker'
 import EncounterPickerModal from '../components/combat/EncounterPickerModal'
 import DiceRollBubble from '../components/chat/DiceRollBubble'
+import TierBadge from '../components/ui/TierBadge'
 import { parseDiceCommand, rollDice, buildDiceMetadata, formatDiceBody } from '../utils/dice'
 
 function formatLightTimer(secs) {
@@ -32,6 +33,7 @@ export default function CampaignDetail() {
   const [loading, setLoading]       = useState(true)
   const [copied, setCopied]         = useState(false)
   const [error, setError]           = useState('')
+  const [userTierMap, setUserTierMap] = useState({}) // { userId: { tier, isAdmin } }
 
   const [inviteUsername, setInviteUsername] = useState('')
   const [inviteLoading,  setInviteLoading]  = useState(false)
@@ -61,6 +63,27 @@ export default function CampaignDetail() {
           character_name: campaign.gm_character_name,
           portrait_url:   campaign.gm_portrait_url,
         } : null)
+
+        // Build tier map from members + GM for use in chat badges
+        const tierMap = {}
+        if (members) {
+          members.forEach(m => {
+            if (m.user_id) {
+              tierMap[m.user_id] = {
+                tier:    m.supporter_tier ?? 'free',
+                isAdmin: m.is_admin       ?? false,
+              }
+            }
+          })
+        }
+        // Include GM tier if provided
+        if (campaign.gm_user_id && campaign.gm_supporter_tier) {
+          tierMap[campaign.gm_user_id] = {
+            tier:    campaign.gm_supporter_tier,
+            isAdmin: campaign.gm_is_admin ?? false,
+          }
+        }
+        setUserTierMap(tierMap)
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
@@ -391,7 +414,7 @@ export default function CampaignDetail() {
         <div className="flex gap-4 items-start">
           {/* Chat — full width when no combat, flex-1 when combat is live */}
           <div className={combatActive ? 'flex-1 min-w-0' : 'w-full'}>
-            <CampaignChat campaignId={id} isGM={isGM} gameSystem={campaign.game_system} />
+            <CampaignChat campaignId={id} isGM={isGM} gameSystem={campaign.game_system} userTierMap={userTierMap} />
           </div>
           {/* Combat Tracker — collapses to 0 width when inactive, avoids unmount */}
           <div
@@ -618,7 +641,7 @@ function DefaultPortrait({ system }) {
 // Real-time chat panel scoped to a single campaign room.
 // Supports spectator mode: GM can open the session to public viewers,
 // with a per-player consent flow and 60-second timeout.
-function CampaignChat({ campaignId, isGM, gameSystem }) {
+function CampaignChat({ campaignId, isGM, gameSystem, userTierMap = {} }) {
   const { user }              = useAuth()
   const { socket, connected } = useSocket()
 
@@ -1096,8 +1119,13 @@ function CampaignChat({ campaignId, isGM, gameSystem }) {
                 {msg.username?.[0] ?? '?'}
               </div>
               <div className={`max-w-[72%] flex flex-col gap-0.5 ${isMine ? 'items-end' : 'items-start'}`}>
-                <div className="flex items-baseline gap-1.5">
-                  {!isMine && <span className="text-[11px] font-medium text-codex-subtext">{msg.username}</span>}
+                <div className="flex items-center gap-1 flex-wrap">
+                  {!isMine && (
+                    <>
+                      <span className="text-[11px] font-medium text-codex-subtext">{msg.username}</span>
+                      <TierBadge tier={userTierMap[msg.user_id]?.tier ?? 'free'} size={13} />
+                    </>
+                  )}
                   <span className="text-[10px] text-codex-muted">{formatChatTime(msg.created_at)}</span>
                 </div>
                 <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words

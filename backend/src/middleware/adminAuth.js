@@ -43,4 +43,34 @@ async function requireAdmin(req, res, next) {
   })
 }
 
-module.exports = { requireAdmin }
+/**
+ * Protect routes that require admin OR moderator access.
+ *
+ * Allows through if the user has `is_admin = true` OR `is_moderator = true`
+ * in the DB. Like requireAdmin, this performs a fresh DB read on every request
+ * so that role changes take effect immediately without waiting for token expiry.
+ *
+ * @param {import('express').Request}  req
+ * @param {import('express').Response} res
+ * @param {import('express').NextFunction} next
+ */
+async function requireModerator(req, res, next) {
+  requireAuth(req, res, async () => {
+    try {
+      const result = await db.query(
+        'SELECT is_admin, is_moderator FROM users WHERE id = $1 LIMIT 1',
+        [req.user.sub]
+      )
+      const row = result.rows[0]
+      if (!row?.is_admin && !row?.is_moderator) {
+        return res.status(403).json({ error: 'Moderator access required.' })
+      }
+      next()
+    } catch (err) {
+      console.error('[requireModerator]', err)
+      res.status(500).json({ error: 'An unexpected error occurred.' })
+    }
+  })
+}
+
+module.exports = { requireAdmin, requireModerator }
