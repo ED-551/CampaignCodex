@@ -4,12 +4,11 @@ import { Helmet } from 'react-helmet-async'
 import {
   BookOpen, ArrowLeft, Send, Trash2, Reply,
   Feather, Inbox, Mail, Settings, LogOut, Shield, ChevronLeft,
+  ChevronDown, ChevronUp, Scroll,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../utils/api'
 import TierBadge from '../components/ui/TierBadge'
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const GAME_LABELS = {
   shadowdark: 'Shadowdark',
@@ -20,16 +19,10 @@ const GAME_LABELS = {
 function formatDate(dateStr) {
   const d = new Date(dateStr)
   const now = new Date()
-  const diffMs = now - d
-  const diffDays = Math.floor(diffMs / 86400000)
-
-  if (diffDays === 0) {
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
+  const diffDays = Math.floor((now - d) / 86400000)
+  if (diffDays === 0) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   if (diffDays === 1) return 'Yesterday'
-  if (diffDays < 7) {
-    return d.toLocaleDateString([], { weekday: 'long' })
-  }
+  if (diffDays < 7) return d.toLocaleDateString([], { weekday: 'long' })
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
@@ -40,8 +33,70 @@ function formatDateFull(dateStr) {
   })
 }
 
-// ─── Message List Item ────────────────────────────────────────────────────────
+// ─── Going Postal stamp header ────────────────────────────────────────────────
+function PostalStamp() {
+  return (
+    <div className="px-4 pt-4 pb-3 border-b border-codex-border">
+      {/* Outer stamp frame with perforated-edge effect */}
+      <div className="relative border-2 border-dashed border-codex-gold/50 rounded-sm px-3 py-3 bg-codex-gold/3">
+        {/* Corner ornaments */}
+        <span className="absolute top-1 left-1.5 text-[9px] text-codex-gold/40 select-none">✦</span>
+        <span className="absolute top-1 right-1.5 text-[9px] text-codex-gold/40 select-none">✦</span>
+        <span className="absolute bottom-1 left-1.5 text-[9px] text-codex-gold/40 select-none">✦</span>
+        <span className="absolute bottom-1 right-1.5 text-[9px] text-codex-gold/40 select-none">✦</span>
 
+        {/* Issuing authority */}
+        <p className="text-center text-[8px] uppercase tracking-[0.25em] text-codex-muted mb-1.5 select-none">
+          Ankh-Morpork Postal Service
+        </p>
+
+        {/* Main emblem */}
+        <div className="flex items-center justify-center gap-2 mb-1.5">
+          <Feather size={13} className="text-codex-gold/70 shrink-0" />
+          <span className="font-display text-codex-gold text-sm tracking-widest uppercase">
+            The Raven Post
+          </span>
+          <Feather size={13} className="text-codex-gold/70 shrink-0 scale-x-[-1]" />
+        </div>
+
+        {/* Divider rule */}
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <div className="flex-1 h-px bg-codex-gold/20" />
+          <span className="text-codex-gold/30 text-[8px] select-none">◆</span>
+          <div className="flex-1 h-px bg-codex-gold/20" />
+        </div>
+
+        {/* Denomination / value line */}
+        <p className="text-center text-[8px] tracking-[0.15em] text-codex-muted/70 select-none">
+          ONE RAVEN · OFFICIAL DISPATCH
+        </p>
+      </div>
+
+      {/* Motto below stamp */}
+      <p className="text-[9px] text-codex-muted/60 text-center italic leading-relaxed mt-2 px-1 select-none">
+        "Neither snow nor rain nor fell dragon-fire shall stay these ravens from their appointed rounds."
+      </p>
+    </div>
+  )
+}
+
+// ─── Postmark decoration for message header ───────────────────────────────────
+function Postmark({ date }) {
+  const d = new Date(date)
+  const day = d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+  return (
+    <div className="flex-shrink-0 w-14 h-14 rounded-full border-2 border-codex-gold/25
+      flex flex-col items-center justify-center text-center rotate-[-12deg] select-none
+      bg-codex-gold/3">
+      <span className="text-[7px] font-bold uppercase tracking-widest text-codex-gold/40 leading-none">Raven</span>
+      <span className="text-[7px] uppercase tracking-widest text-codex-gold/40 leading-none">Post</span>
+      <div className="w-8 h-px bg-codex-gold/20 my-0.5" />
+      <span className="text-[7px] text-codex-muted/60 leading-none">{day}</span>
+    </div>
+  )
+}
+
+// ─── Message List Item ────────────────────────────────────────────────────────
 function MessageListItem({ message, isSelected, onClick, isInbox }) {
   const isUnread  = isInbox && !message.read_at
   const otherUser = isInbox ? message.sender_username : message.recipient_username
@@ -63,38 +118,75 @@ function MessageListItem({ message, isSelected, onClick, isInbox }) {
         <span className="text-[11px] text-codex-muted shrink-0">{formatDate(message.created_at)}</span>
       </div>
       <div className="flex items-center gap-1.5">
-        {isUnread && (
-          <span className="w-1.5 h-1.5 rounded-full bg-codex-gold shrink-0" />
-        )}
+        {isUnread && <span className="w-1.5 h-1.5 rounded-full bg-codex-gold shrink-0" />}
         <p className={`text-xs truncate ${isUnread ? 'text-codex-text font-medium' : 'text-codex-muted'}`}>
           {message.subject}
         </p>
       </div>
       {message.character_name && (
-        <p className="text-[10px] text-codex-muted mt-1 truncate">
-          📜 {message.character_name}
-        </p>
+        <p className="text-[10px] text-codex-muted mt-1 truncate">📜 {message.character_name}</p>
       )}
     </button>
   )
 }
 
-// ─── Message View ─────────────────────────────────────────────────────────────
+// ─── Collapsed thread item ────────────────────────────────────────────────────
+function ThreadMessage({ msg }) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div className="border border-codex-border/60 rounded-lg overflow-hidden bg-codex-bg/40">
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="w-full flex items-center justify-between px-4 py-2.5 text-left
+          hover:bg-codex-surface/40 transition-colors"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <Feather size={11} className="text-codex-muted shrink-0" />
+          <span className="text-xs text-codex-subtext font-medium truncate">{msg.sender_username}</span>
+          <span className="text-[10px] text-codex-muted shrink-0">{formatDateFull(msg.created_at)}</span>
+        </div>
+        {expanded
+          ? <ChevronUp size={12} className="text-codex-muted shrink-0" />
+          : <ChevronDown size={12} className="text-codex-muted shrink-0" />
+        }
+      </button>
+      {expanded && (
+        <div className="px-4 pb-3 pt-1 border-t border-codex-border/40">
+          {msg.character_name && (
+            <div className="flex items-center gap-1.5 mb-2 text-[10px] text-codex-muted">
+              <Scroll size={10} />
+              <span>{msg.character_name}</span>
+              <span>· {GAME_LABELS[msg.character_game_system] ?? msg.character_game_system}</span>
+            </div>
+          )}
+          <pre className="text-xs text-codex-subtext whitespace-pre-wrap font-sans leading-relaxed">
+            {msg.body}
+          </pre>
+        </div>
+      )}
+    </div>
+  )
+}
 
+// ─── Message View ─────────────────────────────────────────────────────────────
 function MessageView({ messageId, isInbox, onReply, onDelete, onBack }) {
   const [message, setMessage]   = useState(null)
+  const [thread,  setThread]    = useState([])
   const [loading, setLoading]   = useState(true)
   const [deleting, setDeleting] = useState(false)
+  const [threadOpen, setThreadOpen] = useState(false)
 
   useEffect(() => {
     if (!messageId) return
     setLoading(true)
     setMessage(null)
+    setThread([])
+    setThreadOpen(false)
 
     api.get(`/ravens/${messageId}`)
-      .then(({ message: msg }) => {
+      .then(({ message: msg, thread: t }) => {
         setMessage(msg)
-        // Mark as read automatically if we're the recipient and it's unread
+        setThread(t ?? [])
         if (isInbox && !msg.read_at) {
           api.patch(`/ravens/${messageId}/read`).catch(() => {})
         }
@@ -116,98 +208,111 @@ function MessageView({ messageId, isInbox, onReply, onDelete, onBack }) {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <p className="text-sm text-codex-muted animate-pulse">Summoning your raven…</p>
-      </div>
-    )
-  }
-
-  if (!message) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <p className="text-sm text-codex-muted">Message not found.</p>
-      </div>
-    )
-  }
-
-  const otherUser = isInbox ? message.sender_username : message.recipient_username
+  if (loading) return (
+    <div className="flex-1 flex items-center justify-center">
+      <p className="text-sm text-codex-muted animate-pulse">Summoning your raven…</p>
+    </div>
+  )
+  if (!message) return (
+    <div className="flex-1 flex items-center justify-center">
+      <p className="text-sm text-codex-muted">Message not found.</p>
+    </div>
+  )
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Message header */}
-      <div className="px-6 py-5 border-b border-codex-border flex flex-col gap-3">
-        {/* Mobile back button */}
+      {/* Letter header — old-fashioned mail aesthetic */}
+      <div className="px-6 py-5 border-b border-codex-border">
         {onBack && (
-          <button
-            onClick={onBack}
-            className="flex items-center gap-1.5 text-xs text-codex-muted hover:text-codex-text transition-colors sm:hidden"
-          >
+          <button onClick={onBack}
+            className="flex items-center gap-1.5 text-xs text-codex-muted hover:text-codex-text transition-colors sm:hidden mb-3">
             <ChevronLeft size={14} /> Back
           </button>
         )}
 
         <div className="flex items-start justify-between gap-4">
-          <h2 className="text-lg font-semibold text-codex-text leading-snug">{message.subject}</h2>
-          <div className="flex items-center gap-2 shrink-0">
-            {isInbox && (
-              <button
-                onClick={() => onReply(message)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-codex-border
-                  text-xs text-codex-subtext hover:text-codex-gold hover:border-codex-gold/40 transition-colors"
-              >
-                <Reply size={12} /> Reply
-              </button>
-            )}
-            <button
-              onClick={handleDelete}
-              disabled={deleting}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-codex-border
-                text-xs text-codex-muted hover:text-red-400 hover:border-red-500/30 transition-colors disabled:opacity-40"
-            >
-              <Trash2 size={12} /> {deleting ? 'Removing…' : 'Dismiss'}
-            </button>
-          </div>
+          <h2 className="text-lg font-semibold text-codex-text leading-snug flex-1 min-w-0">
+            {message.subject}
+          </h2>
+          {/* Postmark stamp */}
+          <Postmark date={message.created_at} />
         </div>
 
-        <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-codex-muted">
-          <span className="flex items-center gap-1.5">
-            <span className="text-codex-subtext">From:</span>{' '}
-            <span className="text-codex-text font-medium">{message.sender_username}</span>
-            <TierBadge tier={message.sender_supporter_tier ?? 'free'} size={12} />
+        {/* Formal to/from block */}
+        <div className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+          <span className="text-codex-muted font-medium uppercase tracking-wide text-[10px] pt-0.5">From</span>
+          <span className="flex items-center gap-1.5 text-codex-text font-medium">
+            {message.sender_username}
+            <TierBadge tier={message.sender_supporter_tier ?? 'free'} size={11} />
           </span>
-          <span>
-            <span className="text-codex-subtext">To:</span>{' '}
-            <span className="text-codex-text font-medium">{message.recipient_username}</span>
-          </span>
-          <span>{formatDateFull(message.created_at)}</span>
+          <span className="text-codex-muted font-medium uppercase tracking-wide text-[10px] pt-0.5">To</span>
+          <span className="text-codex-subtext">{message.recipient_username}</span>
+          <span className="text-codex-muted font-medium uppercase tracking-wide text-[10px] pt-0.5">Date</span>
+          <span className="text-codex-muted">{formatDateFull(message.created_at)}</span>
         </div>
 
         {/* Character attachment */}
         {message.character_name && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-codex-surface border border-codex-border/60 self-start">
-            <span className="text-sm">📜</span>
+          <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-codex-surface border border-codex-border/60 self-start w-fit">
+            <Scroll size={13} className="text-codex-gold/70" />
             <div>
               <p className="text-xs font-medium text-codex-text">{message.character_name}</p>
               <p className="text-[10px] text-codex-muted">{GAME_LABELS[message.character_game_system] ?? message.character_game_system}</p>
             </div>
           </div>
         )}
+
+        {/* Action buttons */}
+        <div className="flex items-center gap-2 mt-3">
+          {isInbox && (
+            <button onClick={() => onReply(message)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-codex-border
+                text-xs text-codex-subtext hover:text-codex-gold hover:border-codex-gold/40 transition-colors">
+              <Reply size={12} /> Reply
+            </button>
+          )}
+          <button onClick={handleDelete} disabled={deleting}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-codex-border
+              text-xs text-codex-muted hover:text-red-400 hover:border-red-500/30 transition-colors disabled:opacity-40">
+            <Trash2 size={12} /> {deleting ? 'Removing…' : 'Dismiss'}
+          </button>
+        </div>
       </div>
 
-      {/* Message body */}
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      {/* Scrollable body */}
+      <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-6">
+        {/* Current message body */}
         <pre className="text-sm text-codex-text whitespace-pre-wrap font-sans leading-relaxed">
           {message.body}
         </pre>
+
+        {/* Previous correspondence thread */}
+        {thread.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => setThreadOpen(o => !o)}
+              className="flex items-center gap-2 text-xs text-codex-muted hover:text-codex-subtext transition-colors self-start"
+            >
+              {threadOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              <span>
+                {threadOpen ? 'Hide' : 'Show'} previous correspondence
+                ({thread.length} {thread.length === 1 ? 'message' : 'messages'})
+              </span>
+            </button>
+
+            {threadOpen && (
+              <div className="flex flex-col gap-2 pl-3 border-l-2 border-codex-border/40">
+                {thread.map(t => <ThreadMessage key={t.id} msg={t} />)}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
 // ─── Compose Modal ────────────────────────────────────────────────────────────
-
 function ComposeModal({ onClose, onSent, characters, replyTo }) {
   const [recipient, setRecipient]       = useState(
     replyTo ? { id: replyTo.sender_id, username: replyTo.sender_username } : null
@@ -215,35 +320,26 @@ function ComposeModal({ onClose, onSent, characters, replyTo }) {
   const [toInput, setToInput]           = useState(replyTo?.sender_username ?? '')
   const [searchResults, setSearchResults] = useState([])
   const [searching, setSearching]       = useState(false)
-  const [subject, setSubject]           = useState(replyTo ? `Re: ${replyTo.subject}` : '')
+  const [subject, setSubject]           = useState(replyTo ? `Re: ${replyTo.subject.replace(/^(Re:\s*)+/i, '')}` : '')
   const [body, setBody]                 = useState('')
   const [characterId, setCharacterId]   = useState('')
   const [sending, setSending]           = useState(false)
   const [error, setError]               = useState('')
   const searchTimer = useRef(null)
 
-  // Debounced username search
   function handleToInput(val) {
     setToInput(val)
     setRecipient(null)
     setError('')
     clearTimeout(searchTimer.current)
-
-    if (!val.trim() || val.length < 2) {
-      setSearchResults([])
-      return
-    }
-
+    if (!val.trim() || val.length < 2) { setSearchResults([]); return }
     setSearching(true)
     searchTimer.current = setTimeout(async () => {
       try {
         const { users } = await api.get(`/users/search?q=${encodeURIComponent(val.trim())}`)
         setSearchResults(users)
-      } catch {
-        setSearchResults([])
-      } finally {
-        setSearching(false)
-      }
+      } catch { setSearchResults([]) }
+      finally { setSearching(false) }
     }, 300)
   }
 
@@ -256,27 +352,18 @@ function ComposeModal({ onClose, onSent, characters, replyTo }) {
   async function handleSend(e) {
     e.preventDefault()
     setError('')
-
-    if (!recipient) {
-      setError('Please select a recipient from the list.')
-      return
-    }
-    if (!subject.trim()) {
-      setError('Subject is required.')
-      return
-    }
-    if (!body.trim()) {
-      setError('Message body is required.')
-      return
-    }
+    if (!recipient)       { setError('Please select a recipient from the list.'); return }
+    if (!subject.trim())  { setError('Subject is required.'); return }
+    if (!body.trim())     { setError('Message body is required.'); return }
 
     setSending(true)
     try {
       await api.post('/ravens', {
-        recipientId:  recipient.id,
-        subject:      subject.trim(),
-        body:         body.trim(),
-        characterId:  characterId || null,
+        recipientId: recipient.id,
+        subject:     subject.trim(),
+        body:        body.trim(),
+        characterId: characterId || null,
+        parentId:    replyTo?.id ?? null,
       })
       onSent()
       onClose()
@@ -286,8 +373,9 @@ function ComposeModal({ onClose, onSent, characters, replyTo }) {
     }
   }
 
-  const bodyRemaining = 5000 - body.length
-  const subjectRemaining = 120 - subject.length
+  const bodyRemaining    = 5000 - body.length
+  const subjectRemaining = 120  - subject.length
+  const hasNoCharacters  = characters.length === 0
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -297,30 +385,30 @@ function ComposeModal({ onClose, onSent, characters, replyTo }) {
         <div className="flex items-center justify-between px-5 py-4 border-b border-codex-border">
           <div className="flex items-center gap-2">
             <Feather size={16} className="text-codex-gold" />
-            <h3 className="font-semibold text-codex-text text-sm">New Raven</h3>
+            <h3 className="font-semibold text-codex-text text-sm">
+              {replyTo ? 'Reply' : 'New Raven'}
+            </h3>
           </div>
-          <button
-            onClick={onClose}
-            className="text-codex-muted hover:text-codex-text transition-colors text-lg leading-none"
-          >
+          <button onClick={onClose}
+            className="text-codex-muted hover:text-codex-text transition-colors text-lg leading-none">
             ×
           </button>
         </div>
 
         <form onSubmit={handleSend} className="flex flex-col gap-0 flex-1 min-h-0">
 
-          {/* To field */}
+          {/* To */}
           <div className="relative border-b border-codex-border">
             <div className="flex items-center gap-2 px-4 py-3">
-              <span className="text-xs text-codex-muted w-12 shrink-0">To</span>
+              <span className="text-xs text-codex-muted w-12 shrink-0 uppercase tracking-wide">To</span>
               <input
                 type="text"
                 value={toInput}
                 onChange={e => handleToInput(e.target.value)}
                 placeholder="Username…"
                 autoFocus={!replyTo}
-                className="flex-1 bg-transparent text-sm text-codex-text placeholder-codex-muted
-                  focus:outline-none"
+                readOnly={!!replyTo}
+                className="flex-1 bg-transparent text-sm text-codex-text placeholder-codex-muted focus:outline-none"
               />
               {recipient && (
                 <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full
@@ -329,22 +417,13 @@ function ComposeModal({ onClose, onSent, characters, replyTo }) {
                 </span>
               )}
             </div>
-
-            {/* Username search dropdown */}
             {(searchResults.length > 0 || searching) && !recipient && (
               <div className="absolute left-0 right-0 top-full z-10 bg-codex-surface border border-codex-border
                 rounded-b-xl shadow-lg overflow-hidden">
-                {searching && (
-                  <p className="px-4 py-2 text-xs text-codex-muted animate-pulse">Searching…</p>
-                )}
+                {searching && <p className="px-4 py-2 text-xs text-codex-muted animate-pulse">Searching…</p>}
                 {!searching && searchResults.map(u => (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => selectRecipient(u)}
-                    className="w-full text-left px-4 py-2.5 text-sm text-codex-subtext
-                      hover:bg-codex-bg hover:text-codex-text transition-colors"
-                  >
+                  <button key={u.id} type="button" onClick={() => selectRecipient(u)}
+                    className="w-full text-left px-4 py-2.5 text-sm text-codex-subtext hover:bg-codex-bg hover:text-codex-text transition-colors">
                     {u.username}
                   </button>
                 ))}
@@ -355,15 +434,15 @@ function ComposeModal({ onClose, onSent, characters, replyTo }) {
             )}
           </div>
 
-          {/* Subject field */}
+          {/* Subject */}
           <div className="flex items-center gap-2 px-4 py-3 border-b border-codex-border">
-            <span className="text-xs text-codex-muted w-12 shrink-0">Subject</span>
+            <span className="text-xs text-codex-muted w-12 shrink-0 uppercase tracking-wide">Re</span>
             <input
               type="text"
               value={subject}
               onChange={e => setSubject(e.target.value)}
               maxLength={120}
-              placeholder="Enter subject…"
+              placeholder="Subject…"
               className="flex-1 bg-transparent text-sm text-codex-text placeholder-codex-muted focus:outline-none"
             />
             {subject.length > 100 && (
@@ -373,10 +452,15 @@ function ComposeModal({ onClose, onSent, characters, replyTo }) {
             )}
           </div>
 
-          {/* Character attachment */}
-          {characters.length > 0 && (
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-codex-border">
-              <span className="text-xs text-codex-muted w-12 shrink-0">📜 Sheet</span>
+          {/* Character sheet — always shown */}
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-codex-border">
+            <Scroll size={13} className="text-codex-muted shrink-0" />
+            <span className="text-xs text-codex-muted w-12 shrink-0">Sheet</span>
+            {hasNoCharacters ? (
+              <span className="flex-1 text-xs text-codex-muted/60 italic">
+                No character sheets on file yet.
+              </span>
+            ) : (
               <select
                 value={characterId}
                 onChange={e => setCharacterId(e.target.value)}
@@ -389,8 +473,8 @@ function ComposeModal({ onClose, onSent, characters, replyTo }) {
                   </option>
                 ))}
               </select>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Body */}
           <div className="flex-1 min-h-0 flex flex-col px-4 pt-3 pb-2">
@@ -399,30 +483,24 @@ function ComposeModal({ onClose, onSent, characters, replyTo }) {
               onChange={e => setBody(e.target.value)}
               maxLength={5000}
               placeholder="Write your message…"
+              autoFocus={!!replyTo}
               className="flex-1 bg-transparent text-sm text-codex-text placeholder-codex-muted
                 focus:outline-none resize-none leading-relaxed min-h-[120px]"
             />
             <div className="flex justify-end pt-1">
               <span className={`text-[10px] ${bodyRemaining < 200 ? bodyRemaining < 50 ? 'text-red-400' : 'text-amber-400' : 'text-codex-muted'}`}>
-                {bodyRemaining.toLocaleString()} characters remaining
+                {bodyRemaining.toLocaleString()} remaining
               </span>
             </div>
           </div>
 
-          {/* Error */}
           {error && (
-            <p className="px-4 py-2 text-xs text-red-400 bg-red-500/5 border-t border-red-500/20">
-              {error}
-            </p>
+            <p className="px-4 py-2 text-xs text-red-400 bg-red-500/5 border-t border-red-500/20">{error}</p>
           )}
 
-          {/* Footer */}
           <div className="flex items-center justify-between px-4 py-3 border-t border-codex-border">
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-sm text-codex-muted hover:text-codex-text transition-colors"
-            >
+            <button type="button" onClick={onClose}
+              className="text-sm text-codex-muted hover:text-codex-text transition-colors">
               Cancel
             </button>
             <button
@@ -432,7 +510,7 @@ function ComposeModal({ onClose, onSent, characters, replyTo }) {
                 text-codex-bg text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Send size={13} />
-              {sending ? 'Sending…' : 'Send Raven'}
+              {sending ? 'Sending…' : 'Dispatch Raven'}
             </button>
           </div>
         </form>
@@ -442,7 +520,6 @@ function ComposeModal({ onClose, onSent, characters, replyTo }) {
 }
 
 // ─── Empty State ──────────────────────────────────────────────────────────────
-
 function EmptyPane({ tab, onCompose }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-8 py-16">
@@ -454,25 +531,19 @@ function EmptyPane({ tab, onCompose }) {
           {tab === 'inbox' ? 'Your inbox is empty.' : 'You haven\'t sent any ravens.'}
         </p>
         <p className="text-xs text-codex-muted mt-1">
-          {tab === 'inbox'
-            ? 'Ravens sent to you will appear here.'
-            : 'Send your first raven to get started.'}
+          {tab === 'inbox' ? 'Ravens sent to you will appear here.' : 'Send your first raven to get started.'}
         </p>
       </div>
       {tab === 'sent' && (
-        <button
-          onClick={onCompose}
+        <button onClick={onCompose}
           className="flex items-center gap-2 px-4 py-2 rounded-xl border border-codex-gold/40
-            text-codex-gold text-sm hover:bg-codex-gold/10 transition-colors"
-        >
+            text-codex-gold text-sm hover:bg-codex-gold/10 transition-colors">
           <Feather size={13} /> Send a Raven
         </button>
       )}
     </div>
   )
 }
-
-// ─── No Selection State ───────────────────────────────────────────────────────
 
 function NoSelection() {
   return (
@@ -483,7 +554,6 @@ function NoSelection() {
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-
 export default function RavenPost() {
   const { user, logout }            = useAuth()
   const navigate                    = useNavigate()
@@ -499,10 +569,7 @@ export default function RavenPost() {
   const [replyTo, setReplyTo]       = useState(null)
   const [characters, setCharacters] = useState([])
 
-  // Mobile: 'list' | 'detail' | 'compose'
   const [mobileView, setMobileView] = useState('list')
-
-  // ── Load message list ──────────────────────────────────────────────────────
 
   const loadMessages = useCallback(async (activeTab = tab, activePage = page) => {
     setLoadingList(true)
@@ -518,42 +585,28 @@ export default function RavenPost() {
     }
   }, [tab, page])
 
-  useEffect(() => {
-    loadMessages(tab, page)
-  }, [tab, page]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadMessages(tab, page) }, [tab, page]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load characters for compose attachment picker
   useEffect(() => {
     api.get('/characters')
-      .then(({ characters: chars }) => setCharacters(chars))
+      .then(({ characters: chars }) => setCharacters(chars ?? []))
       .catch(() => {})
   }, [])
 
-  // ── Tab change ─────────────────────────────────────────────────────────────
-
   function switchTab(newTab) {
     if (newTab === tab) return
-    setTab(newTab)
-    setPage(1)
-    setSelectedId(null)
-    setMessages([])
-    setMobileView('list')
+    setTab(newTab); setPage(1); setSelectedId(null); setMessages([]); setMobileView('list')
   }
-
-  // ── Select a message ───────────────────────────────────────────────────────
 
   function selectMessage(id) {
     setSelectedId(id)
     setMobileView('detail')
-    // Optimistically mark as read in the list
     if (tab === 'inbox') {
       setMessages(prev => prev.map(m =>
         m.id === id && !m.read_at ? { ...m, read_at: new Date().toISOString() } : m
       ))
     }
   }
-
-  // ── Delete a message ───────────────────────────────────────────────────────
 
   function handleDeleted(id) {
     setMessages(prev => prev.filter(m => m.id !== id))
@@ -562,45 +615,28 @@ export default function RavenPost() {
     setMobileView('list')
   }
 
-  // ── Compose ────────────────────────────────────────────────────────────────
-
   function openCompose(reply = null) {
-    setReplyTo(reply)
-    setComposing(true)
-    setMobileView('compose')
+    setReplyTo(reply); setComposing(true); setMobileView('compose')
   }
 
   function handleSent() {
-    // Refresh the sent tab to show the new message
-    if (tab === 'sent') {
-      loadMessages('sent', 1)
-      setPage(1)
-    }
+    if (tab === 'sent') { loadMessages('sent', 1); setPage(1) }
   }
 
-  // ── Logout ─────────────────────────────────────────────────────────────────
-
-  function handleLogout() {
-    logout()
-    navigate('/', { replace: true })
-  }
+  function handleLogout() { logout(); navigate('/', { replace: true }) }
 
   const hasMore = messages.length < total
-
-  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-codex-bg flex flex-col">
       <Helmet><title>The Raven Post — CampaignCodex</title></Helmet>
 
-      {/* ── Top Nav ── */}
+      {/* Top nav */}
       <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link
-              to="/dashboard"
-              className="flex items-center gap-1.5 text-xs text-codex-muted hover:text-codex-gold transition-colors"
-            >
+            <Link to="/dashboard"
+              className="flex items-center gap-1.5 text-xs text-codex-muted hover:text-codex-gold transition-colors">
               <ArrowLeft size={13} /> Dashboard
             </Link>
             <div className="flex items-center gap-2 text-codex-gold">
@@ -609,10 +645,8 @@ export default function RavenPost() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Link
-              to="/settings"
-              className="flex items-center gap-1.5 text-sm text-codex-subtext hover:text-codex-gold transition-colors group"
-            >
+            <Link to="/settings"
+              className="flex items-center gap-1.5 text-sm text-codex-subtext hover:text-codex-gold transition-colors group">
               <span className="hidden sm:block text-xs">{user?.username}</span>
               <Settings size={14} className="text-codex-muted group-hover:text-codex-gold transition-colors" />
             </Link>
@@ -631,41 +665,37 @@ export default function RavenPost() {
         </div>
       </header>
 
-      {/* ── Body: two-column layout ── */}
       <div className="flex-1 flex max-w-6xl w-full mx-auto">
 
-        {/* ── Left sidebar (message list) ─────────────────────────────── */}
+        {/* Left sidebar */}
         <aside className={`
           w-full sm:w-72 md:w-80 flex-shrink-0 border-r border-codex-border
           flex flex-col bg-codex-surface/30
           ${mobileView !== 'list' ? 'hidden sm:flex' : 'flex'}
         `}>
-          {/* Sidebar header */}
-          <div className="px-4 py-4 border-b border-codex-border flex flex-col gap-3">
+          {/* Going Postal stamp header */}
+          <PostalStamp />
+
+          {/* New Raven button + tabs */}
+          <div className="px-4 py-3 border-b border-codex-border flex flex-col gap-3">
             <button
               onClick={() => openCompose()}
               className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl
-                bg-codex-gold hover:bg-codex-goldHover text-codex-bg text-sm font-semibold
-                transition-all"
+                bg-codex-gold hover:bg-codex-goldHover text-codex-bg text-sm font-semibold transition-all"
             >
               <Feather size={14} /> New Raven
             </button>
-
-            {/* Tab bar */}
             <div className="flex rounded-lg border border-codex-border overflow-hidden">
               {[
                 { key: 'inbox', label: 'Inbox', icon: <Inbox size={12} /> },
                 { key: 'sent',  label: 'Sent',  icon: <Mail  size={12} /> },
               ].map(({ key, label, icon }) => (
-                <button
-                  key={key}
-                  onClick={() => switchTab(key)}
+                <button key={key} onClick={() => switchTab(key)}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium
                     transition-all ${tab === key
                       ? 'bg-codex-gold/15 text-codex-gold'
                       : 'text-codex-muted hover:text-codex-subtext'
-                    }`}
-                >
+                    }`}>
                   {icon} {label}
                 </button>
               ))}
@@ -693,10 +723,8 @@ export default function RavenPost() {
                 ))}
                 {hasMore && (
                   <div className="p-4 text-center">
-                    <button
-                      onClick={() => setPage(p => p + 1)}
-                      className="text-xs text-codex-muted hover:text-codex-gold transition-colors"
-                    >
+                    <button onClick={() => setPage(p => p + 1)}
+                      className="text-xs text-codex-muted hover:text-codex-gold transition-colors">
                       Load more ({total - messages.length} remaining)
                     </button>
                   </div>
@@ -706,7 +734,7 @@ export default function RavenPost() {
           </div>
         </aside>
 
-        {/* ── Right panel (message detail / empty state) ─────────────── */}
+        {/* Right panel */}
         <main className={`
           flex-1 flex flex-col min-h-0 min-w-0
           ${mobileView === 'list' ? 'hidden sm:flex' : 'flex'}
@@ -726,7 +754,6 @@ export default function RavenPost() {
         </main>
       </div>
 
-      {/* ── Compose Modal ── */}
       {composing && (
         <ComposeModal
           onClose={() => { setComposing(false); setReplyTo(null); setMobileView(selectedId ? 'detail' : 'list') }}

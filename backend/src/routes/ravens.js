@@ -207,7 +207,38 @@ router.get('/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Message not found.' })
     }
 
-    res.json({ message: msg })
+    // Recursively fetch the parent chain (up to 5 levels) so the UI can show
+    // the full correspondence thread below the current message.
+    let thread = []
+    if (msg.parent_id) {
+      const chainResult = await db.query(
+        `WITH RECURSIVE chain AS (
+           SELECT rm.id, rm.parent_id, rm.subject, rm.body, rm.created_at,
+                  CASE WHEN s.is_admin THEN 'Site Administrator' ELSE s.username END AS sender_username,
+                  ch.character_name, ch.game_system AS character_game_system,
+                  0 AS depth
+           FROM raven_messages rm
+           JOIN users s ON s.id = rm.sender_id
+           LEFT JOIN characters ch ON ch.id = rm.character_id
+           WHERE rm.id = $1
+           UNION ALL
+           SELECT rm.id, rm.parent_id, rm.subject, rm.body, rm.created_at,
+                  CASE WHEN s.is_admin THEN 'Site Administrator' ELSE s.username END,
+                  ch.character_name, ch.game_system,
+                  c.depth + 1
+           FROM raven_messages rm
+           JOIN chain c ON rm.id = c.parent_id
+           JOIN users s ON s.id = rm.sender_id
+           LEFT JOIN characters ch ON ch.id = rm.character_id
+           WHERE c.depth < 5
+         )
+         SELECT * FROM chain ORDER BY created_at ASC`,
+        [msg.parent_id]
+      )
+      thread = chainResult.rows
+    }
+
+    res.json({ message: msg, thread })
   } catch (err) {
     console.error('[ravens/get]', err)
     res.status(500).json({ error: 'Failed to fetch message.' })
@@ -233,11 +264,15 @@ router.post('/', requireAuth, ravensLimiter, [
     .optional({ nullable: true })
     .custom(val => val === null || val === '' || isUUID(val))
     .withMessage('Invalid character ID.'),
+  body('parentId')
+    .optional({ nullable: true })
+    .custom(val => val === null || val === '' || isUUID(val))
+    .withMessage('Invalid parent message ID.'),
 ], async (req, res) => {
   if (validationErrors(req, res)) return
 
   const senderId = req.user.sub
-  const { recipientId, subject, body: msgBody, characterId } = req.body
+  const { recipientId, subject, body: msgBody, characterId, parentId } = req.body
 
   // Can't send to yourself
   if (recipientId === senderId) {
@@ -266,11 +301,21 @@ router.post('/', requireAuth, ravensLimiter, [
       safeCharId = characterId
     }
 
+    // Validate parentId — must be a message the sender is party to
+    let safeParentId = null
+    if (parentId && parentId !== '') {
+      const parentCheck = await db.query(
+        'SELECT id FROM raven_messages WHERE id = $1 AND (sender_id = $2 OR recipient_id = $2) LIMIT 1',
+        [parentId, senderId]
+      )
+      if (parentCheck.rows.length) safeParentId = parentId
+    }
+
     const result = await db.query(
-      `INSERT INTO raven_messages (sender_id, recipient_id, subject, body, character_id)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO raven_messages (sender_id, recipient_id, subject, body, character_id, parent_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, subject, created_at`,
-      [senderId, recipientId, subject.trim(), msgBody.trim(), safeCharId]
+      [senderId, recipientId, subject.trim(), msgBody.trim(), safeCharId, safeParentId]
     )
 
     // Push live notification to recipient — they get a dot without polling
