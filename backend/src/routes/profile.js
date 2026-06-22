@@ -23,17 +23,19 @@ const VALID_DISPLAY_PREFS = new Set(['username', 'first_and_username'])
 
 // ─── Shared stats helper ──────────────────────────────────────────────────────
 async function fetchStats(userId) {
-  const [statsRes, friendsRes] = await Promise.all([
+  const [statsRes, friendsRes, charsRes] = await Promise.all([
+    // Count campaigns where the user is GM (via gm_user_id) OR an active member.
+    // The GM is not inserted into campaign_members, so we must union both paths.
     db.query(
       `SELECT
-         COUNT(*) FILTER (WHERE cm.left_at IS NULL AND c.is_deleted = false)       AS campaign_count,
-         COUNT(*) FILTER (WHERE cm.left_at IS NULL AND c.is_deleted = false
-                            AND c.gm_user_id = $1)                                 AS dm_count,
-         COUNT(*) FILTER (WHERE cm.left_at IS NULL AND c.is_deleted = false
-                            AND c.gm_user_id != $1)                                AS player_count
-       FROM campaign_members cm
-       JOIN campaigns c ON c.id = cm.campaign_id
-       WHERE cm.user_id = $1`,
+         COUNT(DISTINCT c.id)                                                       AS campaign_count,
+         COUNT(DISTINCT c.id) FILTER (WHERE c.gm_user_id = $1)                     AS dm_count,
+         COUNT(DISTINCT c.id) FILTER (WHERE c.gm_user_id != $1
+                                       AND cm.user_id = $1 AND cm.left_at IS NULL)  AS player_count
+       FROM campaigns c
+       LEFT JOIN campaign_members cm ON cm.campaign_id = c.id AND cm.user_id = $1
+       WHERE c.is_deleted = false
+         AND (c.gm_user_id = $1 OR (cm.user_id = $1 AND cm.left_at IS NULL))`,
       [userId]
     ),
     db.query(
@@ -41,12 +43,17 @@ async function fetchStats(userId) {
        WHERE (sender_id = $1 OR receiver_id = $1) AND status = 'accepted'`,
       [userId]
     ),
+    db.query(
+      `SELECT COUNT(*) FROM characters WHERE user_id = $1`,
+      [userId]
+    ),
   ])
   return {
-    campaigns: parseInt(statsRes.rows[0]?.campaign_count ?? 0),
-    dm:        parseInt(statsRes.rows[0]?.dm_count        ?? 0),
-    player:    parseInt(statsRes.rows[0]?.player_count    ?? 0),
-    friends:   parseInt(friendsRes.rows[0]?.count         ?? 0),
+    campaigns:  parseInt(statsRes.rows[0]?.campaign_count ?? 0),
+    dm:         parseInt(statsRes.rows[0]?.dm_count        ?? 0),
+    player:     parseInt(statsRes.rows[0]?.player_count    ?? 0),
+    friends:    parseInt(friendsRes.rows[0]?.count         ?? 0),
+    characters: parseInt(charsRes.rows[0]?.count           ?? 0),
   }
 }
 

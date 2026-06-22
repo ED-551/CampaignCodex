@@ -11,7 +11,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import {
   BookOpen, ArrowLeft, MessageCircle, UserPlus, UserCheck, Clock,
-  Swords, Shield, Users, Scroll,
+  Swords, Shield, Users, Scroll, User,
 } from 'lucide-react'
 import { useAuth }   from '../context/AuthContext'
 import { useDM }     from '../context/DMContext'
@@ -199,6 +199,12 @@ export default function ProfilePage() {
                 icon={<Swords size={13} />}
                 label="Player"
                 value={profile.stats.player}
+                theme={theme}
+              />
+              <StatItem
+                icon={<User size={13} />}
+                label="Characters"
+                value={profile.stats.characters ?? 0}
                 theme={theme}
               />
               <StatItem
