@@ -8,6 +8,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
 import {
   BookOpen, ArrowLeft, MessageCircle, UserPlus, UserCheck, Clock,
   Swords, Shield, Users, Scroll,
@@ -137,6 +138,7 @@ export default function ProfilePage() {
 
   return (
     <PageShell>
+      <Helmet><title>{username}'s Profile — CampaignCodex</title></Helmet>
       <main className="flex-1 max-w-lg mx-auto w-full px-4 py-10">
         {/* ── Profile Card ── */}
         <div className={`bg-codex-card border ${theme.cardBorder} rounded-2xl overflow-hidden shadow-xl`}>

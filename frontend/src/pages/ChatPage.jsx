@@ -18,6 +18,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
 import { ArrowLeft, BookOpen, Send, Users, Eye } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
@@ -128,6 +129,7 @@ export default function ChatPage() {
 
   return (
     <div className="min-h-screen bg-codex-bg flex flex-col">
+      <Helmet><title>Chat — CampaignCodex</title></Helmet>
       {/* Nav */}
       <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-3">

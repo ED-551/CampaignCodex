@@ -1,0 +1,65 @@
+name: Deploy to Production
+
+# Trigger: manual dispatch OR push to main branch
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    # IMPORTANT: this runner must be installed on the CampaignCodex VM (192.168.1.207).
+    # See deployment runbook: scripts/setup-gh-runner.md
+    runs-on: self-hosted
+
+    steps:
+      # ── 1. Checkout ─────────────────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── 2. Install frontend dependencies ────────────────────────────────────
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      # ── 3. Build frontend ────────────────────────────────────────────────────
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      # ── 4. Install backend dependencies ─────────────────────────────────────
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci --omit=dev
+
+      # ── 5. Copy built frontend dist to app directory ─────────────────────────
+      - name: Sync frontend dist
+        run: |
+          rsync -av --delete \
+            frontend/dist/ \
+            /home/ragnarok1414/campaigncodex/frontend/dist/
+
+      # ── 6. Sync backend source ───────────────────────────────────────────────
+      - name: Sync backend
+        run: |
+          rsync -av --delete \
+            --exclude='.env' \
+            --exclude='node_modules' \
+            backend/ \
+            /home/ragnarok1414/campaigncodex/backend/
+
+      # ── 7. Install production backend deps on server ─────────────────────────
+      - name: Install backend deps on server
+        run: |
+          cd /home/ragnarok1414/campaigncodex/backend && npm ci --omit=dev
+
+      # ── 8. Restart API via PM2 ──────────────────────────────────────────────
+      - name: Restart PM2
+        run: pm2 restart campaigncodex-api
+
+      # ── 9. Confirm service is up ─────────────────────────────────────────────
+      - name: Health check
+        run: |
+          sleep 3
+          curl -sf http://localhost:3001/api/health || (echo "Health check failed!" && exit 1)

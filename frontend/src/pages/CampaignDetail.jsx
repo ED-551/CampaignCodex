@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, Copy, Check, Sword, Plus, BookOpen, X, MessageSquare, Send, Eye, EyeOff, Users, Crown, UserPlus, Settings, Flame } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { Helmet } from 'react-helmet-async'
 import { useSocket } from '../context/SocketContext'
 import { useDM } from '../context/DMContext'
 import { api } from '../utils/api'
@@ -182,6 +183,7 @@ export default function CampaignDetail() {
 
   return (
     <PageShell>
+      <Helmet><title>{campaign?.name ? `${campaign.name} — CampaignCodex` : 'Campaign — CampaignCodex'}</title></Helmet>
       {/* Header */}
       <div className="max-w-5xl mx-auto px-4 pt-8 pb-4">
         <Link to="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-codex-subtext hover:text-codex-text transition-colors mb-6">

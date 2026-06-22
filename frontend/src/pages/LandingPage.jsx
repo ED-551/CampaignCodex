@@ -1,4 +1,5 @@
 import { useLocation, Navigate } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
 import { useAuth } from '../context/AuthContext'
 import LoginForm from '../components/auth/LoginForm'
 import SignupForm from '../components/auth/SignupForm'
@@ -27,6 +28,7 @@ export default function LandingPage() {
 
   return (
     <div className="relative min-h-screen w-full flex items-center justify-center overflow-x-hidden py-8 bg-codex-bg">
+      <Helmet><title>CampaignCodex — Digital Companion for Tabletop RPGs</title></Helmet>
 
       {/* Background radial glow */}
       <div

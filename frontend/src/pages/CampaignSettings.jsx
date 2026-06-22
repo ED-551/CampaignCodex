@@ -4,6 +4,7 @@ import {
   ArrowLeft, Copy, Check, Trash2, Sword, BookOpen,
   X, Info, ExternalLink, Settings, Library,
 } from 'lucide-react'
+import { Helmet } from 'react-helmet-async'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../utils/api'
 import PageShell from '../components/layout/PageShell'
@@ -92,6 +93,7 @@ export default function CampaignSettings() {
 
   return (
     <PageShell>
+      <Helmet><title>Campaign Settings — CampaignCodex</title></Helmet>
       <div className="max-w-5xl mx-auto px-4 pt-8 pb-16">
 
         {/* Back link */}

@@ -21,6 +21,7 @@ import {
   ArrowLeft, Plus, Trash2, X, BookOpen, Sword, Save,
   ChevronDown, ChevronUp, ExternalLink,
 } from 'lucide-react'
+import { Helmet } from 'react-helmet-async'
 import { api } from '../utils/api'
 import PageShell from '../components/layout/PageShell'
 
@@ -267,6 +268,7 @@ export default function EncounterBuilder() {
 
   return (
     <PageShell>
+      <Helmet><title>Encounter Builder — CampaignCodex</title></Helmet>
       <form onSubmit={handleSave} className="max-w-5xl mx-auto px-4 pt-8 pb-16">
 
         {/* Back link */}

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
 import { useAuth } from '../context/AuthContext'
 import { BookOpen, ExternalLink, Shield, Heart, Users, AlertTriangle } from 'lucide-react'
 
@@ -67,6 +68,7 @@ export default function TermsPage() {
 
   return (
     <div className="min-h-screen bg-codex-bg">
+      <Helmet><title>Terms of Service — CampaignCodex</title></Helmet>
       {/* Header */}
       <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">

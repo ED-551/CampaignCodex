@@ -4,6 +4,7 @@ import {
   ArrowLeft, Sword, Plus, BookOpen, SkipForward, RefreshCw,
   X, Skull, Wifi, WifiOff, AlertTriangle, Heart, Shield, Crown, CheckSquare,
 } from 'lucide-react'
+import { Helmet } from 'react-helmet-async'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
 import { api } from '../utils/api'
@@ -598,6 +599,7 @@ export default function CombatPage() {
 
   return (
     <Shell>
+      <Helmet><title>Combat — CampaignCodex</title></Helmet>
       {/* ── Header ── */}
       <header className="flex-none border-b border-codex-border bg-codex-surface/80 backdrop-blur-sm sticky top-0 z-20">
         <div className="flex items-center justify-between px-4 h-12 gap-3">

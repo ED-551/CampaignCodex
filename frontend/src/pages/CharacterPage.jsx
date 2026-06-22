@@ -1,5 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
 import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
 import { ArrowLeft, BookOpen, Trash2, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../utils/api'
@@ -95,6 +96,7 @@ export default function CharacterPage() {
 
   return (
     <div className="min-h-screen bg-codex-bg">
+      <Helmet><title>{character?.name ? `${character.name} — CampaignCodex` : 'Character — CampaignCodex'}</title></Helmet>
       {/* Nav */}
       <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">

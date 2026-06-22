@@ -19,6 +19,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link }      from 'react-router-dom'
 import { ArrowLeft, BookOpen, Plus, Trash2, X, Pencil, Share2, Send, Check, Square, CheckSquare, Search } from 'lucide-react'
+import { Helmet }                            from 'react-helmet-async'
 import { api }                               from '../utils/api'
 import ShadowdarkMonsterForm                 from '../components/bestiary/ShadowdarkMonsterForm'
 import MorkborgMonsterForm                   from '../components/bestiary/MorkborgMonsterForm'
@@ -282,6 +283,7 @@ export default function BestiaryPage() {
 
   return (
     <div className="min-h-screen bg-codex-bg">
+      <Helmet><title>{meta?.label ? `${meta.label} Bestiary` : 'Bestiary'} — CampaignCodex</title></Helmet>
 
       {/* ── Nav ── */}
       <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">

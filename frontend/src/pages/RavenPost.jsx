@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
 import {
   BookOpen, ArrowLeft, Send, Trash2, Reply,
   Feather, Inbox, Mail, Settings, LogOut, Shield, ChevronLeft,
@@ -590,6 +591,7 @@ export default function RavenPost() {
 
   return (
     <div className="min-h-screen bg-codex-bg flex flex-col">
+      <Helmet><title>The Raven Post — CampaignCodex</title></Helmet>
 
       {/* ── Top Nav ── */}
       <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">

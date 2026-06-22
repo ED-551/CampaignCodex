@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
 import { Shield, ArrowLeft, BookOpen, Search, Users, UserX, CheckCircle, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../utils/api'
@@ -113,6 +114,7 @@ export default function ModeratorDashboard() {
 
   return (
     <div className="min-h-screen bg-codex-bg">
+      <Helmet><title>Moderator — CampaignCodex</title></Helmet>
 
       {/* ── Nav ── */}
       <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">

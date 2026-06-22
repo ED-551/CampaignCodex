@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
 import { BookOpen, Heart, ArrowLeft, ExternalLink } from 'lucide-react'
 
 const RULEBOOKS = [
@@ -34,6 +35,7 @@ const ACCENT = {
 export default function DonatePage() {
   return (
     <div className="min-h-screen bg-codex-bg">
+      <Helmet><title>Support CampaignCodex</title></Helmet>
       {/* Header */}
       <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">

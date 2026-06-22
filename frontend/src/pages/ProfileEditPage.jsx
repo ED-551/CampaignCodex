@@ -8,6 +8,7 @@
 
 import { useState, useEffect } from 'react'
 import { Link, useNavigate }   from 'react-router-dom'
+import { Helmet }              from 'react-helmet-async'
 import {
   BookOpen, ArrowLeft, Eye, EyeOff, Check, Swords, Shield, Users, Scroll,
 } from 'lucide-react'
@@ -176,6 +177,7 @@ export default function ProfileEditPage() {
 
   return (
     <Shell>
+      <Helmet><title>Edit Profile — CampaignCodex</title></Helmet>
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-10">
 
         {/* ── Page title + preview toggle ── */}

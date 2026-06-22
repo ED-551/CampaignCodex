@@ -9,6 +9,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, Plus, Pencil, Trash2, Sword, Search, X, BookOpen } from 'lucide-react'
+import { Helmet } from 'react-helmet-async'
 import { api } from '../utils/api'
 import PageShell from '../components/layout/PageShell'
 
@@ -84,6 +85,7 @@ export default function EncounterLibrary() {
 
   return (
     <PageShell>
+      <Helmet><title>Encounters — CampaignCodex</title></Helmet>
       <div className="max-w-5xl mx-auto px-4 pt-8 pb-16">
 
         {/* Back link */}

@@ -1,0 +1,17 @@
+{
+  "name": "CampaignCodex",
+  "short_name": "CampaignCodex",
+  "description": "Digital companion for tabletop RPG campaigns",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0b0f",
+  "theme_color": "#c9a84c",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

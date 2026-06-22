@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
 import { api } from '../utils/api'
 import { setToken } from '../utils/api'
 import { useAuth } from '../context/AuthContext'
@@ -60,6 +61,7 @@ export default function VerifyEmailPage() {
 
   return (
     <div className="min-h-screen bg-codex-bg flex items-center justify-center p-4">
+      <Helmet><title>Verify Email — CampaignCodex</title></Helmet>
       <div className="w-full max-w-sm">
 
         {/* Header */}
