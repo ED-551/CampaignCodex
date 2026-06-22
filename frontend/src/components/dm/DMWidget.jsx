@@ -13,6 +13,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { MessageCircle, X, ChevronLeft, Send, Search, UserPlus,
          Users, Bell, MoreHorizontal, UserCheck, UserX, Clock, ExternalLink,
@@ -513,11 +514,12 @@ function FriendsTab({ friends, newFriendIds, onDM }) {
         })}
       </ul>
 
-      {/* Dropdown rendered fixed to viewport — never clipped by overflow:hidden */}
-      {openMenuId && menuPos && activeFriend && (
+      {/* Dropdown rendered into document.body via portal — escapes the widget's
+          overflow:hidden entirely so it can never be clipped */}
+      {openMenuId && menuPos && activeFriend && createPortal(
         <div
           ref={dropdownRef}
-          style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 60 }}
+          style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 9999 }}
           className="w-44 bg-codex-card border border-codex-border rounded-xl shadow-xl py-1 flex flex-col overflow-hidden"
         >
           <button
@@ -549,7 +551,8 @@ function FriendsTab({ friends, newFriendIds, onDM }) {
           >
             <Trash2 size={12} /> Block User
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
