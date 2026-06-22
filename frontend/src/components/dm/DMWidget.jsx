@@ -633,9 +633,11 @@ function ChatPane({ targetUserId, targetUsername, msgs, connected, user, onBack,
   const [confirmBlock, setConfirmBlock] = useState(false)
   const [blocking,    setBlocking]    = useState(false)
   const [friendLoading, setFriendLoading] = useState(false)
-  const bottomRef = useRef(null)
-  const inputRef  = useRef(null)
-  const menuRef   = useRef(null)
+  const bottomRef          = useRef(null)
+  const scrollContainerRef = useRef(null)
+  const didScrollRef       = useRef(false)
+  const inputRef           = useRef(null)
+  const menuRef            = useRef(null)
 
   const friendStatus = getFriendStatus(targetUserId)
 
@@ -648,9 +650,17 @@ function ChatPane({ targetUserId, targetUsername, msgs, connected, user, onBack,
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  // Auto-scroll on new messages
+  // Auto-scroll on new messages — instant jump on open, then only if near bottom
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = scrollContainerRef.current
+    if (!el) return
+    if (!didScrollRef.current) {
+      el.scrollTop = el.scrollHeight
+      didScrollRef.current = true
+    } else {
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150
+      if (nearBottom) el.scrollTop = el.scrollHeight
+    }
   }, [msgs])
 
   const handleSend = useCallback((e) => {
@@ -844,7 +854,7 @@ function ChatPane({ targetUserId, targetUsername, msgs, connected, user, onBack,
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-2 scroll-smooth">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-2">
         {isLoading && (
           <div className="flex-1 flex items-center justify-center">
             <p className="text-xs text-codex-muted animate-pulse">Loading…</p>

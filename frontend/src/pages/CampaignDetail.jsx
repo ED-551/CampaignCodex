@@ -680,9 +680,11 @@ function CampaignChat({ campaignId, isGM, gameSystem, userTierMap = {} }) {
   // zero — not just at the next re-render from an inline Date comparison.
   const lightRunning = Boolean(lightExpiresAt) && lightDisplay > 0
 
-  const bottomRef         = useRef(null)
-  const inputRef          = useRef(null)
-  const countdownInterval = useRef(null)
+  const bottomRef          = useRef(null)
+  const scrollContainerRef = useRef(null)
+  const didScrollRef       = useRef(false)
+  const inputRef           = useRef(null)
+  const countdownInterval  = useRef(null)
 
   // ── Join room + listen for messages ────────────────────────────────────────
   useEffect(() => {
@@ -700,7 +702,7 @@ function CampaignChat({ campaignId, isGM, gameSystem, userTierMap = {} }) {
 
     socket.emit('join_campaign', { campaignId }, ({ messages: history, spectatorModeActive, lightTimerExpiresAt, lightTimerRemaining, error }) => {
       if (error) { setChatError(error); return }
-      setMessages(history ?? [])
+      setMessages((history ?? []).slice(-200))
       setJoined(true)
       if (spectatorModeActive) {
         setSpectatorStatus('active')
@@ -713,7 +715,7 @@ function CampaignChat({ campaignId, isGM, gameSystem, userTierMap = {} }) {
 
     // ── Incoming messages ──────────────────────────────────────────────────
     function handleNewMessage(msg) {
-      setMessages(prev => [...prev, msg])
+      setMessages(prev => [...prev, msg].slice(-200))
     }
 
     // ── Spectator: GM receives consent progress updates ────────────────────
@@ -825,8 +827,17 @@ function CampaignChat({ campaignId, isGM, gameSystem, userTierMap = {} }) {
   }
 
   // ── Auto-scroll to latest message ──────────────────────────────────────────
+  // First render → instant jump to bottom. New messages → jump only if near bottom.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = scrollContainerRef.current
+    if (!el) return
+    if (!didScrollRef.current) {
+      el.scrollTop = el.scrollHeight
+      didScrollRef.current = true
+    } else {
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150
+      if (nearBottom) el.scrollTop = el.scrollHeight
+    }
   }, [messages])
 
   // ── Send message ────────────────────────────────────────────────────────────
@@ -1098,7 +1109,7 @@ function CampaignChat({ campaignId, isGM, gameSystem, userTierMap = {} }) {
       )}
 
       {/* ── Message log ── */}
-      <div className="h-80 overflow-y-auto px-4 py-3 flex flex-col gap-3 scroll-smooth">
+      <div ref={scrollContainerRef} className="h-80 overflow-y-auto px-4 py-3 flex flex-col gap-3">
         {joined && messages.length === 0 && (
           <div className="flex-1 flex items-center justify-center">
             <p className="text-xs text-codex-muted italic text-center">

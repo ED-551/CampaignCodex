@@ -40,6 +40,13 @@ export function DMProvider({ children }) {
   const activeUserIdRef = useRef(null)
   useEffect(() => { activeUserIdRef.current = activeUserId }, [activeUserId])
 
+  // Track which DM socket rooms this client has explicitly joined via open_dm.
+  // A new_dm arriving via the personal user:<id> room does NOT count as joined —
+  // the DM room itself must be joined so we can send/receive in both directions
+  // and fetch the full 50-message history.
+  // Cleared on disconnect so rooms are re-joined after a reconnect.
+  const joinedDMRooms = useRef(new Set())
+
   // ── Hydrate / clear conversation list on auth state change ────────────────
   // On login: fetch all past conversation partners from the DB so the DMs tab
   // is pre-populated even after a page refresh.
@@ -77,7 +84,7 @@ export function DMProvider({ children }) {
       setMessages(prev => {
         const bucket = prev[otherUserId] ?? []
         if (bucket.some(m => m.id === msg.id)) return prev
-        return { ...prev, [otherUserId]: [...bucket, msg] }
+        return { ...prev, [otherUserId]: [...bucket, msg].slice(-200) }
       })
 
       // Increment unread only if this convo isn't the one currently open
@@ -95,8 +102,18 @@ export function DMProvider({ children }) {
       })
     }
 
-    socket.on('new_dm', handleNewDM)
-    return () => socket.off('new_dm', handleNewDM)
+    function handleDisconnect() {
+      // Socket rooms are lost on disconnect — clear so switchTo/openDM will
+      // re-join the correct rooms after reconnect.
+      joinedDMRooms.current.clear()
+    }
+
+    socket.on('new_dm',     handleNewDM)
+    socket.on('disconnect', handleDisconnect)
+    return () => {
+      socket.off('new_dm',     handleNewDM)
+      socket.off('disconnect', handleDisconnect)
+    }
   }, [socket, user])
 
   // ── Rejoin DM rooms on reconnect ──────────────────────────────────────────
@@ -106,17 +123,18 @@ export function DMProvider({ children }) {
     if (!socket || !connected || openConvos.length === 0) return
 
     openConvos.forEach(({ userId }) => {
+      joinedDMRooms.current.add(userId)
       socket.emit('open_dm', { targetUserId: userId }, ({ messages: history, error }) => {
         if (error || !history) return
-        // Merge: don't overwrite messages received during the disconnect gap
+        // Merge: keep any messages received during the disconnect gap,
+        // prepend history items that aren't already present.
         setMessages(prev => {
           const existing = prev[userId] ?? []
-          // Deduplicate by id (history is the last-50 snapshot)
           const existingIds = new Set(existing.map(m => m.id))
-          const fresh = history.filter(m => !existingIds.has(m.id))
+          const missing = history.filter(m => !existingIds.has(m.id))
           return {
             ...prev,
-            [userId]: [...history.filter(m => !fresh.some(() => false)), ...fresh],
+            [userId]: [...missing, ...existing].slice(-200),
           }
         })
       })
@@ -142,16 +160,19 @@ export function DMProvider({ children }) {
 
     if (!socket || !connected) return
 
-    // Fetch history only on first open (subsequent switches reuse cached messages)
-    setMessages(prev => {
-      if (prev[targetUserId] !== undefined) return prev  // already loaded
-      // Emit join + history fetch
-      socket.emit('open_dm', { targetUserId }, ({ messages: history, error }) => {
-        if (error || !history) return
-        setMessages(p => ({ ...p, [targetUserId]: history }))
+    // Join the DM socket room + fetch history on first open.
+    // Guard by joinedDMRooms so we don't re-fetch on every focus change.
+    if (!joinedDMRooms.current.has(targetUserId)) {
+      joinedDMRooms.current.add(targetUserId)
+      setMessages(prev => {
+        socket.emit('open_dm', { targetUserId }, ({ messages: history, error }) => {
+          if (error || !history) return
+          setMessages(p => ({ ...p, [targetUserId]: history.slice(-200) }))
+        })
+        if (prev[targetUserId] !== undefined) return prev  // keep existing while loading
+        return { ...prev, [targetUserId]: null }           // null = loading indicator
       })
-      return { ...prev, [targetUserId]: null }  // null = loading
-    })
+    }
   }, [socket, connected])
 
   // ── closeDM ────────────────────────────────────────────────────────────────
@@ -159,6 +180,7 @@ export function DMProvider({ children }) {
     setOpenConvos(prev => prev.filter(c => c.userId !== targetUserId))
     setMessages(prev => { const n = { ...prev }; delete n[targetUserId]; return n })
     setUnread(prev => { const n = { ...prev }; delete n[targetUserId]; return n })
+    joinedDMRooms.current.delete(targetUserId)
 
     if (activeUserId === targetUserId) {
       setActiveUserId(null)
@@ -178,14 +200,25 @@ export function DMProvider({ children }) {
     setActiveUserId(targetUserId)
     setUnread(prev => ({ ...prev, [targetUserId]: 0 }))
 
-    // Join socket room if not already in it (e.g., conversation loaded from list)
-    if (socket && connected && !messages[targetUserId]) {
+    // Join the DM socket room if we haven't explicitly joined it yet.
+    // This handles the case where a new_dm arrived via the personal user:<id>
+    // room (which only delivers the single message) before the user clicked
+    // the conversation — we need to join the DM room and fetch full history.
+    if (socket && connected && !joinedDMRooms.current.has(targetUserId)) {
+      joinedDMRooms.current.add(targetUserId)
       socket.emit('open_dm', { targetUserId }, ({ messages: history, error }) => {
         if (error || !history) return
-        setMessages(prev => ({ ...prev, [targetUserId]: history }))
+        setMessages(prev => {
+          const existing = prev[targetUserId] ?? []
+          if (existing.length === 0) return { ...prev, [targetUserId]: history.slice(-200) }
+          // Prepend any history messages not already in the live feed
+          const existingIds = new Set(existing.map(m => m.id))
+          const missing = history.filter(m => !existingIds.has(m.id))
+          return { ...prev, [targetUserId]: [...missing, ...existing].slice(-200) }
+        })
       })
     }
-  }, [socket, connected, messages])
+  }, [socket, connected])
 
   const toggleWidget = useCallback(() => setWidgetOpen(w => !w), [])
 

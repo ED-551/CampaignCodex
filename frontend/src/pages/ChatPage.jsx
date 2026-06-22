@@ -294,15 +294,17 @@ function RoomView({ room, socket, connected, user, onExit }) {
   const [sending,   setSending]   = useState(false)
   const [chatErr,   setChatErr]   = useState('')
   const [showWho,   setShowWho]   = useState(false)  // mobile "Who's Here" toggle
-  const bottomRef = useRef(null)
-  const inputRef  = useRef(null)
+  const bottomRef        = useRef(null)
+  const scrollContainerRef = useRef(null)
+  const didScrollRef     = useRef(false)
+  const inputRef         = useRef(null)
 
   // ── Listen for room events ──────────────────────────────────────────────────
   useEffect(() => {
     if (!socket) return
 
     function handleMessage(msg) {
-      setMessages(prev => [...prev, msg])
+      setMessages(prev => [...prev, msg].slice(-200))
     }
     function handleOccupants(list) {
       setOccupants(list)
@@ -318,8 +320,19 @@ function RoomView({ room, socket, connected, user, onExit }) {
   }, [socket])
 
   // ── Auto-scroll ─────────────────────────────────────────────────────────────
+  // First load → instant jump to bottom (no animation).
+  // Subsequent new messages → instant jump only if user is already near the bottom
+  // so reading history isn't interrupted.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = scrollContainerRef.current
+    if (!el) return
+    if (!didScrollRef.current) {
+      el.scrollTop = el.scrollHeight
+      didScrollRef.current = true
+    } else {
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150
+      if (nearBottom) el.scrollTop = el.scrollHeight
+    }
   }, [messages])
 
   // ── Send ────────────────────────────────────────────────────────────────────
@@ -357,7 +370,7 @@ function RoomView({ room, socket, connected, user, onExit }) {
   }
 
   return (
-    <div className="flex-1 flex flex-col max-w-5xl mx-auto w-full px-4 py-4 gap-3">
+    <div className="flex flex-col max-w-5xl mx-auto w-full px-4 py-4 gap-3 h-[calc(100dvh-3.5rem)]">
 
       {/* ── Room header ── */}
       <div className="flex items-center justify-between">
@@ -402,8 +415,8 @@ function RoomView({ room, socket, connected, user, onExit }) {
           )}
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto bg-codex-surface border border-codex-border
-            rounded-xl p-4 flex flex-col gap-2.5 scroll-smooth">
+          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto bg-codex-surface border border-codex-border
+            rounded-xl p-4 flex flex-col gap-2.5">
 
             {messages.length === 0 && (
               <div className="flex-1 flex items-center justify-center py-16">
@@ -534,15 +547,17 @@ function RoomView({ room, socket, connected, user, onExit }) {
 // campaign room to the `spectator:<campaignId>` Socket.io room via `room_message`.
 // The session may end at any time (GM closes it) — we handle `spectator_ended`.
 function SpectatorView({ session, socket, connected, onExit }) {
-  const [messages, setMessages] = useState([])
-  const [ended,    setEnded]    = useState(false)
-  const bottomRef = useRef(null)
+  const [messages, setMessages]    = useState([])
+  const [ended,    setEnded]       = useState(false)
+  const bottomRef                  = useRef(null)
+  const scrollContainerRef         = useRef(null)
+  const didScrollRef               = useRef(false)
 
   useEffect(() => {
     if (!socket) return
 
     function handleMessage(msg) {
-      setMessages(prev => [...prev, msg])
+      setMessages(prev => [...prev, msg].slice(-200))
     }
     function handleEnded({ campaignId }) {
       if (campaignId !== session.campaignId) return
@@ -560,11 +575,19 @@ function SpectatorView({ session, socket, connected, onExit }) {
   }, [socket, session.campaignId])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = scrollContainerRef.current
+    if (!el) return
+    if (!didScrollRef.current) {
+      el.scrollTop = el.scrollHeight
+      didScrollRef.current = true
+    } else {
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150
+      if (nearBottom) el.scrollTop = el.scrollHeight
+    }
   }, [messages])
 
   return (
-    <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full px-4 py-4 gap-3">
+    <div className="flex flex-col max-w-3xl mx-auto w-full px-4 py-4 gap-3 h-[calc(100dvh-3.5rem)]">
 
       {/* ── Header ── */}
       <div className="flex items-center gap-3">
@@ -604,8 +627,8 @@ function SpectatorView({ session, socket, connected, onExit }) {
       )}
 
       {/* ── Message feed — read only ── */}
-      <div className="flex-1 overflow-y-auto bg-codex-surface border border-codex-border
-        rounded-xl p-4 flex flex-col gap-2.5 scroll-smooth">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto bg-codex-surface border border-codex-border
+        rounded-xl p-4 flex flex-col gap-2.5">
 
         {messages.length === 0 && !ended && (
           <div className="flex-1 flex items-center justify-center py-16">
