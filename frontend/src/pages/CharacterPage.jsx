@@ -99,7 +99,7 @@ export default function CharacterPage() {
       <Helmet><title>{character?.name ? `${character.name} — CampaignCodex` : 'Character — CampaignCodex'}</title></Helmet>
       {/* Nav */}
       <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link to="/dashboard" className="flex items-center gap-2 text-codex-gold">
             <BookOpen size={16} />
             <span className="font-display text-sm tracking-wide">CampaignCodex</span>
@@ -121,7 +121,7 @@ export default function CharacterPage() {
       {character && SheetComponent ? (
         <>
           {/* Back + optional GM banner — slim, padded strip above the sheet */}
-          <div className="max-w-5xl mx-auto px-4 pt-6 pb-2">
+          <div className="max-w-7xl mx-auto px-4 pt-6 pb-2">
             <Link
               to={campaignId ? `/campaigns/${campaignId}` : '/dashboard'}
               className="inline-flex items-center gap-1.5 text-sm text-codex-subtext hover:text-codex-text transition-colors"
@@ -156,7 +156,7 @@ export default function CharacterPage() {
 
           {/* Danger Zone */}
           {isOwner && !readOnly && (
-            <div className="max-w-5xl mx-auto px-4 mt-8 pb-12 border-t border-codex-border pt-8">
+            <div className="max-w-7xl mx-auto px-4 mt-8 pb-12 border-t border-codex-border pt-8">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-widest text-codex-muted mb-1">
@@ -182,7 +182,7 @@ export default function CharacterPage() {
         </>
       ) : (
         /* Wizard / loading / error — use the normal constrained main */
-        <main className="max-w-5xl mx-auto px-4 py-8">
+        <main className="max-w-7xl mx-auto px-4 py-8">
           <Link
             to={campaignId ? `/campaigns/${campaignId}` : '/dashboard'}
             className="inline-flex items-center gap-1.5 text-sm text-codex-subtext hover:text-codex-text transition-colors mb-6"

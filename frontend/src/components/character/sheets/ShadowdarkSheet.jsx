@@ -679,7 +679,7 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
         </div>
       )}
 
-      <div className="max-w-3xl mx-auto p-4 space-y-6">
+      <div className="max-w-5xl mx-auto p-4 space-y-6">
 
         {/* Sheet Title */}
         <div className="text-center pt-2 pb-1">

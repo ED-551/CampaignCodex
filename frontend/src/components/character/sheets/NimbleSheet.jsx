@@ -623,24 +623,24 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
 
   return (
     <div className="min-h-screen bg-codex-bg text-codex-text font-nimble">
-      {/* Top bar */}
-      <div className="sticky top-0 z-10 bg-codex-bg/95 backdrop-blur border-b border-codex-border px-6 py-2 flex items-center justify-between">
+      {/* Top bar — title centered on full viewport; save status pinned right */}
+      <div className="sticky top-0 z-10 bg-codex-bg/95 backdrop-blur border-b border-codex-border px-6 py-2 relative flex items-center justify-center">
         <span className="font-display text-ni-gold text-sm tracking-widest uppercase">
           Nimble Character Sheet
         </span>
         {!readOnly && (
-          <span className={`text-xs font-medium transition-opacity duration-300 ${
+          <span className={`absolute right-6 text-xs font-medium transition-opacity duration-300 ${
             saveStatus === 'idle' ? 'opacity-0' : 'opacity-100'
           } ${saveStatus === 'saving' ? 'text-codex-subtext' : 'text-ni-gold'}`}>
             {saveStatus === 'saving' ? 'Saving…' : 'Saved ✓'}
           </span>
         )}
         {readOnly && (
-          <span className="text-xs text-codex-subtext italic">Read Only</span>
+          <span className="absolute right-6 text-xs text-codex-subtext italic">Read Only</span>
         )}
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
 
         {/* ── BASIC IDENTITY ─────────────────────────────────────────────── */}
         <div className="bg-codex-card border border-codex-border rounded-lg p-5 shadow-card">
