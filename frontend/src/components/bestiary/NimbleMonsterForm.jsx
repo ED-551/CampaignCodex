@@ -507,7 +507,7 @@ function LegendaryPreview({ form }) {
 
 // ─── Shared nav bar ───────────────────────────────────────────────────────────
 
-function NimbleNav({ onBack, crumb }) {
+function NimbleNav({ onBack, crumb, sharedFrom }) {
   return (
     <header className="sticky top-0 z-10 border-b border-emerald-400/20 bg-codex-surface/80 backdrop-blur-sm">
       <div className="max-w-7xl mx-auto px-4 h-14 flex items-center gap-3">
@@ -524,6 +524,11 @@ function NimbleNav({ onBack, crumb }) {
         </button>
         <span className="text-codex-border">/</span>
         <span className="text-sm font-medium text-emerald-400">{crumb}</span>
+        {sharedFrom && (
+          <span className="text-xs text-codex-muted italic ml-1">
+            — shared by <span className="text-codex-subtext font-medium">{sharedFrom}</span>
+          </span>
+        )}
       </div>
     </header>
   )
@@ -629,6 +634,7 @@ function EntryForm({ existing, onBack, onSaved }) {
       <NimbleNav
         onBack={onBack}
         crumb={isEdit ? `Editing — ${existing.name}` : 'New Bestiary Entry'}
+        sharedFrom={existing?.shared_from_username}
       />
 
       <div className="max-w-7xl mx-auto px-4 py-6">
@@ -1081,6 +1087,7 @@ function LegendaryForm({ existing, onBack, onSaved }) {
       <NimbleNav
         onBack={onBack}
         crumb={isEdit ? `Editing — ${existing.name}` : 'New Legendary Monster'}
+        sharedFrom={existing?.shared_from_username}
       />
 
       <div className="max-w-7xl mx-auto px-4 py-6">

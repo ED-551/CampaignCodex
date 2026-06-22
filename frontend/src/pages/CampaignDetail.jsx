@@ -158,6 +158,21 @@ export default function CampaignDetail() {
     }
   }
 
+  async function handleSetPlayerCharacter(characterId) {
+    try {
+      const { character: updated } = await api.patch(`/campaigns/${id}/my-character`, { characterId })
+      // Update the local members list so myMember reflects the new character
+      setMembers(prev => prev.map(m =>
+        m.user_id === user?.id && !m.left_at
+          ? { ...m, character_id: updated?.id ?? null, character_name: updated?.character_name ?? null, portrait_url: updated?.portrait_url ?? null }
+          : m
+      ))
+      setShowCharPicker(false)
+    } catch (err) {
+      setCharPickerError(err.message)
+    }
+  }
+
   async function handleRemoveGMCharacter() {
     try {
       await api.patch(`/campaigns/${id}/gm-character`, { characterId: null })
@@ -243,7 +258,7 @@ export default function CampaignDetail() {
               )}
               {!isGM && !myMember?.character_id && (
                 <button
-                  onClick={() => navigate(`/characters/new?system=${campaign.game_system}&campaignId=${id}`)}
+                  onClick={handleOpenCharPicker}
                   className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg bg-codex-gold text-codex-bg hover:bg-codex-goldHover transition-all"
                 >
                   <Plus size={14} /> Add My Character
@@ -447,7 +462,7 @@ export default function CampaignDetail() {
         />
       )}
 
-      {/* ── GM Character Picker Modal ── */}
+      {/* ── Character Picker Modal (GM sets their character; players link theirs) ── */}
       {showCharPicker && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
@@ -504,7 +519,7 @@ export default function CampaignDetail() {
                     {myCharacters.map(char => (
                       <button
                         key={char.id}
-                        onClick={() => handleSetGMCharacter(char.id)}
+                        onClick={() => isGM ? handleSetGMCharacter(char.id) : handleSetPlayerCharacter(char.id)}
                         className="flex flex-col items-center gap-2 p-3 bg-codex-surface border border-codex-border rounded-xl hover:border-codex-gold/50 hover:bg-codex-card transition-all"
                       >
                         <div className="w-12 h-12 rounded-full bg-codex-bg border border-codex-border overflow-hidden flex items-center justify-center">

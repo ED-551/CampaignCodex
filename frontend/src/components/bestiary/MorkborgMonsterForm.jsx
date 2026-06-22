@@ -242,6 +242,11 @@ export default function MorkborgMonsterForm({ existing, onBack, onSaved }) {
           <span className="text-sm font-black text-yellow-300 tracking-wide">
             💀 {isEdit ? `Editing: ${existing.name}` : 'New Mörk Borg Creature'}
           </span>
+          {existing?.shared_from_username && (
+            <span className="text-xs text-yellow-300/40 italic ml-2">
+              — shared by <span className="text-yellow-300/70 font-medium">{existing.shared_from_username}</span>
+            </span>
+          )}
         </div>
       </header>
 

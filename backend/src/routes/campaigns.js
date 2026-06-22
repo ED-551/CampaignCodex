@@ -443,4 +443,92 @@ router.patch('/:id/gm-character', requireAuth, [
   }
 })
 
+// ── PATCH /campaigns/:id/my-character ──────────────────────────────────────
+// Let a player (non-GM member) set or clear the character they're playing in
+// this campaign. Updates campaign_members.character_id for the calling user.
+router.patch('/:id/my-character', requireAuth, [
+  body('characterId').optional({ nullable: true }),
+], async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid campaign ID.' })
+  if (validationErrors(req, res)) return
+
+  const { characterId } = req.body
+
+  try {
+    // Fetch campaign to get game_system and verify requester is not GM
+    const campResult = await db.query(
+      'SELECT gm_user_id, game_system FROM campaigns WHERE id = $1', [req.params.id]
+    )
+    if (!campResult.rows[0]) return res.status(404).json({ error: 'Campaign not found.' })
+
+    const campaign = campResult.rows[0]
+
+    if (campaign.gm_user_id === req.user.sub) {
+      return res.status(403).json({ error: 'GMs must use the /gm-character endpoint.' })
+    }
+
+    // Verify requester is an active member
+    const memberResult = await db.query(
+      `SELECT id FROM campaign_members
+       WHERE campaign_id = $1 AND user_id = $2 AND left_at IS NULL
+       LIMIT 1`,
+      [req.params.id, req.user.sub]
+    )
+    if (!memberResult.rows[0]) {
+      return res.status(403).json({ error: 'You are not a member of this campaign.' })
+    }
+
+    // Clearing — set to null
+    if (characterId === null || characterId === undefined) {
+      await db.query(
+        `UPDATE campaign_members SET character_id = NULL
+         WHERE campaign_id = $1 AND user_id = $2 AND left_at IS NULL`,
+        [req.params.id, req.user.sub]
+      )
+      return res.json({ character: null })
+    }
+
+    // Validate the character UUID
+    if (!UUID_RE.test(characterId)) {
+      return res.status(400).json({ error: 'Invalid character ID.' })
+    }
+
+    // Verify character exists, belongs to requester, and matches campaign system
+    const charResult = await db.query(
+      'SELECT id, user_id, character_name, portrait_url, game_system FROM characters WHERE id = $1',
+      [characterId]
+    )
+    if (!charResult.rows[0]) return res.status(404).json({ error: 'Character not found.' })
+
+    const character = charResult.rows[0]
+
+    if (character.user_id !== req.user.sub) {
+      return res.status(403).json({ error: 'You do not own this character.' })
+    }
+
+    if (character.game_system !== campaign.game_system) {
+      return res.status(400).json({
+        error: `Character must be a ${campaign.game_system} character for this campaign.`,
+      })
+    }
+
+    await db.query(
+      `UPDATE campaign_members SET character_id = $1
+       WHERE campaign_id = $2 AND user_id = $3 AND left_at IS NULL`,
+      [characterId, req.params.id, req.user.sub]
+    )
+
+    res.json({
+      character: {
+        id:             character.id,
+        character_name: character.character_name,
+        portrait_url:   character.portrait_url,
+      },
+    })
+  } catch (err) {
+    console.error('[campaigns/my-character]', err)
+    res.status(500).json({ error: 'Failed to update character.' })
+  }
+})
+
 module.exports = router

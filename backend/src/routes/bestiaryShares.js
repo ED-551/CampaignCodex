@@ -225,13 +225,20 @@ router.post('/:id/accept', requireAuth, [
       }
     }
 
-    // Insert each monster into the recipient's bestiary
+    // Fetch the sender's username for attribution
+    const senderRow = await db.query(
+      'SELECT username FROM users WHERE id = $1 LIMIT 1',
+      [share.from_user_id]
+    )
+    const senderUsername = senderRow.rows[0]?.username ?? null
+
+    // Insert each monster into the recipient's bestiary, stamping attribution
     const inserted = []
     for (const m of monsters) {
       const result = await db.query(
-        `INSERT INTO monsters (user_id, game_system, name, challenge, tags, stat_data)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id, name, challenge, tags, stat_data, game_system, created_at`,
+        `INSERT INTO monsters (user_id, game_system, name, challenge, tags, stat_data, shared_from_username)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id, name, challenge, tags, stat_data, game_system, shared_from_username, created_at`,
         [
           req.user.sub,
           share.game_system,
@@ -239,6 +246,7 @@ router.post('/:id/accept', requireAuth, [
           m.challenge ? String(m.challenge).slice(0, 50) : null,
           m.tags      ? String(m.tags).slice(0, 200)     : null,
           m.stat_data ? JSON.stringify(m.stat_data) : '{}',
+          senderUsername,
         ]
       )
       inserted.push(result.rows[0])

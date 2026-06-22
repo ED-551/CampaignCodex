@@ -525,3 +525,6 @@ CREATE TABLE IF NOT EXISTS email_verification_tokens (
   created_at TIMESTAMP   NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_evt_user ON email_verification_tokens(user_id);
+
+-- 2026-06-22: Add shared_from_username to monsters for bestiary share attribution
+ALTER TABLE monsters ADD COLUMN IF NOT EXISTS shared_from_username VARCHAR(50);

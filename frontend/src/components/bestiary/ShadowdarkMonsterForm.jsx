@@ -331,6 +331,11 @@ export default function ShadowdarkMonsterForm({ existing, onBack, onSaved }) {
           <span className="text-sm font-medium text-amber-500">
             🗡️ {isEdit ? `Editing: ${existing.name}` : 'New Shadowdark Monster'}
           </span>
+          {existing?.shared_from_username && (
+            <span className="text-xs text-codex-muted italic ml-2">
+              — shared by <span className="text-codex-subtext font-medium">{existing.shared_from_username}</span>
+            </span>
+          )}
         </div>
       </header>
 

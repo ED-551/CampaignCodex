@@ -40,7 +40,7 @@ router.get('/', requireAuth, [
   const { system } = req.query
   try {
     const result = await db.query(
-      `SELECT id, game_system, name, challenge, tags, stat_data, created_at, updated_at
+      `SELECT id, game_system, name, challenge, tags, stat_data, shared_from_username, created_at, updated_at
        FROM monsters
        WHERE user_id = $1
          ${system ? 'AND game_system = $2' : ''}
@@ -101,7 +101,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 
   try {
     const result = await db.query(
-      `SELECT id, user_id, game_system, name, challenge, tags, stat_data, created_at, updated_at
+      `SELECT id, user_id, game_system, name, challenge, tags, stat_data, shared_from_username, created_at, updated_at
        FROM monsters WHERE id = $1`,
       [req.params.id]
     )
@@ -153,7 +153,7 @@ router.patch('/:id', requireAuth, [
          tags      = COALESCE($3, tags),
          stat_data = COALESCE($4, stat_data)
        WHERE id = $5
-       RETURNING id, game_system, name, challenge, tags, stat_data, created_at, updated_at`,
+       RETURNING id, game_system, name, challenge, tags, stat_data, shared_from_username, created_at, updated_at`,
       [name || null,
        challenge !== undefined ? (challenge || null) : null,
        tags      !== undefined ? (tags      || null) : null,

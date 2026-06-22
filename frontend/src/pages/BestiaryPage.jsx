@@ -18,7 +18,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link }      from 'react-router-dom'
-import { ArrowLeft, BookOpen, Plus, Trash2, X, Pencil, Share2, Send, Check, Square, CheckSquare, Search } from 'lucide-react'
+import { ArrowLeft, BookOpen, Plus, Trash2, X, Pencil, Share2, Send, Check, Square, CheckSquare, Search, Inbox } from 'lucide-react'
 import { Helmet }                            from 'react-helmet-async'
 import { api }                               from '../utils/api'
 import ShadowdarkMonsterForm                 from '../components/bestiary/ShadowdarkMonsterForm'
@@ -149,6 +149,14 @@ export default function BestiaryPage() {
   const [shareMode,      setShareMode]      = useState(false)
   const [selectedIds,    setSelectedIds]    = useState(new Set())
   const [showShareModal, setShowShareModal] = useState(false)
+
+  // Pending share count — shown as a badge on the Inbox button
+  const [pendingShares,  setPendingShares]  = useState(0)
+  useEffect(() => {
+    api.get('/bestiary/shares/inbox')
+      .then(({ shares }) => setPendingShares(shares.length))
+      .catch(() => {})
+  }, [])
 
   // Guards against manually typed or bookmarked URLs with invalid system slugs
   // (e.g. /bestiary/dnd5e). replace:true keeps the history stack clean so the
@@ -359,6 +367,22 @@ export default function BestiaryPage() {
             </div>
           ) : (
             <div className="flex items-center gap-2">
+              {/* Inbox — always visible; badge shows pending count */}
+              <Link
+                to="/bestiary/shares"
+                className="relative flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg
+                  border border-codex-border text-codex-subtext
+                  hover:border-codex-gold hover:text-codex-gold transition-all"
+                title="Monster share inbox"
+              >
+                <Inbox size={14} /> Inbox
+                {pendingShares > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full
+                    bg-codex-gold text-codex-bg text-[10px] font-bold flex items-center justify-center px-1">
+                    {pendingShares > 9 ? '9+' : pendingShares}
+                  </span>
+                )}
+              </Link>
               {monsters.length > 0 && (
                 <button
                   onClick={toggleShareMode}
@@ -710,6 +734,15 @@ function MonsterCard({ monster, meta, system, onEdit, onDelete, shareMode = fals
           <p className="text-[10px] text-codex-muted">📋 Stat block form coming soon</p>
         )}
       </div>
+
+      {/* Attribution — only shown for monsters received via share */}
+      {monster.shared_from_username && (
+        <div className="flex items-center gap-1 mt-1">
+          <span className="text-[10px] text-codex-muted italic">
+            Shared by <span className="text-codex-subtext font-medium">{monster.shared_from_username}</span>
+          </span>
+        </div>
+      )}
     </div>
   )
 }
