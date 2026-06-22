@@ -12,6 +12,169 @@ import { Helmet }                            from 'react-helmet-async'
 import { ArrowLeft, BookOpen, Check, X, ChevronDown, ChevronUp, Share2 } from 'lucide-react'
 import { api }                               from '../utils/api'
 
+// ─── Custom thematic icons ────────────────────────────────────────────────────
+
+/**
+ * Parchment envelope viewed from the back — four triangular flaps meet at center
+ * in an X pattern, sealed with a blob-edged red wax seal.
+ * Size prop controls width; height is proportional (landscape 64:46 ratio).
+ */
+function WaxSealLetterIcon({ size = 48 }) {
+  const h = Math.round(size * 46 / 64)
+  return (
+    <svg width={size} height={h} viewBox="0 0 64 46" fill="none" aria-hidden="true">
+
+      {/* Subtle drop shadow */}
+      <rect x="2" y="2" width="62" height="43" rx="3" fill="#8b6f30" opacity="0.18" />
+
+      {/* Parchment base */}
+      <rect x="0" y="0" width="64" height="46" rx="3" fill="#e8d5a8" />
+
+      {/* Four triangular flaps — the X fold on the back of a sealed envelope.
+          Each flap is a slightly different parchment tone to suggest 3-D folding. */}
+      {/* Top flap (slightly cooler/lighter) */}
+      <polygon points="0,0 64,0 32,23" fill="#dccf98" />
+      {/* Bottom flap (warmer/darker — back face) */}
+      <polygon points="0,46 64,46 32,23" fill="#c4b07a" />
+      {/* Left flap */}
+      <polygon points="0,0 0,46 32,23" fill="#d0c08e" />
+      {/* Right flap (lightest — catches the most light) */}
+      <polygon points="64,0 64,46 32,23" fill="#dcd2a0" />
+
+      {/* Fold crease lines radiating from center */}
+      <line x1="0"  y1="0"  x2="32" y2="23" stroke="#a89060" strokeWidth="0.75" />
+      <line x1="64" y1="0"  x2="32" y2="23" stroke="#a89060" strokeWidth="0.75" />
+      <line x1="0"  y1="46" x2="32" y2="23" stroke="#a89060" strokeWidth="0.75" />
+      <line x1="64" y1="46" x2="32" y2="23" stroke="#a89060" strokeWidth="0.75" />
+
+      {/* Envelope border */}
+      <rect x="0.5" y="0.5" width="63" height="45" rx="2.5"
+        fill="none" stroke="#a08050" strokeWidth="1" />
+
+      {/* ── Wax seal ──
+          24-point blob polygon (12 outer bumps at r=10, 12 inner valleys at r=8.5)
+          centered at (32, 23) — matches the X fold center. */}
+      <polygon
+        points="42,23 40.2,25.2 40.7,28 38,29 37,31.7 34.2,31.2 32,33 29.8,31.2 27,31.7 26,29 23.3,28 23.8,25.2 22,23 23.8,20.8 23.3,18 26,17 27,14.3 29.8,14.8 32,13 34.2,14.8 37,14.3 38,17 40.7,18 40.2,20.8"
+        fill="#7f1111"
+      />
+      {/* Mid ring */}
+      <circle cx="32" cy="23" r="8"   fill="#9b1c1c" />
+      {/* Inner raised circle */}
+      <circle cx="32" cy="23" r="6"   fill="#b91c1c" />
+      {/* Inner ring detail */}
+      <circle cx="32" cy="23" r="4.5" fill="none" stroke="#ef4444" strokeWidth="0.7" opacity="0.5" />
+      {/* Light catch / specular highlight */}
+      <ellipse cx="29.5" cy="20.5" rx="2.8" ry="1.6"
+        fill="#ef8080" opacity="0.28" transform="rotate(-30 29.5 20.5)" />
+
+    </svg>
+  )
+}
+
+/**
+ * Log-cabin mailbox on a post: horizontal log stripes, peaked cedar roof with
+ * shingle rows, arched front opening, stone chimney, and a raised red flag.
+ * Size prop controls width; height is proportional (70:82 ratio).
+ */
+function CabinMailboxIcon({ size = 56 }) {
+  const h = Math.round(size * 82 / 70)
+  return (
+    <svg width={size} height={h} viewBox="0 0 70 82" fill="none" aria-hidden="true">
+      <defs>
+        {/* Clip the shingle lines to the roof triangle */}
+        <clipPath id="ccRoofClip">
+          <polygon points="1,36 35,8 69,36" />
+        </clipPath>
+      </defs>
+
+      {/* ── Post and stand ── */}
+      {/* Center vertical post */}
+      <rect x="29" y="62" width="12" height="18" rx="1.5"
+        fill="#a06030" stroke="#6b3d18" strokeWidth="0.9" />
+      {/* Post wood grain */}
+      <line x1="32" y1="65" x2="32" y2="78" stroke="#6b3d18" strokeWidth="0.5" opacity="0.5" />
+      {/* Horizontal crossbar (top of T) */}
+      <rect x="14" y="58" width="42" height="5" rx="1"
+        fill="#8b5020" stroke="#6b3d18" strokeWidth="0.9" />
+      {/* Base foot */}
+      <rect x="18" y="78" width="34" height="4" rx="1"
+        fill="#8b5020" stroke="#6b3d18" strokeWidth="0.9" />
+
+      {/* ── Log cabin body ── */}
+      <rect x="4" y="36" width="62" height="26" rx="1.5"
+        fill="#b8692a" stroke="#7a3d12" strokeWidth="1" />
+      {/* Horizontal log seam lines every 4 px */}
+      <line x1="4"  y1="40" x2="66" y2="40" stroke="#7a3d12" strokeWidth="0.85" />
+      <line x1="4"  y1="44" x2="66" y2="44" stroke="#7a3d12" strokeWidth="0.85" />
+      <line x1="4"  y1="48" x2="66" y2="48" stroke="#7a3d12" strokeWidth="0.85" />
+      <line x1="4"  y1="52" x2="66" y2="52" stroke="#7a3d12" strokeWidth="0.85" />
+      <line x1="4"  y1="56" x2="66" y2="56" stroke="#7a3d12" strokeWidth="0.85" />
+      {/* Log end-grain circles on the left side */}
+      <ellipse cx="5" cy="38" rx="2" ry="2" fill="#c87840" stroke="#7a3d12" strokeWidth="0.6" />
+      <ellipse cx="5" cy="42" rx="2" ry="2" fill="#c87840" stroke="#7a3d12" strokeWidth="0.6" />
+      <ellipse cx="5" cy="46" rx="2" ry="2" fill="#c87840" stroke="#7a3d12" strokeWidth="0.6" />
+      <ellipse cx="5" cy="50" rx="2" ry="2" fill="#c87840" stroke="#7a3d12" strokeWidth="0.6" />
+      <ellipse cx="5" cy="54" rx="2" ry="2" fill="#c87840" stroke="#7a3d12" strokeWidth="0.6" />
+      <ellipse cx="5" cy="58" rx="2" ry="2" fill="#c87840" stroke="#7a3d12" strokeWidth="0.6" />
+
+      {/* ── Arched mailbox opening ──
+          Semi-arch (10px radius) spanning the left half of the body front face. */}
+      <path d="M15,62 L15,46 A11,11 0 0,1 37,46 L37,62 Z" fill="#140a02" />
+      {/* Metal rim */}
+      <path d="M15,46 A11,11 0 0,1 37,46"
+        stroke="#9b8060" strokeWidth="1.3" fill="none" />
+      {/* Inner depth shadow */}
+      <path d="M17,62 L17,47 A9,9 0 0,1 35,47 L35,62 Z"
+        fill="#0d0805" opacity="0.5" />
+
+      {/* ── Cedar roof ── */}
+      <polygon points="1,36 35,8 69,36" fill="#9b4e1e" />
+      {/* Shingle rows (clipped inside the roof triangle) */}
+      <g clipPath="url(#ccRoofClip)" stroke="#7a3d0e" strokeWidth="0.8" opacity="0.85">
+        <line x1="0" y1="13" x2="70" y2="13" />
+        <line x1="0" y1="18" x2="70" y2="18" />
+        <line x1="0" y1="23" x2="70" y2="23" />
+        <line x1="0" y1="28" x2="70" y2="28" />
+        <line x1="0" y1="33" x2="70" y2="33" />
+      </g>
+      {/* Ridge highlight */}
+      <line x1="35" y1="8" x2="35" y2="15"
+        stroke="#c8702a" strokeWidth="1.1" opacity="0.6" />
+      {/* Roof outline */}
+      <polygon points="1,36 35,8 69,36"
+        fill="none" stroke="#6b3010" strokeWidth="1.2" />
+
+      {/* ── Stone chimney (right side of roof, protrudes through slope) ── */}
+      <rect x="46" y="16" width="10" height="22"
+        fill="#8c8882" stroke="#5c5852" strokeWidth="1" />
+      {/* Stone course lines */}
+      <line x1="46" y1="20" x2="56" y2="20" stroke="#5c5852" strokeWidth="0.7" />
+      <line x1="46" y1="24" x2="56" y2="24" stroke="#5c5852" strokeWidth="0.7" />
+      <line x1="46" y1="28" x2="56" y2="28" stroke="#5c5852" strokeWidth="0.7"/>
+      <line x1="46" y1="32" x2="56" y2="32" stroke="#5c5852" strokeWidth="0.7" />
+      {/* Vertical break (alternating bond) */}
+      <line x1="51" y1="16" x2="51" y2="38"
+        stroke="#5c5852" strokeWidth="0.5" opacity="0.55" />
+      {/* Chimney cap */}
+      <rect x="44" y="13" width="14" height="4"
+        fill="#6b6460" stroke="#3a3430" strokeWidth="0.9" />
+      {/* Pointed cap */}
+      <polygon points="44,13 51,8 58,13"
+        fill="#5a5450" stroke="#3a3430" strokeWidth="0.9" />
+
+      {/* ── Flag ── */}
+      {/* Pole attached to right side of body */}
+      <rect x="63" y="36" width="2.5" height="24"
+        fill="#6b5030" stroke="#4a3020" strokeWidth="0.6" />
+      {/* Red flag triangle pointing right */}
+      <polygon points="64,36 64,46 73,41"
+        fill="#dc2626" stroke="#9b1c1c" strokeWidth="0.8" />
+
+    </svg>
+  )
+}
+
 const SYSTEM_META = {
   shadowdark: { label: 'Shadowdark', icon: '🗡️', color: 'text-amber-500',  badgeClass: 'text-amber-500 bg-amber-500/10 border-amber-500/30' },
   morkborg:   { label: 'Mörk Borg',  icon: '💀', color: 'text-yellow-300', badgeClass: 'text-yellow-300 bg-yellow-300/10 border-yellow-300/30' },
@@ -69,7 +232,7 @@ export default function BestiarySharesPage() {
         </Link>
 
         <div className="flex items-center gap-3 mb-6">
-          <span className="text-3xl">📨</span>
+          <WaxSealLetterIcon size={48} />
           <div>
             <h1 className="text-xl font-semibold text-codex-text">Shared with You</h1>
             <p className="text-xs text-codex-muted mt-0.5">
@@ -90,7 +253,9 @@ export default function BestiarySharesPage() {
 
         {!loading && !error && shares.length === 0 && (
           <div className="border border-dashed border-codex-border rounded-xl p-16 text-center">
-            <p className="text-4xl mb-4">📭</p>
+            <div className="flex justify-center mb-5">
+              <CabinMailboxIcon size={56} />
+            </div>
             <p className="text-codex-subtext text-sm mb-2">No pending shares.</p>
             <p className="text-codex-muted text-xs">
               When a friend shares monsters from their bestiary, they'll appear here.

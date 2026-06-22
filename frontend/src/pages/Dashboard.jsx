@@ -164,42 +164,45 @@ export default function Dashboard() {
               </span>
             )}
 
-            {/* Public Chatrooms */}
-            <Link
-              to="/chat"
-              data-tour="nav-chatrooms"
-              className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm text-codex-subtext hover:text-codex-gold hover:bg-codex-gold/5 transition-colors"
-              title="Public Chatrooms"
-            >
-              <MessagesSquare size={16} />
-              <span className="hidden sm:block text-xs">Chatrooms</span>
-            </Link>
+            {/* Tour target: groups the three main nav links as a single spotlight */}
+            <div data-tour="nav-trio" className="flex items-center gap-1">
+              {/* Public Chatrooms */}
+              <Link
+                to="/chat"
+                data-tour="nav-chatrooms"
+                className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm text-codex-subtext hover:text-codex-gold hover:bg-codex-gold/5 transition-colors"
+                title="Public Chatrooms"
+              >
+                <MessagesSquare size={16} />
+                <span className="hidden sm:block text-xs">Chatrooms</span>
+              </Link>
 
-            {/* Raven Post with unread badge */}
-            <Link
-              to="/ravens"
-              data-tour="nav-ravens"
-              className="relative flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm text-codex-subtext hover:text-codex-gold hover:bg-codex-gold/5 transition-colors"
-              title="The Raven Post"
-            >
-              <Feather size={16} />
-              <span className="hidden sm:block text-xs">Ravens</span>
-              {unreadRavens > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-codex-gold
-                  border-2 border-codex-bg" />
-              )}
-            </Link>
+              {/* Raven Post with unread badge */}
+              <Link
+                to="/ravens"
+                data-tour="nav-ravens"
+                className="relative flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm text-codex-subtext hover:text-codex-gold hover:bg-codex-gold/5 transition-colors"
+                title="The Raven Post"
+              >
+                <Feather size={16} />
+                <span className="hidden sm:block text-xs">Ravens</span>
+                {unreadRavens > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-codex-gold
+                    border-2 border-codex-bg" />
+                )}
+              </Link>
 
-            {/* Settings / username */}
-            <Link
-              to="/settings"
-              data-tour="nav-settings"
-              className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm text-codex-subtext hover:text-codex-gold hover:bg-codex-gold/5 transition-colors group"
-              title="Account settings"
-            >
-              <span className="hidden sm:block text-xs">{user?.username}</span>
-              <Settings size={16} className="text-codex-muted group-hover:text-codex-gold transition-colors" />
-            </Link>
+              {/* Settings / username */}
+              <Link
+                to="/settings"
+                data-tour="nav-settings"
+                className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm text-codex-subtext hover:text-codex-gold hover:bg-codex-gold/5 transition-colors group"
+                title="Account settings"
+              >
+                <span className="hidden sm:block text-xs">{user?.username}</span>
+                <Settings size={16} className="text-codex-muted group-hover:text-codex-gold transition-colors" />
+              </Link>
+            </div>
 
             {user?.isModerator && !user?.isAdmin && (
               <button
@@ -286,7 +289,7 @@ export default function Dashboard() {
         ) : (
           <>
             {/* GM Campaigns */}
-            <section>
+            <section data-tour="section-campaigns">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold text-codex-text flex items-center gap-2">
                   <Shield size={15} className="text-codex-gold" /> Campaigns I'm Running
@@ -344,7 +347,7 @@ export default function Dashboard() {
             </section>
 
             {/* My Characters */}
-            <section>
+            <section data-tour="section-characters">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold text-codex-text flex items-center gap-2">
                   <Scroll size={15} className="text-codex-gold" /> My Characters
@@ -372,7 +375,7 @@ export default function Dashboard() {
             </section>
 
             {/* Bestiary */}
-            <section>
+            <section data-tour="section-bestiary">
               <div className="flex items-center gap-2 mb-4">
                 <h2 className="text-base font-semibold text-codex-text flex items-center gap-2">
                   <Skull size={15} className="text-codex-gold" /> Bestiary

@@ -556,17 +556,14 @@ export default function BestiaryPage() {
         />
       )}
 
-      {/* ── Share inbox link ── */}
-      {!shareMode && monsters.length > 0 && (
-        <div className="mt-6 text-center">
-          <Link
-            to="/bestiary/shares"
-            className="text-xs text-codex-muted hover:text-codex-gold transition-colors"
-          >
-            📨 View received monster shares
-          </Link>
+      {/* ── Footer ── */}
+      <footer className="border-t border-codex-border/30 py-4 mt-8">
+        <div className="max-w-5xl mx-auto px-4 text-center">
+          <p className="text-xs text-codex-muted/50">
+            © {new Date().getFullYear()} CampaignCodex · All rights reserved
+          </p>
         </div>
-      )}
+      </footer>
 
       {/* ── Share Modal ── */}
       {showShareModal && (

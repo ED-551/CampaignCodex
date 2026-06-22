@@ -14,10 +14,10 @@
  *  - TourTooltip       : dark card positioned relative to the target rect.
  *                        Shows a Next/Finish button on info/last steps.
  *                        Always shows an X close button.
- *  - TourWelcomeModal  : unchanged welcome prompt shown on first /dashboard visit.
+ *  - TourWelcomeModal  : welcome prompt shown on first /dashboard visit.
  *  - TourManager       : top-level orchestrator. Drives auto-advance logic
  *                        (widgetOpen, location.pathname). Measures target
- *                        element via rAF loop.
+ *                        element via rAF loop. Handles per-step scrolling.
  *
  * Step types:
  *  interactive — user must click the target element; no Next button;
@@ -25,13 +25,17 @@
  *  info        — user reads then clicks Next; spotlight is click-blocked.
  *  last        — same as info but button reads "Finish Tour".
  *
- * Auto-advance (via TourContext state watchers, same as before):
+ * Auto-advance (via TourContext state watchers):
  *  Step 0 → 1: widgetOpen becomes true  → 350ms delay → setStepIndex(1)
  *  Step 1 → 2: widgetOpen becomes false (after open) → 350ms → setStepIndex(2)
  *  Step 2 → 3: pathname becomes /profile/edit → 450ms → setStepIndex(3)
  *  Step 5 → 6: pathname returns to /dashboard → 450ms → setStepIndex(6)
- *  Steps 3,4,6,7,8: Next button → setStepIndex(n+1)
- *  Step 9: Finish button → stopTour()
+ *  Info/last steps: Next/Finish button → setStepIndex(n+1) / stopTour()
+ *
+ * Skip logic:
+ *  If a step's target element is not found in the DOM, the tour waits up to
+ *  2 seconds before skipping to the next step. This prevents false skips when
+ *  navigating to a new page that hasn't finished rendering yet.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -58,9 +62,13 @@ const C = {
 }
 
 // ─── Step definitions ─────────────────────────────────────────────────────────
-// type: 'interactive' | 'info' | 'last'
+//
+// type:            'interactive' | 'info' | 'last'
+// scrollToTop:     true  → window.scrollTo(0,0) when this step starts
+// scrollToElement: true  → el.scrollIntoView when this step starts
+//
 const STEPS = [
-  // 0
+  // 0 — DM bubble: user must click to open widget
   {
     target:    '[data-tour="dm-bubble"]',
     title:     'Direct Messages',
@@ -68,7 +76,7 @@ const STEPS = [
     placement: 'top-start',
     type:      'interactive',
   },
-  // 1
+  // 1 — DM panel: user must click X to close widget
   {
     target:    '[data-tour="dm-panel"]',
     title:     'Minimize the Widget',
@@ -76,15 +84,16 @@ const STEPS = [
     placement: 'left',
     type:      'interactive',
   },
-  // 2
+  // 2 — Profile link: user must click their name to navigate to /profile/edit
   {
-    target:    '[data-tour="profile-link"]',
-    title:     'Your Profile',
-    content:   'Click your name to edit your profile, pick a theme, and set your gaming preferences.',
-    placement: 'bottom',
-    type:      'interactive',
+    target:      '[data-tour="profile-link"]',
+    title:       'Your Profile',
+    content:     'Click your name to edit your profile, pick a theme, and set your gaming preferences.',
+    placement:   'bottom',
+    type:        'interactive',
+    scrollToTop: true,
   },
-  // 3
+  // 3 — Profile display section: informational
   {
     target:    '[data-tour="profile-display"]',
     title:     'Name & Role',
@@ -92,88 +101,89 @@ const STEPS = [
     placement: 'right',
     type:      'info',
   },
-  // 4
+  // 4 — Profile theme: informational (may be below fold on small screens)
   {
-    target:    '[data-tour="profile-theme"]',
-    title:     'Profile Theme',
-    content:   'Pick a color scheme for your profile card. Use the Preview button at the top of the page to see how it looks before saving.',
-    placement: 'top',
-    type:      'info',
+    target:          '[data-tour="profile-theme"]',
+    title:           'Profile Theme',
+    content:         'Pick a color scheme for your profile card. Use the Preview button at the top of the page to see how it looks before saving.',
+    placement:       'top',
+    type:            'info',
+    scrollToElement: true,
   },
-  // 5
+  // 5 — Back button: user must click to return to /dashboard
   {
     target:    '[data-tour="profile-back"]',
     title:     'Head Back',
-    content:   'All done here? Click ← Back at the top of the page to return to the dashboard and continue the tour.',
+    content:   'All done exploring? Click ← Back at the top of the page to return to the dashboard and continue the tour.',
     placement: 'bottom',
     type:      'interactive',
   },
-  // 6
+  // 6 — Campaigns section header
   {
-    target:    '[data-tour="nav-chatrooms"]',
-    title:     'Chatrooms',
-    content:   'Find other players and GMs, get help, ask questions, and join community discussions in the public chatrooms.',
+    target:          '[data-tour="section-campaigns"]',
+    title:           'Your Campaigns',
+    content:         "Campaigns you're running as GM live here. Campaigns you've joined as a player sit just below. Use the invite code bar above to join a new one, or hit New Campaign to start your own.",
+    placement:       'bottom',
+    type:            'info',
+    scrollToElement: true,
+  },
+  // 7 — Characters section header
+  {
+    target:          '[data-tour="section-characters"]',
+    title:           'Character Sheets',
+    content:         'All your character sheets live here, one for each game system you play. Create as many as your account allows — each sheet saves automatically as you play.',
+    placement:       'bottom',
+    type:            'info',
+    scrollToElement: true,
+  },
+  // 8 — Bestiary section header
+  {
+    target:          '[data-tour="section-bestiary"]',
+    title:           'The Bestiary',
+    content:         'A library of monsters and creatures for each game system. GMs can create custom monsters, share them with players, and pull them up right at the table.',
+    placement:       'bottom',
+    type:            'info',
+    scrollToElement: true,
+  },
+  // 9 — Nav trio: chatrooms + ravens + settings as a single spotlighted group
+  {
+    target:    '[data-tour="nav-trio"]',
+    title:     'Community & Account',
+    content:   'Chatrooms connects you to public discussions. The Raven Post handles private messages between friends. Settings is where you manage your account and preferences.',
     placement: 'bottom',
     type:      'info',
   },
-  // 7
+  // 10 — Stat pills: final step
   {
-    target:    '[data-tour="nav-ravens"]',
-    title:     'The Raven Post',
-    content:   'Send private letters and share character sheets directly with your friends.',
-    placement: 'bottom',
-    type:      'info',
-  },
-  // 8
-  {
-    target:    '[data-tour="nav-settings"]',
-    title:     'Account Settings',
-    content:   'Adjust your preferences, review the Terms of Service, and manage your account.',
-    placement: 'bottom',
-    type:      'info',
-  },
-  // 9
-  {
-    target:    '[data-tour="stat-pills"]',
-    title:     'Your Dashboard',
-    content:   "Your active character sheets and campaigns at a glance. Scroll down to create characters, manage campaigns, and explore the Bestiary for each game system. That's the tour — have fun out there.",
-    placement: 'bottom',
-    type:      'last',
+    target:      '[data-tour="stat-pills"]',
+    title:       'Your Dashboard',
+    content:     "Your active character sheets and campaigns at a glance. That's the full tour — everything you need to get started. Have fun out there.",
+    placement:   'bottom',
+    type:        'last',
+    scrollToTop: true,
   },
 ]
 
-const TOTAL_STEPS = STEPS.length
-
-// ─── Padding added around the target rect for the spotlight cutout ─────────────
-const SPOTLIGHT_PADDING = 8
+const TOTAL_STEPS     = STEPS.length   // 11
+const SPOTLIGHT_PAD   = 8              // px of extra space around target rect
+const NOT_FOUND_LIMIT = 2000           // ms before skipping a missing-target step
 
 // ─── SpotlightOverlay ─────────────────────────────────────────────────────────
-/**
- * Renders the four-panel donut overlay + optional spotlight blocker + gold ring.
- * Mounts into document.body via createPortal so it always covers the full viewport.
- *
- * Props:
- *  rect          {DOMRect | null} — current bounding box of the target element.
- *                                   If null, covers the entire screen (no cutout).
- *  isInteractive {boolean}        — if true, clicks pass through the spotlight gap;
- *                                   if false, a transparent blocker covers the gap.
- */
 function SpotlightOverlay({ rect, isInteractive }) {
   if (!rect) return null
 
-  const pad = SPOTLIGHT_PADDING
+  const pad = SPOTLIGHT_PAD
   const vw  = window.innerWidth
   const vh  = window.innerHeight
 
-  // Spotlight bounds (clamped to viewport)
-  const sTop    = Math.max(0, rect.top    - pad)
-  const sLeft   = Math.max(0, rect.left   - pad)
+  const sTop    = Math.max(0,  rect.top    - pad)
+  const sLeft   = Math.max(0,  rect.left   - pad)
   const sRight  = Math.min(vw, rect.right  + pad)
   const sBottom = Math.min(vh, rect.bottom + pad)
-  const sWidth  = sRight - sLeft
+  const sWidth  = sRight  - sLeft
   const sHeight = sBottom - sTop
 
-  const panelStyle = {
+  const base = {
     position:      'fixed',
     background:    C.overlay,
     pointerEvents: 'all',
@@ -182,50 +192,40 @@ function SpotlightOverlay({ rect, isInteractive }) {
 
   return createPortal(
     <>
-      {/* ── Four dark panels surrounding the spotlight ── */}
-
       {/* Top panel */}
-      <div style={{ ...panelStyle, top: 0, left: 0, right: 0, height: sTop }} />
-
+      <div style={{ ...base, top: 0,       left: 0,      right: 0,  height: sTop    }} />
       {/* Bottom panel */}
-      <div style={{ ...panelStyle, top: sBottom, left: 0, right: 0, bottom: 0 }} />
+      <div style={{ ...base, top: sBottom, left: 0,      right: 0,  bottom: 0       }} />
+      {/* Left panel */}
+      <div style={{ ...base, top: sTop,    left: 0,      width: sLeft,  height: sHeight }} />
+      {/* Right panel */}
+      <div style={{ ...base, top: sTop,    left: sRight, right: 0,  height: sHeight }} />
 
-      {/* Left panel (between top and bottom panels) */}
-      <div style={{ ...panelStyle, top: sTop, left: 0, width: sLeft, height: sHeight }} />
+      {/* Gold ring around spotlight (never intercepts clicks) */}
+      <div style={{
+        position:      'fixed',
+        top:           sTop,
+        left:          sLeft,
+        width:         sWidth,
+        height:        sHeight,
+        border:        `2px solid ${C.ring}`,
+        borderRadius:  10,
+        pointerEvents: 'none',
+        zIndex:        9001,
+      }} />
 
-      {/* Right panel (between top and bottom panels) */}
-      <div style={{ ...panelStyle, top: sTop, left: sRight, right: 0, height: sHeight }} />
-
-      {/* ── Gold ring around spotlight (pointer-events: none so it never blocks clicks) ── */}
-      <div
-        style={{
+      {/* Transparent click-blocker over spotlight for info/last steps */}
+      {!isInteractive && (
+        <div style={{
           position:      'fixed',
           top:           sTop,
           left:          sLeft,
           width:         sWidth,
           height:        sHeight,
-          border:        `2px solid ${C.ring}`,
-          borderRadius:  10,
-          pointerEvents: 'none',
-          zIndex:        9001,
-        }}
-      />
-
-      {/* ── Transparent blocker over the spotlight for info/last steps ── */}
-      {/* Prevents the user from clicking the highlighted element. */}
-      {!isInteractive && (
-        <div
-          style={{
-            position:      'fixed',
-            top:           sTop,
-            left:          sLeft,
-            width:         sWidth,
-            height:        sHeight,
-            pointerEvents: 'all',
-            zIndex:        9002,
-            background:    'transparent',
-          }}
-        />
+          pointerEvents: 'all',
+          zIndex:        9002,
+          background:    'transparent',
+        }} />
       )}
     </>,
     document.body
@@ -233,39 +233,30 @@ function SpotlightOverlay({ rect, isInteractive }) {
 }
 
 // ─── TourTooltip ──────────────────────────────────────────────────────────────
-/**
- * Dark card tooltip positioned relative to the spotlight.
- *
- * Placement logic:
- *  top / top-start → tooltip sits 14px above the spotlight top edge.
- *  bottom          → tooltip sits 14px below the spotlight bottom edge.
- *  left            → tooltip right edge sits 14px left of the spotlight.
- *                    Falls back to bottom if horizontal space < (TOOLTIP_W + gap + 14).
- *  right           → tooltip left edge sits 14px right of the spotlight.
- *
- * All positions are clamped to stay within the viewport with 8px margin.
- */
 function TourTooltip({ rect, step, stepIndex, totalSteps, onNext, onClose }) {
   const TOOLTIP_W   = 300
   const TOOLTIP_GAP = 14
 
-  const pad = SPOTLIGHT_PADDING
+  const pad = SPOTLIGHT_PAD
   const vw  = window.innerWidth
   const vh  = window.innerHeight
 
-  // Spotlight edges (same computation as SpotlightOverlay)
-  const sTop     = Math.max(0, rect.top    - pad)
-  const sLeft    = Math.max(0, rect.left   - pad)
+  const sTop     = Math.max(0,  rect.top    - pad)
+  const sLeft    = Math.max(0,  rect.left   - pad)
   const sRight   = Math.min(vw, rect.right  + pad)
   const sBottom  = Math.min(vh, rect.bottom + pad)
   const sCenterX = (sLeft + sRight) / 2
 
   let placement = step.placement || 'bottom'
 
-  // Resolve left → bottom fallback if there's not enough horizontal space
-  if (placement === 'left' && sLeft < TOOLTIP_W + TOOLTIP_GAP + 14) {
-    placement = 'bottom'
-  }
+  // Estimated tooltip height (title + body + footer). Used for overflow checks.
+  const TOOLTIP_H_EST = 180
+
+  // Fallbacks when there's not enough room in the preferred direction
+  if (placement === 'left'  && sLeft        < TOOLTIP_W + TOOLTIP_GAP + 14)  placement = 'bottom'
+  if (placement === 'right' && (vw - sRight) < TOOLTIP_W + TOOLTIP_GAP + 14) placement = 'bottom'
+  // If bottom would push the tooltip off-screen, flip to top
+  if (placement === 'bottom' && (vh - sBottom) < TOOLTIP_H_EST + TOOLTIP_GAP) placement = 'top'
 
   let tooltipStyle = {
     position:     'fixed',
@@ -279,22 +270,16 @@ function TourTooltip({ rect, step, stepIndex, totalSteps, onNext, onClose }) {
   }
 
   if (placement === 'top' || placement === 'top-start') {
-    // Anchor the bottom edge of the tooltip to (sTop - gap).
-    // Using CSS `bottom` (distance from viewport bottom) avoids needing to
-    // know tooltip height upfront.
     let leftPos = placement === 'top-start'
       ? sLeft
       : sCenterX - TOOLTIP_W / 2
-
     leftPos = Math.max(8, Math.min(leftPos, vw - TOOLTIP_W - 8))
-
     tooltipStyle.bottom = Math.max(8, vh - sTop + TOOLTIP_GAP)
     tooltipStyle.left   = leftPos
 
   } else if (placement === 'bottom') {
     let leftPos = sCenterX - TOOLTIP_W / 2
     leftPos = Math.max(8, Math.min(leftPos, vw - TOOLTIP_W - 8))
-
     tooltipStyle.top  = Math.min(sBottom + TOOLTIP_GAP, vh - 8)
     tooltipStyle.left = leftPos
 
@@ -319,7 +304,7 @@ function TourTooltip({ rect, step, stepIndex, totalSteps, onNext, onClose }) {
       }} />
 
       <div style={{ padding: '16px 18px 18px' }}>
-        {/* Header row: title + X */}
+        {/* Header: title + X close */}
         <div style={{
           display:        'flex',
           alignItems:     'flex-start',
@@ -338,7 +323,6 @@ function TourTooltip({ rect, step, stepIndex, totalSteps, onNext, onClose }) {
             {step.title}
           </span>
 
-          {/* X close button */}
           <button
             onClick={onClose}
             title="Close tour"
@@ -378,19 +362,17 @@ function TourTooltip({ rect, step, stepIndex, totalSteps, onNext, onClose }) {
           {step.content}
         </p>
 
-        {/* Footer: progress + action button */}
+        {/* Footer: progress indicator + Next/Finish button */}
         <div style={{
           display:        'flex',
           alignItems:     'center',
           justifyContent: 'space-between',
           marginTop:      14,
         }}>
-          {/* Progress indicator */}
           <span style={{ fontSize: 10, color: `${C.muted}99` }}>
             {stepIndex + 1} of {totalSteps}
           </span>
 
-          {/* Next / Finish button — only on info and last steps */}
           {showActionButton && (
             <button
               onClick={onNext}
@@ -419,60 +401,134 @@ function TourTooltip({ rect, step, stepIndex, totalSteps, onNext, onClose }) {
 }
 
 // ─── TourWelcomeModal ─────────────────────────────────────────────────────────
-/**
- * Welcome prompt shown once on first /dashboard visit.
- * Dark card with gold title, two action buttons.
- */
 function TourWelcomeModal({ onAccept, onDecline }) {
-  return (
-    <div className="fixed inset-0 z-[1500] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-      <div className="bg-codex-card border border-codex-border rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center text-center">
+  return createPortal(
+    <>
+      {/* Backdrop */}
+      <div style={{
+        position:      'fixed',
+        inset:         0,
+        background:    'rgba(0,0,0,0.55)',
+        zIndex:        9020,
+        pointerEvents: 'all',
+      }} />
 
-        {/* Icon */}
-        <div className="w-12 h-12 rounded-full bg-codex-gold/10 border border-codex-gold/30
-          flex items-center justify-center text-2xl mb-5">
-          🗺️
-        </div>
+      {/* Card — centered */}
+      <div style={{
+        position:      'fixed',
+        top:           '50%',
+        left:          '50%',
+        transform:     'translate(-50%, -50%)',
+        width:         340,
+        background:    C.card,
+        border:        `1px solid ${C.border}`,
+        borderRadius:  18,
+        boxShadow:     '0 12px 48px rgba(0,0,0,0.8)',
+        overflow:      'hidden',
+        zIndex:        9021,
+      }}>
+        {/* Gold accent bar */}
+        <div style={{
+          height:     2,
+          background: `linear-gradient(to right, transparent, ${C.gold}, transparent)`,
+        }} />
 
-        {/* Heading */}
-        <h2 className="font-display text-lg text-codex-gold mb-2 tracking-wide">
-          Welcome to CampaignCodex
-        </h2>
+        <div style={{ padding: '24px 24px 22px' }}>
+          {/* Icon + title */}
+          <div style={{
+            display:        'flex',
+            alignItems:     'center',
+            gap:            12,
+            marginBottom:   12,
+          }}>
+            <div style={{
+              width:          38,
+              height:         38,
+              borderRadius:   10,
+              background:     `${C.gold}18`,
+              border:         `1px solid ${C.gold}44`,
+              display:        'flex',
+              alignItems:     'center',
+              justifyContent: 'center',
+              fontSize:       18,
+              flexShrink:     0,
+            }}>
+              📜
+            </div>
+            <span style={{
+              fontSize:      15,
+              fontWeight:    700,
+              color:         C.text,
+              lineHeight:    1.3,
+            }}>
+              Welcome to CampaignCodex
+            </span>
+          </div>
 
-        {/* Body */}
-        <p className="text-sm text-codex-subtext leading-relaxed mb-8">
-          Would you like a quick tour? We'll walk you through the main features
-          so you can hit the ground running.
-        </p>
+          {/* Body */}
+          <p style={{
+            fontSize:   13,
+            color:      C.subtext,
+            lineHeight: 1.7,
+            margin:     '0 0 20px',
+          }}>
+            Want a quick tour? We'll walk you through the DM widget, your profile, campaigns, characters, and more — takes about 60 seconds.
+          </p>
 
-        {/* Actions */}
-        <div className="flex flex-col gap-3 w-full">
-          <button
-            onClick={onAccept}
-            className="w-full py-2.5 rounded-lg bg-codex-gold text-codex-bg
-              text-sm font-semibold hover:bg-codex-goldHover transition-colors"
-          >
-            Show me around →
-          </button>
-          <button
-            onClick={onDecline}
-            className="w-full py-2 rounded-lg border border-codex-border
-              text-sm text-codex-subtext hover:text-codex-text hover:border-codex-muted
-              transition-colors"
-          >
-            No thanks
-          </button>
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button
+              onClick={onDecline}
+              style={{
+                background:   'transparent',
+                border:       `1px solid ${C.border}`,
+                borderRadius: 20,
+                padding:      '7px 16px',
+                fontSize:     12,
+                fontWeight:   500,
+                color:        C.subtext,
+                cursor:       'pointer',
+                transition:   'border-color 0.15s, color 0.15s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = C.muted
+                e.currentTarget.style.color       = C.text
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = C.border
+                e.currentTarget.style.color       = C.subtext
+              }}
+            >
+              Skip for Now
+            </button>
+
+            <button
+              onClick={onAccept}
+              style={{
+                background:   C.gold,
+                border:       'none',
+                borderRadius: 20,
+                padding:      '7px 20px',
+                fontSize:     12,
+                fontWeight:   700,
+                color:        C.bg,
+                cursor:       'pointer',
+                transition:   'background 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = C.goldHover }}
+              onMouseLeave={e => { e.currentTarget.style.background = C.gold }}
+            >
+              Take the Tour →
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </>,
+    document.body
   )
 }
 
 // ─── TourManager ──────────────────────────────────────────────────────────────
-/**
- * Top-level orchestrator. Mounts outside <Routes> so it persists across
- * page navigations. Must render inside <BrowserRouter> (needs useLocation).
- */
 export default function TourManager() {
   const location       = useLocation()
   const { user }       = useAuth()
@@ -483,21 +539,15 @@ export default function TourManager() {
     hasSeen, markSeen,
   } = useTour()
 
-  // Bounding rect of the current step's target element.
-  // Updated continuously via rAF while the tour is running.
-  const [targetRect, setTargetRect] = useState(null)
-
-  // Whether to show the welcome modal
+  const [targetRect,  setTargetRect]  = useState(null)
   const [showWelcome, setShowWelcome] = useState(false)
 
-  const didAutoPrompt  = useRef(false)
-  const widgetWasOpen  = useRef(false)
-  const rafRef         = useRef(null)
-  // Cached previous rect values for change-detection — avoids thrashing React
-  // with setState on every animation frame when the element hasn't moved.
-  const prevRectRef    = useRef(null)
+  const didAutoPrompt = useRef(false)
+  const widgetWasOpen = useRef(false)
+  const rafRef        = useRef(null)
+  const prevRectRef   = useRef(null)
 
-  // ── Auto-prompt: first ever visit to /dashboard ────────────────────────────
+  // ── Auto-prompt on first /dashboard visit ─────────────────────────────────
   useEffect(() => {
     if (!user || location.pathname !== '/dashboard' || run || showWelcome || didAutoPrompt.current) return
     if (!hasSeen(user.id)) {
@@ -518,7 +568,29 @@ export default function TourManager() {
     setShowWelcome(false)
   }
 
+  // ── Per-step scroll ────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!run) return
+    const step = STEPS[stepIndex]
+    if (!step) return
+
+    if (step.scrollToTop) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+    if (step.scrollToElement) {
+      const t = setTimeout(() => {
+        const el = document.querySelector(step.target)
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 120)
+      return () => clearTimeout(t)
+    }
+  }, [run, stepIndex])
+
   // ── rAF loop: continuously measure the target element ─────────────────────
+  // Uses a timeout-based skip (NOT_FOUND_LIMIT) instead of an immediate skip
+  // on the first missing frame. This prevents false skips when a page has just
+  // navigated and the new elements haven't rendered yet.
   useEffect(() => {
     if (!run) {
       setTargetRect(null)
@@ -530,18 +602,31 @@ export default function TourManager() {
     const step = STEPS[stepIndex]
     if (!step) return
 
+    let abandoned = false
+
+    // Skip this step only if the target remains missing for NOT_FOUND_LIMIT ms
+    const skipTimer = setTimeout(() => {
+      if (!abandoned) {
+        setStepIndex(prev => Math.min(prev + 1, TOTAL_STEPS - 1))
+      }
+    }, NOT_FOUND_LIMIT)
+
     function measure() {
+      if (abandoned) return
+
       const el = document.querySelector(step.target)
       if (!el) {
-        // Target not in DOM — skip to next step gracefully
-        setStepIndex(prev => prev + 1)
+        // Keep trying; skip timer handles the eventual timeout
+        rafRef.current = requestAnimationFrame(measure)
         return
       }
+
+      // Found — cancel the skip timer
+      clearTimeout(skipTimer)
 
       const r    = el.getBoundingClientRect()
       const prev = prevRectRef.current
 
-      // Only update state if the rect has actually changed
       if (
         !prev          ||
         prev.top    !== r.top    ||
@@ -564,19 +649,22 @@ export default function TourManager() {
     }
 
     rafRef.current = requestAnimationFrame(measure)
+
     return () => {
+      abandoned = true
+      clearTimeout(skipTimer)
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
     }
   }, [run, stepIndex, setStepIndex])
 
-  // ── Step 0 → 1: auto-advance when DM widget opens ─────────────────────────
+  // ── Step 0 → 1: widget opened ─────────────────────────────────────────────
   useEffect(() => {
     if (!run || stepIndex !== 0 || !widgetOpen) return
     const t = setTimeout(() => setStepIndex(1), 350)
     return () => clearTimeout(t)
   }, [widgetOpen, run, stepIndex, setStepIndex])
 
-  // ── Step 1 → 2: auto-advance when DM widget closes ────────────────────────
+  // ── Step 1 → 2: widget closed (after being open) ──────────────────────────
   useEffect(() => {
     if (!run || stepIndex !== 1) {
       widgetWasOpen.current = false
@@ -590,7 +678,7 @@ export default function TourManager() {
     }
   }, [widgetOpen, run, stepIndex, setStepIndex])
 
-  // ── Step 2 → 3: auto-advance when user navigates to /profile/edit ─────────
+  // ── Step 2 → 3: navigated to /profile/edit ────────────────────────────────
   useEffect(() => {
     if (!run || stepIndex !== 2) return
     if (location.pathname === '/profile/edit') {
@@ -599,7 +687,7 @@ export default function TourManager() {
     }
   }, [location.pathname, run, stepIndex, setStepIndex])
 
-  // ── Step 5 → 6: auto-advance when user returns to /dashboard ──────────────
+  // ── Step 5 → 6: returned to /dashboard ────────────────────────────────────
   useEffect(() => {
     if (!run || stepIndex !== 5) return
     if (location.pathname === '/dashboard') {
@@ -608,7 +696,7 @@ export default function TourManager() {
     }
   }, [location.pathname, run, stepIndex, setStepIndex])
 
-  // ── Next / Finish handler (info + last steps) ──────────────────────────────
+  // ── Next / Finish ──────────────────────────────────────────────────────────
   const handleNext = useCallback(() => {
     if (stepIndex >= TOTAL_STEPS - 1) {
       stopTour()
@@ -617,23 +705,21 @@ export default function TourManager() {
     }
   }, [stepIndex, setStepIndex, stopTour])
 
-  // ── Close (X) handler ─────────────────────────────────────────────────────
+  // ── Cancel (X button) ─────────────────────────────────────────────────────
   const handleClose = useCallback(() => {
     stopTour()
   }, [stopTour])
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
   const currentStep   = run ? STEPS[stepIndex] : null
   const isInteractive = currentStep?.type === 'interactive'
 
   return (
     <>
-      {/* Welcome modal — shown before the tour starts */}
       {showWelcome && (
         <TourWelcomeModal onAccept={handleAccept} onDecline={handleDecline} />
       )}
 
-      {/* Tour overlay + tooltip — only while run is true and rect is known */}
       {run && currentStep && targetRect && (
         <>
           <SpotlightOverlay
