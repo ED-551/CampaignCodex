@@ -89,19 +89,23 @@ router.post('/signup', authLimiter, signupLimiter, [
     return res.status(400).json({ error: 'Please use a permanent email address to sign up.' })
   }
 
+  const client = await db.getClient()
   try {
+    await client.query('BEGIN')
+
     // Check uniqueness
-    const existing = await db.query(
+    const existing = await client.query(
       'SELECT id FROM users WHERE username = $1 OR email = $2 LIMIT 1',
       [username, email]
     )
     if (existing.rows.length > 0) {
+      await client.query('ROLLBACK')
       return res.status(409).json({ error: 'Username or email is already taken.' })
     }
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS)
 
-    const result = await db.query(
+    const result = await client.query(
       `INSERT INTO users
          (username, email, first_name, last_name, middle_initial,
           password_hash, newsletter_opt_in, terms_accepted_at, email_verified)
@@ -120,17 +124,24 @@ router.post('/signup', authLimiter, signupLimiter, [
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
 
-    await db.query(
+    await client.query(
       'INSERT INTO email_verification_tokens (user_id, token_hash, expires_at) VALUES ($1,$2,$3)',
       [user.id, tokenHash, expiresAt]
     )
 
+    // Send email before committing — if delivery fails, roll back so no ghost
+    // account is left in an unverifiable state.
     await sendVerificationEmail(user.email, rawToken)
+
+    await client.query('COMMIT')
 
     res.status(201).json({ pending: true, email: user.email })
   } catch (err) {
+    await client.query('ROLLBACK')
     console.error('[signup]', err)
     res.status(500).json({ error: 'An error occurred. Please try again.' })
+  } finally {
+    client.release()
   }
 })
 
