@@ -272,6 +272,8 @@ export default function Dashboard() {
               onChange={e => { setJoinCode(e.target.value.toUpperCase()); setJoinError('') }}
               placeholder="Enter join code  (e.g. XKF-9TRA)"
               maxLength={8}
+              autoFocus={false}
+              autoComplete="off"
               className="w-full bg-codex-surface border border-codex-border rounded-lg px-4 py-2.5 text-codex-text placeholder-codex-muted text-sm font-mono tracking-widest uppercase focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/30 transition-colors"
             />
             {joinError && (
