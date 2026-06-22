@@ -680,8 +680,12 @@ function createSocketServer(httpServer) {
         const message = result.rows[0]
         const roomKey = [socket.userId, targetUserId].sort().join(':')
 
-        // Broadcast to both ends — recipient gets it even if their widget is minimized
+        // Broadcast to both ends of the open conversation (if both have the window open).
         io.to(`dm:${roomKey}`).emit('new_dm', message)
+        // Also notify the recipient via their always-joined personal room so they
+        // receive the message and unread dot even when the DM window isn't open.
+        // The frontend deduplicates by message ID, so double delivery is harmless.
+        io.to(`user:${targetUserId}`).emit('new_dm', message)
 
         callback({ ok: true })
       } catch (err) {

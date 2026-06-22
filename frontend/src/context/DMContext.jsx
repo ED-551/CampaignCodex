@@ -51,11 +51,13 @@ export function DMProvider({ children }) {
       const otherUserId   = isFromMe ? msg.recipient_id   : msg.sender_id
       const otherUsername = isFromMe ? msg.recipient_username : msg.sender_username
 
-      // Append message to the right conversation bucket
-      setMessages(prev => ({
-        ...prev,
-        [otherUserId]: [...(prev[otherUserId] ?? []), msg],
-      }))
+      // Append message — deduplicate by ID because the server emits to both the
+      // dm:<room> and user:<id> rooms, so recipients with the window open get it twice.
+      setMessages(prev => {
+        const bucket = prev[otherUserId] ?? []
+        if (bucket.some(m => m.id === msg.id)) return prev
+        return { ...prev, [otherUserId]: [...bucket, msg] }
+      })
 
       // Increment unread only if this convo isn't the one currently open
       if (activeUserIdRef.current !== otherUserId) {
