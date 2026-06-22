@@ -511,7 +511,7 @@ function ComposeModal({ onClose, onSent, characters, replyTo }) {
                 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Send size={13} />
-              {sending ? 'Sending…' : 'Dispatch Raven'}
+              {sending ? 'Dispatching…' : 'Dispatch Raven'}
             </button>
           </div>
         </form>
