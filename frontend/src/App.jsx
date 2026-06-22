@@ -4,7 +4,9 @@ import { AuthProvider }   from './context/AuthContext'
 import { SocketProvider } from './context/SocketContext'
 import { DMProvider }     from './context/DMContext'
 import { SocialProvider } from './context/SocialContext'
+import { TourProvider }   from './context/TourContext'
 import DMWidget           from './components/dm/DMWidget'
+import TourManager        from './components/tour/TourManager'
 import ProtectedRoute     from './components/layout/ProtectedRoute'
 import ErrorBoundary      from './components/layout/ErrorBoundary'
 
@@ -55,6 +57,7 @@ export default function App() {
       <SocketProvider>
         <DMProvider>
           <SocialProvider>
+          <TourProvider>
           <BrowserRouter>
             {/* Top-level ErrorBoundary: catches any unhandled JS crash in any page.
                 A second per-route boundary wraps CombatPage to isolate combat crashes
@@ -154,8 +157,11 @@ export default function App() {
 
             {/* ── DM Widget — persists across all routes ── */}
             <DMWidget />
+            {/* ── Onboarding tour — persists across all routes ── */}
+            <TourManager />
             </ErrorBoundary>
           </BrowserRouter>
+          </TourProvider>
           </SocialProvider>
         </DMProvider>
       </SocketProvider>

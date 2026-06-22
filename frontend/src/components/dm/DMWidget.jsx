@@ -46,6 +46,7 @@ export default function DMWidget() {
     <>
       {/* ── Floating toggle button ── */}
       <button
+        data-tour="dm-bubble"
         onClick={toggleWidget}
         className={`fixed bottom-5 right-5 z-50 w-12 h-12 rounded-full shadow-lg
           flex items-center justify-center transition-all duration-200
@@ -64,7 +65,7 @@ export default function DMWidget() {
 
       {/* ── Main panel ── */}
       {widgetOpen && (
-        <div className="fixed bottom-20 right-5 z-50 w-80 h-[480px]
+        <div data-tour="dm-panel" className="fixed bottom-20 right-5 z-50 w-80 h-[480px]
           bg-codex-surface border border-codex-border rounded-2xl shadow-2xl
           flex flex-col overflow-hidden">
 
@@ -114,6 +115,7 @@ function ConvoPanel({ openConvos, unread, onSelect, onClose, onNewDM, closeDM })
       <div className="flex items-center justify-between px-4 py-3 border-b border-codex-border">
         <span className="text-sm font-semibold text-codex-text">Messages</span>
         <button
+          data-tour="dm-close"
           onClick={onClose}
           className="p-1.5 text-codex-muted hover:text-codex-text hover:bg-codex-bg rounded-lg transition-colors"
         >

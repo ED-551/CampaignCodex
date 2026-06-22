@@ -187,6 +187,7 @@ export default function ProfileEditPage() {
             <p className="text-xs text-codex-muted mt-0.5">Customize how you appear to other players.</p>
           </div>
           <button
+            data-tour="profile-preview-btn"
             onClick={() => setPreview(p => !p)}
             className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg
               border border-codex-border bg-codex-surface text-codex-subtext
@@ -210,6 +211,8 @@ export default function ProfileEditPage() {
           /* ── EDIT MODE ── */
           <div className="space-y-6">
 
+            {/* Display name + role + game interests — grouped under one tour target */}
+            <div data-tour="profile-display">
             {/* Display name preference */}
             <FormSection label="Display Name" hint="How your name appears on your profile card.">
               <div className="flex flex-col gap-2">
@@ -309,9 +312,12 @@ export default function ProfileEditPage() {
               </div>
             </FormSection>
 
+            </div>{/* end data-tour="profile-display" */}
+
             <div className="h-px bg-codex-border/40" />
 
             {/* Profile theme */}
+            <div data-tour="profile-theme">
             <FormSection label="Profile Theme" hint="Applies a color scheme to your public profile card.">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {THEME_OPTIONS.map(opt => (
@@ -341,6 +347,8 @@ export default function ProfileEditPage() {
                 ))}
               </div>
             </FormSection>
+
+            </div>{/* end data-tour="profile-theme" */}
 
             <div className="h-px bg-codex-border/40" />
 
@@ -495,6 +503,7 @@ function Shell({ children }) {
           </Link>
           <span className="text-codex-border">/</span>
           <button
+            data-tour="profile-back"
             onClick={() => navigate(-1)}
             className="flex items-center gap-1 text-xs text-codex-subtext hover:text-codex-text transition-colors"
           >

@@ -4,6 +4,7 @@ import { Helmet } from 'react-helmet-async'
 import { Plus, LogOut, Scroll, Users, Shield, BookOpen, Settings, Feather, MessagesSquare, Skull } from 'lucide-react'
 import { useAuth }   from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
+import { useTour }   from '../context/TourContext'
 import { api } from '../utils/api'
 import CreateCampaignModal from '../components/campaign/CreateCampaignModal'
 import CreateCharacterModal from '../components/character/CreateCharacterModal'
@@ -51,6 +52,7 @@ const BESTIARY_SYSTEMS = [
 
 export default function Dashboard() {
   const { user, logout }              = useAuth()
+  const { startTour }                 = useTour()
   const { socket, connected }         = useSocket()
   const navigate                      = useNavigate()
   const [campaigns, setCampaigns]     = useState([])
@@ -165,6 +167,7 @@ export default function Dashboard() {
             {/* Public Chatrooms */}
             <Link
               to="/chat"
+              data-tour="nav-chatrooms"
               className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm text-codex-subtext hover:text-codex-gold hover:bg-codex-gold/5 transition-colors"
               title="Public Chatrooms"
             >
@@ -175,6 +178,7 @@ export default function Dashboard() {
             {/* Raven Post with unread badge */}
             <Link
               to="/ravens"
+              data-tour="nav-ravens"
               className="relative flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm text-codex-subtext hover:text-codex-gold hover:bg-codex-gold/5 transition-colors"
               title="The Raven Post"
             >
@@ -189,6 +193,7 @@ export default function Dashboard() {
             {/* Settings / username */}
             <Link
               to="/settings"
+              data-tour="nav-settings"
               className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm text-codex-subtext hover:text-codex-gold hover:bg-codex-gold/5 transition-colors group"
               title="Account settings"
             >
@@ -235,6 +240,7 @@ export default function Dashboard() {
               Welcome back,{' '}
               <Link
                 to="/profile/edit"
+                data-tour="profile-link"
                 className="text-codex-gold hover:text-codex-goldHover transition-colors underline-offset-2 hover:underline"
                 title="Edit your profile"
               >
@@ -245,7 +251,7 @@ export default function Dashboard() {
               {user?.sheetLimit - characters.length} of {user?.sheetLimit} character sheets remaining
             </p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3" data-tour="stat-pills">
             <StatPill icon={<Scroll size={14}/>} label="Sheets"    value={characters.length} />
             <StatPill icon={<Users size={14}/>}  label="Campaigns" value={campaigns.length}  />
           </div>
@@ -400,11 +406,28 @@ export default function Dashboard() {
         )}
       </main>
 
-      {/* Copyright footer */}
-      <footer className="border-t border-codex-border/30 py-4 text-center mt-4">
-        <p className="text-xs text-codex-muted/50">
-          © {new Date().getFullYear()} CampaignCodex · All rights reserved
-        </p>
+      {/* Footer */}
+      <footer className="border-t border-codex-border/30 py-4 mt-4">
+        <div className="max-w-5xl mx-auto px-4">
+          {/*
+            Mobile:  flex-col, centered — copyright first, tour button below.
+            Desktop: relative row, copyright centered via justify-center, tour
+                     button absolutely pinned to the left edge (out of flow so
+                     it doesn't shift the copyright off-center).
+          */}
+          <div className="flex flex-col items-center gap-2 sm:relative sm:flex-row sm:justify-center">
+            <p className="text-xs text-codex-muted/50">
+              © {new Date().getFullYear()} CampaignCodex · All rights reserved
+            </p>
+            <button
+              onClick={startTour}
+              className="text-xs text-codex-muted/40 hover:text-codex-gold transition-colors duration-150 sm:absolute sm:left-0"
+              title="Replay the onboarding tour"
+            >
+              Take the Tour
+            </button>
+          </div>
+        </div>
       </footer>
 
       {showCreate && (
