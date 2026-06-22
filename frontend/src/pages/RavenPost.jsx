@@ -47,7 +47,7 @@ function PostalStamp() {
 
         {/* Issuing authority */}
         <p className="text-center text-[8px] uppercase tracking-[0.25em] text-codex-muted mb-1.5 select-none">
-          Ankh-Morpork Postal Service
+          CampaignCodex Postal Service
         </p>
 
         {/* Main emblem */}
@@ -506,8 +506,9 @@ function ComposeModal({ onClose, onSent, characters, replyTo }) {
             <button
               type="submit"
               disabled={sending || !recipient || !subject.trim() || !body.trim()}
-              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-codex-gold hover:bg-codex-goldHover
-                text-codex-bg text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center justify-center gap-2 min-w-[9.5rem] px-5 py-2 rounded-xl
+                bg-codex-gold hover:bg-codex-goldHover text-codex-bg text-sm font-semibold
+                transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Send size={13} />
               {sending ? 'Sending…' : 'Dispatch Raven'}
