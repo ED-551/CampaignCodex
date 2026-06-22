@@ -415,9 +415,9 @@ export default function ShadowdarkMonsterForm({ existing, onBack, onSaved }) {
               {/* ── 2. Core Stats ── */}
               <FormSection title="Core Stats">
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
-                  <StatBox label="LV"  placeholder="1"    value={form.level}    onChange={v => update('level',    v)} disabled={loading} hint="Level" />
-                  <StatBox label="AC"  placeholder="11"   value={form.ac}       onChange={v => update('ac',       v)} disabled={loading} hint="Armor class" />
-                  <StatBox label="HP"  placeholder="5"    value={form.hp}       onChange={v => update('hp',       v)} disabled={loading} hint="Hit points" />
+                  <StatBox label="LV"  placeholder="1"    value={form.level}    onChange={v => update('level',    v)} disabled={loading} hint="Level"      min={1} max={30} />
+                  <StatBox label="AC"  placeholder="11"   value={form.ac}       onChange={v => update('ac',       v)} disabled={loading} hint="Armor class" min={1} max={40} />
+                  <StatBox label="HP"  placeholder="5"    value={form.hp}       onChange={v => update('hp',       v)} disabled={loading} hint="Hit points"  min={1} max={999} />
                   <div className="flex flex-col items-center gap-1">
                     <label className="text-[10px] text-codex-muted uppercase tracking-widest">MV</label>
                     <input
@@ -468,8 +468,22 @@ export default function ShadowdarkMonsterForm({ existing, onBack, onSaved }) {
                       <span className="text-[10px] text-codex-muted uppercase tracking-widest">{label}</span>
                       <input
                         type="text"
+                        inputMode="numeric"
                         value={form[key]}
-                        onChange={e => update(key, e.target.value)}
+                        onChange={e => {
+                          // Allow: optional leading +/-, then digits only
+                          const raw = e.target.value.replace(/[^0-9+\-]/g, '')
+                          // Prevent double sign or sign not at start
+                          const clean = raw.replace(/^([+-]?)(.*)/, (_, sign, rest) =>
+                            sign + rest.replace(/[^0-9]/g, '')
+                          )
+                          update(key, clean)
+                        }}
+                        onBlur={e => {
+                          const n = parseInt(form[key], 10)
+                          if (isNaN(n)) { update(key, '0'); return }
+                          update(key, String(Math.min(10, Math.max(-10, n))))
+                        }}
                         placeholder={ph}
                         disabled={loading}
                         className={TINY}
@@ -515,8 +529,12 @@ export default function ShadowdarkMonsterForm({ existing, onBack, onSaved }) {
                         <div className="grid grid-cols-12 gap-2 items-end">
                           <div className="col-span-2">
                             <label className="block text-[10px] text-codex-muted mb-1">#</label>
-                            <input type="text" value={atk.count}
-                              onChange={e => updateAttack(atk.id, 'count', e.target.value)}
+                            <input type="text" inputMode="numeric" value={atk.count}
+                              onChange={e => updateAttack(atk.id, 'count', e.target.value.replace(/[^0-9]/g, ''))}
+                              onBlur={() => {
+                                const n = parseInt(atk.count, 10)
+                                updateAttack(atk.id, 'count', isNaN(n) ? '1' : String(Math.min(99, Math.max(1, n))))
+                              }}
                               placeholder="1" disabled={loading} className={TINY} />
                           </div>
                           <div className="col-span-4">
@@ -547,8 +565,18 @@ export default function ShadowdarkMonsterForm({ existing, onBack, onSaved }) {
                           </div>
                           <div className="col-span-2">
                             <label className="block text-[10px] text-codex-muted mb-1">Bonus</label>
-                            <input type="text" value={atk.bonus}
-                              onChange={e => updateAttack(atk.id, 'bonus', e.target.value)}
+                            <input type="text" inputMode="numeric" value={atk.bonus}
+                              onChange={e => {
+                                const raw = e.target.value.replace(/[^0-9+\-]/g, '')
+                                const clean = raw.replace(/^([+-]?)(.*)/, (_, sign, rest) =>
+                                  sign + rest.replace(/[^0-9]/g, '')
+                                )
+                                updateAttack(atk.id, 'bonus', clean)
+                              }}
+                              onBlur={() => {
+                                const n = parseInt(atk.bonus, 10)
+                                updateAttack(atk.id, 'bonus', isNaN(n) ? '0' : String(Math.min(20, Math.max(-10, n))))
+                              }}
                               placeholder="+0" disabled={loading} className={TINY} />
                           </div>
                           <div className="col-span-1">
@@ -870,14 +898,28 @@ function Field({ label, hint, required, children }) {
   )
 }
 
-function StatBox({ label, placeholder, value, onChange, disabled, hint }) {
+// Restricts input to unsigned integers within [min, max].
+// Allows empty string while typing; clamps on blur.
+function StatBox({ label, placeholder, value, onChange, disabled, hint, min = 0, max = 9999 }) {
+  function handleChange(e) {
+    const raw = e.target.value.replace(/[^0-9]/g, '')
+    onChange(raw)
+  }
+  function handleBlur() {
+    if (value === '' || value === undefined) return
+    const n = parseInt(value, 10)
+    if (isNaN(n)) { onChange(''); return }
+    onChange(String(Math.min(max, Math.max(min, n))))
+  }
   return (
     <div className="flex flex-col items-center gap-1">
       <label className="text-[10px] text-codex-muted uppercase tracking-widest">{label}</label>
       <input
         type="text"
+        inputMode="numeric"
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onChange={handleChange}
+        onBlur={handleBlur}
         placeholder={placeholder}
         disabled={disabled}
         className={TINY}

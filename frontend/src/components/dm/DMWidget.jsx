@@ -36,6 +36,7 @@ export default function DMWidget() {
     openConvos, activeUserId, messages, unread, totalUnread,
     widgetOpen, openDM, closeDM, sendDM, switchTo, toggleWidget,
   } = useDM()
+  const { totalIncoming, newFriendIds, newRequestIds } = useSocial()
 
   if (!user) return null
 
@@ -53,12 +54,9 @@ export default function DMWidget() {
         title={widgetOpen ? 'Close messages' : 'Direct messages'}
       >
         {widgetOpen ? <X size={18} /> : <MessageCircle size={18} />}
-        {!widgetOpen && totalUnread > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1
-            rounded-full bg-red-500 text-white text-[10px] font-bold
-            flex items-center justify-center leading-none">
-            {totalUnread > 99 ? '99+' : totalUnread}
-          </span>
+        {!widgetOpen && (totalUnread > 0 || totalIncoming > 0 || newFriendIds.size > 0 || newRequestIds.size > 0) && (
+          <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-codex-gold
+            border-2 border-codex-bg" />
         )}
       </button>
 
@@ -98,8 +96,15 @@ export default function DMWidget() {
 function ConvoPanel({ openConvos, unread, onSelect, onClose, onNewDM, closeDM }) {
   const [tab, setTab] = useState(TAB_MESSAGES)
   const { friends, incomingRequests, totalIncoming,
+          newRequestIds, newFriendIds, clearNewRequests, clearNewFriends,
           respondToRequest, sendFriendRequest, getFriendStatus } = useSocial()
   const { openDM } = useDM()
+
+  function handleTabClick(nextTab) {
+    setTab(nextTab)
+    if (nextTab === TAB_REQUESTS) clearNewRequests()
+    if (nextTab === TAB_FRIENDS)  clearNewFriends()
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -116,25 +121,22 @@ function ConvoPanel({ openConvos, unread, onSelect, onClose, onNewDM, closeDM })
 
       {/* Tabs */}
       <div className="flex border-b border-codex-border">
-        <TabBtn active={tab === TAB_MESSAGES}  onClick={() => setTab(TAB_MESSAGES)}>
+        <TabBtn active={tab === TAB_MESSAGES}  onClick={() => handleTabClick(TAB_MESSAGES)}>
           <MessageCircle size={12} /> DMs
-          {Object.values(unread).reduce((a, b) => a + b, 0) > 0 && (
-            <span className="ml-1 text-[10px] font-bold text-codex-gold">
-              {Object.values(unread).reduce((a, b) => a + b, 0)}
-            </span>
+          {Object.values(unread).some(v => v > 0) && (
+            <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-codex-gold flex-shrink-0" />
           )}
         </TabBtn>
-        <TabBtn active={tab === TAB_FRIENDS}   onClick={() => setTab(TAB_FRIENDS)}>
+        <TabBtn active={tab === TAB_FRIENDS}   onClick={() => handleTabClick(TAB_FRIENDS)}>
           <Users size={12} /> Friends
-          <span className="ml-1 text-[10px] text-codex-muted">{friends.length}</span>
+          {newFriendIds.size > 0 && (
+            <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-codex-gold flex-shrink-0" />
+          )}
         </TabBtn>
-        <TabBtn active={tab === TAB_REQUESTS}  onClick={() => setTab(TAB_REQUESTS)}>
+        <TabBtn active={tab === TAB_REQUESTS}  onClick={() => handleTabClick(TAB_REQUESTS)}>
           <Bell size={12} /> Requests
-          {totalIncoming > 0 && (
-            <span className="ml-1 min-w-[14px] h-3.5 px-0.5 rounded-full bg-codex-gold
-              text-codex-bg text-[9px] font-bold flex items-center justify-center">
-              {totalIncoming}
-            </span>
+          {(totalIncoming > 0 || newRequestIds.size > 0) && (
+            <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-codex-gold flex-shrink-0" />
           )}
         </TabBtn>
       </div>
@@ -153,12 +155,14 @@ function ConvoPanel({ openConvos, unread, onSelect, onClose, onNewDM, closeDM })
         {tab === TAB_FRIENDS && (
           <FriendsTab
             friends={friends}
+            newFriendIds={newFriendIds}
             onDM={(friendId, friendUsername) => { openDM(friendId, friendUsername); onSelect(friendId) }}
           />
         )}
         {tab === TAB_REQUESTS && (
           <RequestsTab
             requests={incomingRequests}
+            newRequestIds={newRequestIds}
             onRespond={respondToRequest}
           />
         )}
@@ -329,11 +333,7 @@ function MessagesTab({ openConvos, unread, onSelect, closeDM, onNewDM }) {
                       </p>
                     </div>
                     {count > 0 && (
-                      <span className="flex-shrink-0 min-w-[18px] h-[18px] px-1
-                        rounded-full bg-codex-gold text-codex-bg text-[10px] font-bold
-                        flex items-center justify-center leading-none">
-                        {count > 99 ? '99+' : count}
-                      </span>
+                      <span className="flex-shrink-0 w-2 h-2 rounded-full bg-codex-gold" />
                     )}
                   </button>
                   <button
@@ -356,7 +356,7 @@ function MessagesTab({ openConvos, unread, onSelect, closeDM, onNewDM }) {
 }
 
 // ─── Friends Tab ──────────────────────────────────────────────────────────────
-function FriendsTab({ friends, onDM }) {
+function FriendsTab({ friends, newFriendIds, onDM }) {
   if (friends.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 px-6 text-center">
@@ -370,29 +370,36 @@ function FriendsTab({ friends, onDM }) {
 
   return (
     <ul className="py-1 flex flex-col overflow-y-auto h-full">
-      {friends.map(f => (
-        <li key={f.friend_id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-codex-bg transition-colors">
-          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-codex-bg border border-codex-border
-            flex items-center justify-center text-sm font-bold text-codex-subtext uppercase">
-            {f.friend_username[0]}
-          </div>
-          <span className="flex-1 text-sm text-codex-text truncate">{f.friend_username}</span>
-          <button
-            onClick={() => onDM(f.friend_id, f.friend_username)}
-            className="flex-shrink-0 p-1.5 rounded-lg text-codex-muted hover:text-codex-gold
-              hover:bg-codex-gold/10 transition-colors"
-            title={`Message ${f.friend_username}`}
+      {friends.map(f => {
+        const isNew = newFriendIds?.has(f.friend_id)
+        return (
+          <li key={f.friend_id}
+            className={`flex items-center gap-3 px-4 py-2.5 transition-colors
+              ${isNew ? 'bg-codex-gold/10 animate-pulse-once' : 'hover:bg-codex-bg'}`}
           >
-            <MessageCircle size={13} />
-          </button>
-        </li>
-      ))}
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-codex-bg border border-codex-border
+              flex items-center justify-center text-sm font-bold text-codex-subtext uppercase">
+              {f.friend_username[0]}
+            </div>
+            <span className="flex-1 text-sm text-codex-text truncate">{f.friend_username}</span>
+            {isNew && <span className="w-1.5 h-1.5 rounded-full bg-codex-gold flex-shrink-0" />}
+            <button
+              onClick={() => onDM(f.friend_id, f.friend_username)}
+              className="flex-shrink-0 p-1.5 rounded-lg text-codex-muted hover:text-codex-gold
+                hover:bg-codex-gold/10 transition-colors"
+              title={`Message ${f.friend_username}`}
+            >
+              <MessageCircle size={13} />
+            </button>
+          </li>
+        )
+      })}
     </ul>
   )
 }
 
 // ─── Requests Tab ─────────────────────────────────────────────────────────────
-function RequestsTab({ requests, onRespond }) {
+function RequestsTab({ requests, newRequestIds, onRespond }) {
   const [responding, setResponding] = useState(null)
 
   async function handle(requestId, action) {
@@ -412,8 +419,11 @@ function RequestsTab({ requests, onRespond }) {
 
   return (
     <ul className="py-1 flex flex-col overflow-y-auto h-full">
-      {requests.map(r => (
-        <li key={r.id} className="flex items-start gap-3 px-4 py-3 border-b border-codex-border/50">
+      {requests.map(r => {
+        const isNew = newRequestIds?.has(r.sender_id)
+        return (
+        <li key={r.id} className={`flex items-start gap-3 px-4 py-3 border-b border-codex-border/50
+          ${isNew ? 'bg-codex-gold/10' : ''}`}>
           <div className="flex-shrink-0 w-8 h-8 rounded-full bg-codex-bg border border-codex-border
             flex items-center justify-center text-sm font-bold text-codex-subtext uppercase">
             {r.sender_username[0]}
@@ -443,7 +453,8 @@ function RequestsTab({ requests, onRespond }) {
             </div>
           </div>
         </li>
-      ))}
+        )
+      })}
     </ul>
   )
 }

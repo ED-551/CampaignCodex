@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Plus, LogOut, Scroll, Users, Shield, BookOpen, Settings, Feather, MessagesSquare, Skull } from 'lucide-react'
-import { useAuth } from '../context/AuthContext'
+import { useAuth }   from '../context/AuthContext'
+import { useSocket } from '../context/SocketContext'
 import { api } from '../utils/api'
 import CreateCampaignModal from '../components/campaign/CreateCampaignModal'
 import CreateCharacterModal from '../components/character/CreateCharacterModal'
@@ -49,6 +50,7 @@ const BESTIARY_SYSTEMS = [
 
 export default function Dashboard() {
   const { user, logout }              = useAuth()
+  const { socket, connected }         = useSocket()
   const navigate                      = useNavigate()
   const [campaigns, setCampaigns]     = useState([])
   const [characters, setCharacters]   = useState([])
@@ -77,12 +79,20 @@ export default function Dashboard() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  // Fetch unread raven count for the nav badge (lightweight — uses partial index)
+  // Fetch unread raven count on mount; real-time push via raven:received keeps it live
   useEffect(() => {
     api.get('/ravens/unread-count')
-      .then(({ count }) => setUnreadRavens(count))
+      .then(({ count }) => setUnreadRavens(Number(count) || 0))
       .catch(() => {})
   }, [])
+
+  // Real-time: increment dot when a raven arrives; clears when user visits /ravens
+  useEffect(() => {
+    if (!socket || !connected) return
+    function onRavenReceived() { setUnreadRavens(n => n + 1) }
+    socket.on('raven:received', onRavenReceived)
+    return () => socket.off('raven:received', onRavenReceived)
+  }, [socket, connected])
 
   async function handleJoin(e) {
     e.preventDefault()
@@ -169,11 +179,8 @@ export default function Dashboard() {
               <Feather size={16} />
               <span className="hidden sm:block text-xs">Ravens</span>
               {unreadRavens > 0 && (
-                <span className="absolute top-1 right-1 min-w-[16px] h-4 px-0.5
-                  rounded-full bg-codex-gold text-codex-bg text-[10px] font-bold
-                  flex items-center justify-center leading-none">
-                  {unreadRavens > 99 ? '99+' : unreadRavens}
-                </span>
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-codex-gold
+                  border-2 border-codex-bg" />
               )}
             </Link>
 

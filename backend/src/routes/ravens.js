@@ -16,6 +16,7 @@ const { body, query, validationResult } = require('express-validator')
 const db         = require('../db')
 const { requireAuth }    = require('../middleware/auth')
 const { ravensLimiter }  = require('../middleware/rateLimiter')
+const { getIO }          = require('../socket')
 
 const router = express.Router()
 
@@ -271,6 +272,14 @@ router.post('/', requireAuth, ravensLimiter, [
        RETURNING id, subject, created_at`,
       [senderId, recipientId, subject.trim(), msgBody.trim(), safeCharId]
     )
+
+    // Push live notification to recipient — they get a dot without polling
+    const io = getIO()
+    if (io) {
+      io.to(`user:${recipientId}`).emit('raven:received', {
+        from: req.user.username,
+      })
+    }
 
     res.status(201).json({ message: result.rows[0] })
   } catch (err) {

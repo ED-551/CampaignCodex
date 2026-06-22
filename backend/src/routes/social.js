@@ -20,6 +20,7 @@ const { param, body, validationResult } = require('express-validator')
 const rateLimit = require('express-rate-limit')
 const db        = require('../db')
 const { requireAuth } = require('../middleware/auth')
+const { getIO }       = require('../socket')
 
 const router = express.Router()
 
@@ -168,6 +169,16 @@ router.post('/friend-request/:targetId', friendRequestLimiter, [
            WHERE id = $1`,
           [row.id]
         )
+        // Push to both parties: targetId's request was accepted; myId is now friends with targetId
+        const io = getIO()
+        if (io) {
+          io.to(`user:${targetId}`).emit('friend:accepted', {
+            friendId: myId, friendUsername: req.user.username,
+          })
+          io.to(`user:${myId}`).emit('friend:accepted', {
+            friendId: targetId, friendUsername: target.rows[0].username,
+          })
+        }
         return res.json({ ok: true, status: 'accepted', requestId: row.id })
       }
       // If previously denied, allow re-send by updating to pending
@@ -189,6 +200,15 @@ router.post('/friend-request/:targetId', friendRequestLimiter, [
        RETURNING id`,
       [myId, targetId]
     )
+    // Push live notification to the recipient
+    const io = getIO()
+    if (io) {
+      io.to(`user:${targetId}`).emit('friend:request_received', {
+        requestId:      insert.rows[0].id,
+        senderId:       myId,
+        senderUsername: req.user.username,
+      })
+    }
     res.status(201).json({ ok: true, status: 'pending', requestId: insert.rows[0].id })
   } catch (err) {
     console.error('[social/friend-request]', err)
@@ -225,7 +245,20 @@ router.patch('/friend-request/:requestId', [
       return res.status(404).json({ error: 'Request not found or already resolved.' })
     }
 
-    res.json({ ok: true, status: action, requestId: result.rows[0].id })
+    const row = result.rows[0]
+
+    // If accepted: push live notification to the original sender
+    if (action === 'accepted') {
+      const io = getIO()
+      if (io) {
+        io.to(`user:${row.sender_id}`).emit('friend:accepted', {
+          friendId:       req.user.sub,
+          friendUsername: req.user.username,
+        })
+      }
+    }
+
+    res.json({ ok: true, status: action, requestId: row.id })
   } catch (err) {
     console.error('[social/respond-request]', err)
     res.status(500).json({ error: 'Failed to respond to request.' })

@@ -355,6 +355,11 @@ function createSocketServer(httpServer) {
   io.on('connection', (socket) => {
     console.log(`[socket] + uid=${socket.userId} (${socket.username})`)
 
+    // ── Per-user room — allows server-side targeted emits from REST routes ────
+    // Room name: `user:<userId>`. Each user's tabs all join the same room so
+    // a single io.to('user:<id>').emit(...) reaches all their open tabs.
+    socket.join(`user:${socket.userId}`)
+
     // ── Presence: register socket, broadcast if first tab coming online ──────
     addPresence(socket.userId, socket.id)
     if (presenceMap.get(socket.userId).size === 1) {
@@ -1409,4 +1414,9 @@ function createSocketServer(httpServer) {
   return io
 }
 
-module.exports = { createSocketServer }
+// Returns the active io instance — used by REST routes to push events to users.
+// Returns null before createSocketServer() is called (server startup race is safe
+// because routes only call getIO() inside async handlers, never at require-time).
+function getIO() { return _io }
+
+module.exports = { createSocketServer, getIO }
