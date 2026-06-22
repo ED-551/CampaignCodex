@@ -16,7 +16,8 @@ import LandingPage from './pages/LandingPage'
 // Vite splits each import() call into its own JS chunk at build time.
 // Browsers download a chunk only when the user first navigates to that route,
 // cutting the initial bundle from ~835 KB down to the vendor chunks + landing page.
-const VerifyEmailPage    = lazy(() => import('./pages/VerifyEmailPage'))
+const VerifyEmailPage        = lazy(() => import('./pages/VerifyEmailPage'))
+const VerifyEmailPendingPage = lazy(() => import('./pages/VerifyEmailPendingPage'))
 const Dashboard          = lazy(() => import('./pages/Dashboard'))
 const CampaignDetail     = lazy(() => import('./pages/CampaignDetail'))
 const CampaignSettings   = lazy(() => import('./pages/CampaignSettings'))
@@ -69,6 +70,7 @@ export default function App() {
               <Route path="/forgot-password" element={<LandingPage />} />
               <Route path="/reset-password"  element={<LandingPage />} />
               <Route path="/verify-email"    element={<VerifyEmailPage />} />
+              <Route path="/verify-pending"  element={<VerifyEmailPendingPage />} />
 
               {/* ── Public: legal / support ── */}
               <Route path="/terms"  element={<TermsPage />} />

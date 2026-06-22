@@ -57,12 +57,6 @@ export default function SignupForm() {
   const [fieldErrors, setFieldErrors] = useState({})
   const [error, setError]             = useState('')
   const [loading, setLoading]         = useState(false)
-  // Pending verification state — shown instead of form after successful signup
-  const [verificationPending, setVerificationPending] = useState(false)
-  const [sentEmail, setSentEmail]                     = useState('')
-  const [resendLoading, setResendLoading]             = useState(false)
-  const [resendMsg, setResendMsg]                     = useState('')
-
   // Generic field setter — clears the field's inline error as soon as the user
   // starts correcting, and re-validates confirmPassword live when password changes.
   function set(field) {
@@ -126,8 +120,10 @@ export default function SignupForm() {
         _hp:             form._hp,
       })
       if (result.pending) {
-        setSentEmail(result.email)
-        setVerificationPending(true)
+        navigate('/verify-pending', {
+          replace: true,
+          state: { email: result.email, username: form.username.trim() },
+        })
       } else {
         navigate('/dashboard', { replace: true })
       }
@@ -136,74 +132,6 @@ export default function SignupForm() {
     } finally {
       setLoading(false)
     }
-  }
-
-  async function handleResend() {
-    setResendLoading(true)
-    setResendMsg('')
-    try {
-      await import('../../utils/api').then(({ api }) =>
-        api.post('/auth/resend-verification', { username: form.username.trim() })
-      )
-      setResendMsg('A new verification link has been sent.')
-    } catch {
-      setResendMsg('Could not resend. Please try again in a moment.')
-    } finally {
-      setResendLoading(false)
-    }
-  }
-
-  // ── Verification pending screen ───────────────────────────────────────────────
-  if (verificationPending) {
-    return (
-      <div className="flex flex-col gap-5">
-        <div className="rounded-xl border border-codex-gold/30 bg-codex-gold/5 p-5 flex flex-col gap-3">
-          <div className="flex items-start gap-3">
-            <span className="text-2xl leading-none mt-0.5">📬</span>
-            <div>
-              <p className="text-sm font-semibold text-codex-gold">Check your inbox</p>
-              <p className="text-xs text-codex-subtext mt-0.5 leading-relaxed">
-                We sent a verification link to <span className="text-codex-text font-medium">{sentEmail}</span>.
-                Click it to activate your account and sign in.
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-codex-bg/60 border border-codex-border rounded-lg px-4 py-3">
-            <p className="text-xs text-codex-muted leading-relaxed">
-              <span className="text-codex-subtext font-medium">Why do we require this?</span>{' '}
-              Email verification helps us prevent spam accounts and protect the CampaignCodex
-              community. It takes just one click and keeps the platform safe for everyone.
-            </p>
-          </div>
-
-          <p className="text-xs text-codex-muted">
-            The link expires in 24 hours. Didn't get it? Check your spam folder, then:
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleResend}
-          disabled={resendLoading}
-          className="w-full py-2.5 px-4 rounded-lg border border-codex-border text-codex-subtext hover:text-codex-text hover:border-codex-gold/50 text-sm font-medium transition-all duration-150 disabled:opacity-50"
-        >
-          {resendLoading ? 'Sending…' : 'Resend verification email'}
-        </button>
-
-        {resendMsg && (
-          <p className="text-xs text-center text-codex-gold">{resendMsg}</p>
-        )}
-
-        <button
-          type="button"
-          onClick={() => { setVerificationPending(false); setResendMsg('') }}
-          className="text-xs text-codex-subtext hover:text-codex-text transition-colors text-center"
-        >
-          ← Back to sign up
-        </button>
-      </div>
-    )
   }
 
   return (
