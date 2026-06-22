@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider }   from './context/AuthContext'
 import { SocketProvider } from './context/SocketContext'
@@ -6,28 +7,46 @@ import { SocialProvider } from './context/SocialContext'
 import DMWidget           from './components/dm/DMWidget'
 import ProtectedRoute     from './components/layout/ProtectedRoute'
 import ErrorBoundary      from './components/layout/ErrorBoundary'
-import LandingPage        from './pages/LandingPage'
-import Dashboard          from './pages/Dashboard'
-import CampaignDetail     from './pages/CampaignDetail'
-import CampaignSettings   from './pages/CampaignSettings'
-import EncounterLibrary   from './pages/EncounterLibrary'
-import EncounterBuilder   from './pages/EncounterBuilder'
-import CharacterPage      from './pages/CharacterPage'
-import CombatPage         from './pages/CombatPage'
-import AdminDashboard     from './pages/AdminDashboard'
-import ModeratorDashboard from './pages/ModeratorDashboard'
-import TermsPage          from './pages/TermsPage'
-import SettingsPage       from './pages/SettingsPage'
-import RavenPost          from './pages/RavenPost'
-import ChatPage           from './pages/ChatPage'
-import BestiaryPage       from './pages/BestiaryPage'
-import BestiarySharesPage from './pages/BestiarySharesPage'
-import SecretPage         from './pages/SecretPage'
-import SecretReviewPage   from './pages/SecretReviewPage'
-import DonatePage         from './pages/DonatePage'
-import ProfilePage       from './pages/ProfilePage'
-import ProfileEditPage   from './pages/ProfileEditPage'
-import VerifyEmailPage   from './pages/VerifyEmailPage'
+
+// LandingPage is eagerly loaded — it is the entry point for every anonymous
+// visitor and must render without any additional network round-trip.
+import LandingPage from './pages/LandingPage'
+
+// All other pages are lazy-loaded via React.lazy() + dynamic import().
+// Vite splits each import() call into its own JS chunk at build time.
+// Browsers download a chunk only when the user first navigates to that route,
+// cutting the initial bundle from ~835 KB down to the vendor chunks + landing page.
+const VerifyEmailPage    = lazy(() => import('./pages/VerifyEmailPage'))
+const Dashboard          = lazy(() => import('./pages/Dashboard'))
+const CampaignDetail     = lazy(() => import('./pages/CampaignDetail'))
+const CampaignSettings   = lazy(() => import('./pages/CampaignSettings'))
+const EncounterLibrary   = lazy(() => import('./pages/EncounterLibrary'))
+const EncounterBuilder   = lazy(() => import('./pages/EncounterBuilder'))
+const CharacterPage      = lazy(() => import('./pages/CharacterPage'))
+const CombatPage         = lazy(() => import('./pages/CombatPage'))
+const AdminDashboard     = lazy(() => import('./pages/AdminDashboard'))
+const ModeratorDashboard = lazy(() => import('./pages/ModeratorDashboard'))
+const TermsPage          = lazy(() => import('./pages/TermsPage'))
+const SettingsPage       = lazy(() => import('./pages/SettingsPage'))
+const RavenPost          = lazy(() => import('./pages/RavenPost'))
+const ChatPage           = lazy(() => import('./pages/ChatPage'))
+const BestiaryPage       = lazy(() => import('./pages/BestiaryPage'))
+const BestiarySharesPage = lazy(() => import('./pages/BestiarySharesPage'))
+const SecretPage         = lazy(() => import('./pages/SecretPage'))
+const SecretReviewPage   = lazy(() => import('./pages/SecretReviewPage'))
+const DonatePage         = lazy(() => import('./pages/DonatePage'))
+const ProfilePage        = lazy(() => import('./pages/ProfilePage'))
+const ProfileEditPage    = lazy(() => import('./pages/ProfileEditPage'))
+
+// Shown only while a route's JS chunk is downloading on first visit.
+// Dark background + gold spinner matches the app theme — no jarring flash.
+function PageLoader() {
+  return (
+    <div className="min-h-screen bg-[#0a0b0f] flex items-center justify-center">
+      <div className="w-6 h-6 border-2 border-yellow-500/30 border-t-yellow-500 rounded-full animate-spin" />
+    </div>
+  )
+}
 
 export default function App() {
   return (
@@ -40,6 +59,9 @@ export default function App() {
                 A second per-route boundary wraps CombatPage to isolate combat crashes
                 from the rest of the app (DMWidget, navigation etc. stay alive). */}
             <ErrorBoundary>
+            {/* Suspense wraps Routes only — DMWidget renders outside and stays
+                visible during chunk downloads so the user keeps chat access. */}
+            <Suspense fallback={<PageLoader />}>
             <Routes>
               {/* ── Public: auth pages ── */}
               <Route path="/"                element={<LandingPage />} />
@@ -126,6 +148,7 @@ export default function App() {
               {/* ── Catch-all ── */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            </Suspense>
 
             {/* ── DM Widget — persists across all routes ── */}
             <DMWidget />

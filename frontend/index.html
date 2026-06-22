@@ -2,16 +2,37 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- CSP: font-loader.js is served from 'self' so defer script is allowed.
+         The media="print" link avoids render-blocking; font-loader.js activates it. -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' ws: wss:; font-src 'self' https://fonts.gstatic.com; object-src 'none'; frame-src 'none';">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CampaignCodex</title>
+    <title>CampaignCodex — Digital Companion for Tabletop RPGs</title>
+
+    <!-- Primary SEO -->
+    <meta name="description" content="CampaignCodex is your free digital companion for tabletop RPG campaigns. Manage characters, run live combat, build bestiaries, and send ravens to your party." />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://campaigncodex.net/" />
+
+    <!-- Open Graph / social sharing -->
+    <meta property="og:type"        content="website" />
+    <meta property="og:url"         content="https://campaigncodex.net/" />
+    <meta property="og:title"       content="CampaignCodex — Digital Companion for Tabletop RPGs" />
+    <meta property="og:description" content="Manage characters, run live combat, build bestiaries, and send ravens to your party. Free tools for tabletop RPG campaigns." />
+    <meta property="og:site_name"   content="CampaignCodex" />
+
+    <!-- Google Fonts — non-render-blocking via media="print" trick.
+         font-loader.js (deferred, served from self) switches media to "all"
+         once the DOM is ready. noscript provides a fallback. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Inter:wght@300;400;500;600&display=swap"
-      rel="stylesheet"
-    />
+    <link id="gfonts" rel="stylesheet" media="print"
+      href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Inter:wght@300;400;500;600&display=swap" />
+    <noscript>
+      <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Inter:wght@300;400;500;600&display=swap" />
+    </noscript>
+    <script src="/font-loader.js" defer></script>
   </head>
   <body>
     <div id="root"></div>
