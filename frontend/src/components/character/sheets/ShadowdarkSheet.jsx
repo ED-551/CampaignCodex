@@ -83,11 +83,11 @@ function buildDefaults(sheet_data) {
 function SectionHeader({ children }) {
   return (
     <div className="flex items-center gap-3 mb-3">
-      <div className="w-1 h-5 bg-codex-gold rounded-full flex-shrink-0" />
-      <h2 className="text-xs font-bold uppercase tracking-widest text-codex-gold">
+      <div className="w-1 h-5 bg-sd-gold rounded-full flex-shrink-0" />
+      <h2 className="text-xs font-bold uppercase tracking-widest text-sd-gold">
         {children}
       </h2>
-      <div className="flex-1 h-px bg-codex-gold/20" />
+      <div className="flex-1 h-px bg-sd-gold/20" />
     </div>
   )
 }
@@ -96,7 +96,7 @@ function FieldInput({ label, value, onChange, type = 'text', min, max, disabled,
   return (
     <div className={`flex flex-col gap-1 ${className}`}>
       {label && (
-        <label className="text-[10px] uppercase tracking-wider text-codex-subtext font-semibold">
+        <label className="text-[10px] uppercase tracking-wider text-sd-subtext font-semibold">
           {label}
         </label>
       )}
@@ -108,9 +108,9 @@ function FieldInput({ label, value, onChange, type = 'text', min, max, disabled,
         max={max}
         disabled={disabled}
         className="
-          bg-codex-surface border border-codex-border rounded
-          px-2 py-1.5 text-sm text-codex-text
-          focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/20
+          bg-sd-surface border border-sd-border rounded
+          px-2 py-1.5 text-sm text-sd-text
+          focus:outline-none focus:border-sd-gold focus:ring-1 focus:ring-sd-gold/20
           disabled:opacity-50 disabled:cursor-not-allowed
           transition-colors w-full
         "
@@ -123,7 +123,7 @@ function FieldSelect({ label, value, onChange, options, disabled, className = ''
   return (
     <div className={`flex flex-col gap-1 ${className}`}>
       {label && (
-        <label className="text-[10px] uppercase tracking-wider text-codex-subtext font-semibold">
+        <label className="text-[10px] uppercase tracking-wider text-sd-subtext font-semibold">
           {label}
         </label>
       )}
@@ -132,9 +132,9 @@ function FieldSelect({ label, value, onChange, options, disabled, className = ''
         onChange={onChange}
         disabled={disabled}
         className="
-          bg-codex-surface border border-codex-border rounded
-          px-2 py-1.5 text-sm text-codex-text
-          focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/20
+          bg-sd-surface border border-sd-border rounded
+          px-2 py-1.5 text-sm text-sd-text
+          focus:outline-none focus:border-sd-gold focus:ring-1 focus:ring-sd-gold/20
           disabled:opacity-50 disabled:cursor-not-allowed
           transition-colors w-full
         "
@@ -150,8 +150,8 @@ function FieldSelect({ label, value, onChange, options, disabled, className = ''
 function StatBox({ label, value, onChange, disabled }) {
   const mod = statMod(value)
   return (
-    <div className="flex flex-col items-center bg-codex-card border border-codex-border rounded-lg py-2 px-1 gap-1">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-codex-gold">
+    <div className="flex flex-col items-center bg-sd-card border border-sd-border rounded-lg py-2 px-1 gap-1">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-sd-gold">
         {label}
       </span>
       <input
@@ -162,14 +162,14 @@ function StatBox({ label, value, onChange, disabled }) {
         onChange={onChange}
         disabled={disabled}
         className="
-          w-12 text-center text-xl font-bold text-codex-text
-          bg-transparent border-b border-codex-border
-          focus:outline-none focus:border-codex-gold
+          w-12 text-center text-xl font-bold text-sd-text
+          bg-transparent border-b border-sd-border
+          focus:outline-none focus:border-sd-gold
           disabled:opacity-50 disabled:cursor-not-allowed
           [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none
         "
       />
-      <span className={`text-sm font-semibold ${Number(value) >= 10 ? 'text-codex-gold' : 'text-red-400'}`}>
+      <span className={`text-sm font-semibold ${Number(value) >= 10 ? 'text-sd-gold' : 'text-red-400'}`}>
         {mod}
       </span>
     </div>
@@ -183,7 +183,7 @@ function AddRemoveRow({ children, onRemove, disabled }) {
       {!disabled && (
         <button
           onClick={onRemove}
-          className="mt-1.5 flex-shrink-0 w-6 h-6 rounded text-codex-muted hover:text-red-400 hover:bg-red-400/10 flex items-center justify-center text-base leading-none transition-colors opacity-0 group-hover:opacity-100"
+          className="mt-1.5 flex-shrink-0 w-6 h-6 rounded text-sd-muted hover:text-red-400 hover:bg-red-400/10 flex items-center justify-center text-base leading-none transition-colors opacity-0 group-hover:opacity-100"
           title="Remove row"
         >
           ×
@@ -198,8 +198,8 @@ function AddButton({ onClick, children }) {
     <button
       onClick={onClick}
       className="
-        mt-1 text-xs text-codex-gold border border-codex-gold/30 rounded
-        px-3 py-1 hover:bg-codex-gold/10 hover:border-codex-gold/60
+        mt-1 text-xs text-sd-gold border border-sd-gold/30 rounded
+        px-3 py-1 hover:bg-sd-gold/10 hover:border-sd-gold/60
         transition-colors flex items-center gap-1
       "
     >
@@ -212,22 +212,22 @@ function AddButton({ onClick, children }) {
 // Used inside gear rows when a row has type 'weapon' or 'armor'.
 
 const GEAR_INPUT_CLS = `
-  flex-1 min-w-0 bg-codex-surface border border-codex-border rounded px-2 py-1.5
-  text-sm text-codex-text placeholder-codex-muted
-  focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/20
+  flex-1 min-w-0 bg-sd-surface border border-sd-border rounded px-2 py-1.5
+  text-sm text-sd-text placeholder-sd-muted
+  focus:outline-none focus:border-sd-gold focus:ring-1 focus:ring-sd-gold/20
   disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer
 `
 
 const NOTES_INPUT_CLS = `
-  w-full bg-codex-surface border border-codex-border rounded px-2 py-1
-  text-xs text-codex-muted placeholder-codex-muted/50
-  focus:outline-none focus:border-codex-gold/60 focus:ring-1 focus:ring-codex-gold/10
+  w-full bg-sd-surface border border-sd-border rounded px-2 py-1
+  text-xs text-sd-muted placeholder-sd-muted/50
+  focus:outline-none focus:border-sd-gold/60 focus:ring-1 focus:ring-sd-gold/10
   disabled:opacity-50 disabled:cursor-not-allowed transition-colors
 `
 
 const BACK_BTN_CLS = `
-  flex-shrink-0 px-2 border border-codex-border rounded
-  text-codex-muted hover:text-codex-gold hover:border-codex-gold/40
+  flex-shrink-0 px-2 border border-sd-border rounded
+  text-sd-muted hover:text-sd-gold hover:border-sd-gold/40
   text-xs transition-colors
 `
 
@@ -384,9 +384,9 @@ const SORTED_WEAPONS = Object.entries(SD_WEAPONS)
   }))
 
 const cellCls = `
-  min-w-0 w-full bg-codex-surface border border-codex-border rounded px-2 py-1.5
-  text-sm text-codex-text
-  focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/20
+  min-w-0 w-full bg-sd-surface border border-sd-border rounded px-2 py-1.5
+  text-sm text-sd-text
+  focus:outline-none focus:border-sd-gold focus:ring-1 focus:ring-sd-gold/20
   disabled:opacity-50 disabled:cursor-not-allowed transition-colors
 `
 
@@ -434,8 +434,8 @@ function AttackWeaponCell({ value, stats, onChange, disabled }) {
             type="button"
             title="Back to weapon list"
             onClick={() => { setCustom(false); onChange({ weapon: '' }) }}
-            className="flex-shrink-0 px-2 border border-codex-border rounded
-              text-codex-muted hover:text-codex-gold hover:border-codex-gold/40
+            className="flex-shrink-0 px-2 border border-sd-border rounded
+              text-sd-muted hover:text-sd-gold hover:border-sd-gold/40
               text-xs transition-colors"
           >▾</button>
         )}
@@ -663,14 +663,14 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
   const STAT_LABELS = { str: 'STR', dex: 'DEX', con: 'CON', int: 'INT', wis: 'WIS', cha: 'CHA' }
 
   return (
-    <div className="relative bg-codex-bg min-h-screen font-body">
+    <div className="relative bg-sd-bg min-h-screen font-body">
       {/* Save indicator */}
       {!readOnly && saveStatus !== 'idle' && (
         <div className={`
           fixed top-4 right-4 z-50 px-3 py-1.5 rounded text-xs font-semibold shadow-lg
           transition-all duration-300
-          ${saveStatus === 'saving' ? 'bg-codex-surface border border-codex-border text-codex-subtext' : ''}
-          ${saveStatus === 'saved'  ? 'bg-codex-gold/10 border border-codex-gold/40 text-codex-gold' : ''}
+          ${saveStatus === 'saving' ? 'bg-sd-surface border border-sd-border text-sd-subtext' : ''}
+          ${saveStatus === 'saved'  ? 'bg-sd-gold/10 border border-sd-gold/40 text-sd-gold' : ''}
           ${saveStatus === 'error'  ? 'bg-red-900/30 border border-red-500/40 text-red-400' : ''}
         `}>
           {saveStatus === 'saving' && 'Saving…'}
@@ -683,17 +683,17 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
 
         {/* Sheet Title */}
         <div className="text-center pt-2 pb-1">
-          <h1 className="font-display text-2xl text-codex-gold tracking-wide">Shadowdark</h1>
-          <p className="text-codex-subtext text-xs mt-0.5 tracking-wider uppercase">Character Sheet</p>
+          <h1 className="font-display text-2xl text-sd-gold tracking-wide">Shadowdark</h1>
+          <p className="text-sd-subtext text-xs mt-0.5 tracking-wider uppercase">Character Sheet</p>
           {readOnly && (
-            <span className="inline-block mt-1 text-[10px] uppercase tracking-widest text-codex-muted border border-codex-border rounded px-2 py-0.5">
+            <span className="inline-block mt-1 text-[10px] uppercase tracking-widest text-sd-muted border border-sd-border rounded px-2 py-0.5">
               View Only
             </span>
           )}
         </div>
 
         {/* ── Identity ─────────────────────────────────────────────── */}
-        <section className="bg-codex-card border border-codex-border rounded-xl p-4">
+        <section className="bg-sd-card border border-sd-border rounded-xl p-4">
           <SectionHeader>Identity</SectionHeader>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <FieldInput label="Name"       value={data.name}       onChange={e => set('name', e.target.value)}       disabled={readOnly} className="sm:col-span-2" />
@@ -710,7 +710,7 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
         </section>
 
         {/* ── Ability Scores ───────────────────────────────────────── */}
-        <section className="bg-codex-card border border-codex-border rounded-xl p-4">
+        <section className="bg-sd-card border border-sd-border rounded-xl p-4">
           <SectionHeader>Ability Scores</SectionHeader>
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
             {STATS.map(s => (
@@ -726,40 +726,40 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
         </section>
 
         {/* ── Combat ───────────────────────────────────────────────── */}
-        <section className="bg-codex-card border border-codex-border rounded-xl p-4">
+        <section className="bg-sd-card border border-sd-border rounded-xl p-4">
           <SectionHeader>Combat</SectionHeader>
           <div className="flex flex-wrap items-end gap-4">
             {/* HP — large display */}
             <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-codex-subtext">Hit Points</span>
-              <div className="flex items-baseline gap-2 bg-codex-surface border border-codex-border rounded-lg px-4 py-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-sd-subtext">Hit Points</span>
+              <div className="flex items-baseline gap-2 bg-sd-surface border border-sd-border rounded-lg px-4 py-2">
                 <input
                   type="number"
                   value={data.hp_current}
                   onChange={e => set('hp_current', Number(e.target.value))}
                   disabled={readOnly}
                   className="
-                    w-16 text-center text-4xl font-bold text-codex-gold bg-transparent
+                    w-16 text-center text-4xl font-bold text-sd-gold bg-transparent
                     border-none focus:outline-none
                     disabled:opacity-50 disabled:cursor-not-allowed
                     [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none
                   "
                 />
-                <span className="text-codex-subtext text-lg">/</span>
+                <span className="text-sd-subtext text-lg">/</span>
                 <input
                   type="number"
                   value={data.hp_max}
                   onChange={e => set('hp_max', Number(e.target.value))}
                   disabled={readOnly}
                   className="
-                    w-12 text-center text-xl font-semibold text-codex-text bg-transparent
+                    w-12 text-center text-xl font-semibold text-sd-text bg-transparent
                     border-none focus:outline-none
                     disabled:opacity-50 disabled:cursor-not-allowed
                     [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none
                   "
                 />
               </div>
-              <div className="flex justify-between px-1 text-[10px] text-codex-muted">
+              <div className="flex justify-between px-1 text-[10px] text-sd-muted">
                 <span>current</span>
                 <span>max</span>
               </div>
@@ -767,15 +767,15 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
 
             {/* AC */}
             <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-codex-subtext">Armor Class</span>
-              <div className="flex items-center justify-center bg-codex-surface border border-codex-border rounded-lg px-4 py-2 w-20 h-[68px]">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-sd-subtext">Armor Class</span>
+              <div className="flex items-center justify-center bg-sd-surface border border-sd-border rounded-lg px-4 py-2 w-20 h-[68px]">
                 <input
                   type="number"
                   value={data.ac}
                   onChange={e => set('ac', Number(e.target.value))}
                   disabled={readOnly}
                   className="
-                    w-full text-center text-3xl font-bold text-codex-text bg-transparent
+                    w-full text-center text-3xl font-bold text-sd-text bg-transparent
                     border-none focus:outline-none
                     disabled:opacity-50 disabled:cursor-not-allowed
                     [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none
@@ -787,18 +787,18 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
         </section>
 
         {/* ── Attacks ──────────────────────────────────────────────── */}
-        <section className="bg-codex-card border border-codex-border rounded-xl p-4">
+        <section className="bg-sd-card border border-sd-border rounded-xl p-4">
           <SectionHeader>Attacks</SectionHeader>
 
           {/* ── Mobile: card-per-attack (hidden on sm+) ──────────── */}
           <div className="flex flex-col gap-2 sm:hidden">
             {data.attacks.map((atk, i) => (
               <div key={i}
-                className="relative bg-codex-surface border border-codex-border rounded-lg p-3 flex flex-col gap-2">
+                className="relative bg-sd-surface border border-sd-border rounded-lg p-3 flex flex-col gap-2">
                 {!readOnly && (
                   <button
                     onClick={() => listRemove('attacks', i)}
-                    className="absolute top-2 right-2 w-7 h-7 rounded text-codex-muted
+                    className="absolute top-2 right-2 w-7 h-7 rounded text-sd-muted
                       hover:text-red-400 hover:bg-red-400/10
                       flex items-center justify-center text-base leading-none transition-colors"
                     title="Remove attack"
@@ -812,29 +812,29 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <div className="flex flex-col gap-1">
-                    <span className="text-[9px] uppercase tracking-wider text-codex-muted font-semibold">Bonus</span>
+                    <span className="text-[9px] uppercase tracking-wider text-sd-muted font-semibold">Bonus</span>
                     <input
                       type="text"
                       value={atk.bonus}
                       onChange={e => listSet('attacks', i, 'bonus', e.target.value)}
                       disabled={readOnly}
                       placeholder="+0"
-                      className="w-full bg-codex-bg border border-codex-border rounded px-3 py-2.5
-                        text-sm text-codex-text placeholder-codex-muted
-                        focus:outline-none focus:border-codex-gold transition-colors disabled:opacity-50"
+                      className="w-full bg-sd-bg border border-sd-border rounded px-3 py-2.5
+                        text-sm text-sd-text placeholder-sd-muted
+                        focus:outline-none focus:border-sd-gold transition-colors disabled:opacity-50"
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <span className="text-[9px] uppercase tracking-wider text-codex-muted font-semibold">Damage</span>
+                    <span className="text-[9px] uppercase tracking-wider text-sd-muted font-semibold">Damage</span>
                     <input
                       type="text"
                       value={atk.damage}
                       onChange={e => listSet('attacks', i, 'damage', e.target.value)}
                       disabled={readOnly}
                       placeholder="1d6"
-                      className="w-full bg-codex-bg border border-codex-border rounded px-3 py-2.5
-                        text-sm text-codex-text placeholder-codex-muted
-                        focus:outline-none focus:border-codex-gold transition-colors disabled:opacity-50"
+                      className="w-full bg-sd-bg border border-sd-border rounded px-3 py-2.5
+                        text-sm text-sd-text placeholder-sd-muted
+                        focus:outline-none focus:border-sd-gold transition-colors disabled:opacity-50"
                     />
                   </div>
                 </div>
@@ -844,9 +844,9 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                   onChange={e => listSet('attacks', i, 'notes', e.target.value)}
                   disabled={readOnly}
                   placeholder="Notes (optional)"
-                  className="w-full bg-codex-bg border border-codex-border rounded px-3 py-2.5
-                    text-sm text-codex-text placeholder-codex-muted
-                    focus:outline-none focus:border-codex-gold transition-colors disabled:opacity-50"
+                  className="w-full bg-sd-bg border border-sd-border rounded px-3 py-2.5
+                    text-sm text-sd-text placeholder-sd-muted
+                    focus:outline-none focus:border-sd-gold transition-colors disabled:opacity-50"
                 />
               </div>
             ))}
@@ -858,8 +858,8 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                 {data.gear.some(g => g.item) && (
                   <button
                     onClick={importWeaponsFromGear}
-                    className="text-xs text-codex-muted border border-codex-border rounded
-                      px-3 py-1 hover:text-codex-gold hover:border-codex-gold/40
+                    className="text-xs text-sd-muted border border-sd-border rounded
+                      px-3 py-1 hover:text-sd-gold hover:border-sd-gold/40
                       transition-colors flex items-center gap-1"
                     title="Add weapons from gear that aren't already in this list"
                   >
@@ -882,7 +882,7 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                 : 'grid-cols-[2fr_1fr_1fr_2fr_1.5rem]'
             }`}>
               {['Weapon', 'Bonus', 'Damage', 'Notes'].map(h => (
-                <span key={h} className="text-[10px] uppercase tracking-wider text-codex-subtext font-semibold px-1">
+                <span key={h} className="text-[10px] uppercase tracking-wider text-sd-subtext font-semibold px-1">
                   {h}
                 </span>
               ))}
@@ -907,9 +907,9 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                       disabled={readOnly}
                       placeholder={field === 'bonus' ? '+0' : field === 'damage' ? '1d6' : ''}
                       className="
-                        min-w-0 bg-codex-surface border border-codex-border rounded px-2 py-1.5
-                        text-sm text-codex-text placeholder-codex-muted
-                        focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/20
+                        min-w-0 bg-sd-surface border border-sd-border rounded px-2 py-1.5
+                        text-sm text-sd-text placeholder-sd-muted
+                        focus:outline-none focus:border-sd-gold focus:ring-1 focus:ring-sd-gold/20
                         disabled:opacity-50 disabled:cursor-not-allowed transition-colors
                       "
                     />
@@ -917,7 +917,7 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                   {!readOnly && (
                     <button
                       onClick={() => listRemove('attacks', i)}
-                      className="justify-self-center w-6 h-6 rounded text-codex-muted
+                      className="justify-self-center w-6 h-6 rounded text-sd-muted
                         hover:text-red-400 hover:bg-red-400/10
                         flex items-center justify-center text-base leading-none transition-colors"
                       title="Remove attack"
@@ -935,8 +935,8 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                 {data.gear.some(g => g.item) && (
                   <button
                     onClick={importWeaponsFromGear}
-                    className="text-xs text-codex-muted border border-codex-border rounded
-                      px-3 py-1 hover:text-codex-gold hover:border-codex-gold/40
+                    className="text-xs text-sd-muted border border-sd-border rounded
+                      px-3 py-1 hover:text-sd-gold hover:border-sd-gold/40
                       transition-colors flex items-center gap-1"
                     title="Add weapons from gear that aren't already in this list"
                   >
@@ -949,11 +949,11 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
         </section>
 
         {/* ── Talents ──────────────────────────────────────────────── */}
-        <section className="bg-codex-card border border-codex-border rounded-xl p-4">
+        <section className="bg-sd-card border border-sd-border rounded-xl p-4">
           <SectionHeader>Talents</SectionHeader>
           <div className="space-y-2">
             {data.talents.length === 0 && (
-              <p className="text-codex-muted text-xs italic">No talents yet.</p>
+              <p className="text-sd-muted text-xs italic">No talents yet.</p>
             )}
             {data.talents.map((talent, i) => (
               <AddRemoveRow key={i} onRemove={() => listRemove('talents', i)} disabled={readOnly}>
@@ -964,9 +964,9 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                   disabled={readOnly}
                   placeholder="Talent name"
                   className="
-                    flex-shrink-0 w-36 bg-codex-surface border border-codex-border rounded px-2 py-1.5
-                    text-sm text-codex-text placeholder-codex-muted font-semibold
-                    focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/20
+                    flex-shrink-0 w-36 bg-sd-surface border border-sd-border rounded px-2 py-1.5
+                    text-sm text-sd-text placeholder-sd-muted font-semibold
+                    focus:outline-none focus:border-sd-gold focus:ring-1 focus:ring-sd-gold/20
                     disabled:opacity-50 disabled:cursor-not-allowed transition-colors
                   "
                 />
@@ -977,9 +977,9 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                   disabled={readOnly}
                   placeholder="Description"
                   className="
-                    flex-1 bg-codex-surface border border-codex-border rounded px-2 py-1.5
-                    text-sm text-codex-text placeholder-codex-muted
-                    focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/20
+                    flex-1 bg-sd-surface border border-sd-border rounded px-2 py-1.5
+                    text-sm text-sd-text placeholder-sd-muted
+                    focus:outline-none focus:border-sd-gold focus:ring-1 focus:ring-sd-gold/20
                     disabled:opacity-50 disabled:cursor-not-allowed transition-colors
                   "
                 />
@@ -993,15 +993,15 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
 
         {/* ── Spells ───────────────────────────────────────────────── */}
         {(showSpells || !readOnly) && (
-          <section className="bg-codex-card border border-codex-border rounded-xl p-4">
+          <section className="bg-sd-card border border-sd-border rounded-xl p-4">
             <SectionHeader>Spells</SectionHeader>
 
             {/* Spells-known guidance */}
             {showSpells && spellsKnownRow && (
               <div className="flex gap-2 mb-3 flex-wrap">
-                <span className="text-xs text-codex-subtext">Spells known at level {data.level}:</span>
+                <span className="text-xs text-sd-subtext">Spells known at level {data.level}:</span>
                 {spellsKnownRow.map((count, ti) => count > 0 && (
-                  <span key={ti} className="text-xs bg-codex-surface border border-codex-border rounded px-1.5 py-0.5 text-codex-gold font-semibold">
+                  <span key={ti} className="text-xs bg-sd-surface border border-sd-border rounded px-1.5 py-0.5 text-sd-gold font-semibold">
                     T{ti + 1}: {count}
                   </span>
                 ))}
@@ -1009,7 +1009,7 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
             )}
 
             {!showSpells && !readOnly && (
-              <p className="text-codex-muted text-xs italic mb-2">
+              <p className="text-sd-muted text-xs italic mb-2">
                 Set class to Wizard, Priest, Necromancer, or Bard to track spells.
               </p>
             )}
@@ -1027,7 +1027,7 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                 .filter(g => g.entries.length > 0)
 
               if (groups.length === 0 && showSpells) {
-                return <p className="text-codex-muted text-xs italic mb-3">No spells yet — add from the library below.</p>
+                return <p className="text-sd-muted text-xs italic mb-3">No spells yet — add from the library below.</p>
               }
 
               return (
@@ -1036,8 +1036,8 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                     <div key={tier}>
                       {/* Tier group header */}
                       <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-codex-gold">Tier {tier}</span>
-                        <div className="flex-1 h-px bg-codex-gold/20" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-sd-gold">Tier {tier}</span>
+                        <div className="flex-1 h-px bg-sd-gold/20" />
                       </div>
 
                       {/* Spell cards in this tier */}
@@ -1051,7 +1051,7 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                                 rounded-lg border transition-colors
                                 ${spell.failed
                                   ? 'border-red-700/60 bg-red-950/20'
-                                  : 'border-codex-border bg-codex-surface'}
+                                  : 'border-sd-border bg-sd-surface'}
                               `}
                             >
                               {/* Collapsed header row */}
@@ -1064,22 +1064,22 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                                     onChange={e => listSet('spells', i, 'name', e.target.value)}
                                     disabled={readOnly}
                                     placeholder="Spell name"
-                                    className="flex-1 min-w-0 bg-transparent text-sm font-semibold text-codex-text placeholder-codex-muted focus:outline-none disabled:opacity-50"
+                                    className="flex-1 min-w-0 bg-transparent text-sm font-semibold text-sd-text placeholder-sd-muted focus:outline-none disabled:opacity-50"
                                   />
                                 ) : (
-                                  <span className="flex-1 min-w-0 text-sm font-semibold text-codex-text truncate">
+                                  <span className="flex-1 min-w-0 text-sm font-semibold text-sd-text truncate">
                                     {spell.name}
                                   </span>
                                 )}
 
                                 {/* Duration + Range pills (collapsed) */}
                                 {!isExpanded && spell.duration && (
-                                  <span className="hidden sm:inline-flex text-[10px] text-codex-subtext border border-codex-border rounded px-1.5 py-0.5 whitespace-nowrap">
+                                  <span className="hidden sm:inline-flex text-[10px] text-sd-subtext border border-sd-border rounded px-1.5 py-0.5 whitespace-nowrap">
                                     {spell.duration}
                                   </span>
                                 )}
                                 {!isExpanded && spell.range && (
-                                  <span className="hidden sm:inline-flex text-[10px] text-codex-subtext border border-codex-border rounded px-1.5 py-0.5 whitespace-nowrap">
+                                  <span className="hidden sm:inline-flex text-[10px] text-sd-subtext border border-sd-border rounded px-1.5 py-0.5 whitespace-nowrap">
                                     {spell.range}
                                   </span>
                                 )}
@@ -1093,7 +1093,7 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                                     flex-shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded border transition-colors
                                     ${spell.failed
                                       ? 'bg-red-700/30 border-red-600/60 text-red-400'
-                                      : 'bg-transparent border-codex-border/60 text-codex-muted hover:border-red-600/60 hover:text-red-400'}
+                                      : 'bg-transparent border-sd-border/60 text-sd-muted hover:border-red-600/60 hover:text-red-400'}
                                     disabled:cursor-not-allowed
                                   `}
                                 >
@@ -1103,7 +1103,7 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                                 {/* Expand toggle */}
                                 <button
                                   onClick={() => toggleSpellExpanded(i)}
-                                  className="flex-shrink-0 text-codex-subtext hover:text-codex-gold transition-colors p-0.5"
+                                  className="flex-shrink-0 text-sd-subtext hover:text-sd-gold transition-colors p-0.5"
                                   title={isExpanded ? 'Collapse' : 'Expand details'}
                                 >
                                   <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -1126,7 +1126,7 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                                         return n
                                       })
                                     }}
-                                    className="flex-shrink-0 text-codex-muted hover:text-red-400 transition-colors p-0.5"
+                                    className="flex-shrink-0 text-sd-muted hover:text-red-400 transition-colors p-0.5"
                                     title="Remove spell"
                                   >
                                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1138,37 +1138,37 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
 
                               {/* Expanded detail panel */}
                               {isExpanded && (
-                                <div className="border-t border-codex-border/50 px-3 py-2.5 space-y-2">
+                                <div className="border-t border-sd-border/50 px-3 py-2.5 space-y-2">
                                   {spell.custom ? (
                                     <>
                                       <div className="grid grid-cols-2 gap-2">
                                         <div>
-                                          <label className="text-[10px] uppercase tracking-wider text-codex-subtext block mb-1">Duration</label>
-                                          <input type="text" value={spell.duration} onChange={e => listSet('spells', i, 'duration', e.target.value)} disabled={readOnly} placeholder="e.g. 5 rounds" className="w-full bg-codex-bg border border-codex-border rounded px-2 py-1 text-xs text-codex-text focus:outline-none focus:border-codex-gold disabled:opacity-50" />
+                                          <label className="text-[10px] uppercase tracking-wider text-sd-subtext block mb-1">Duration</label>
+                                          <input type="text" value={spell.duration} onChange={e => listSet('spells', i, 'duration', e.target.value)} disabled={readOnly} placeholder="e.g. 5 rounds" className="w-full bg-sd-bg border border-sd-border rounded px-2 py-1 text-xs text-sd-text focus:outline-none focus:border-sd-gold disabled:opacity-50" />
                                         </div>
                                         <div>
-                                          <label className="text-[10px] uppercase tracking-wider text-codex-subtext block mb-1">Range</label>
-                                          <input type="text" value={spell.range} onChange={e => listSet('spells', i, 'range', e.target.value)} disabled={readOnly} placeholder="e.g. Near" className="w-full bg-codex-bg border border-codex-border rounded px-2 py-1 text-xs text-codex-text focus:outline-none focus:border-codex-gold disabled:opacity-50" />
+                                          <label className="text-[10px] uppercase tracking-wider text-sd-subtext block mb-1">Range</label>
+                                          <input type="text" value={spell.range} onChange={e => listSet('spells', i, 'range', e.target.value)} disabled={readOnly} placeholder="e.g. Near" className="w-full bg-sd-bg border border-sd-border rounded px-2 py-1 text-xs text-sd-text focus:outline-none focus:border-sd-gold disabled:opacity-50" />
                                         </div>
                                       </div>
                                       <div>
-                                        <label className="text-[10px] uppercase tracking-wider text-codex-subtext block mb-1">Description</label>
-                                        <textarea value={spell.description} onChange={e => listSet('spells', i, 'description', e.target.value)} disabled={readOnly} placeholder="Spell effect…" rows={3} className="w-full bg-codex-bg border border-codex-border rounded px-2 py-1 text-xs text-codex-text focus:outline-none focus:border-codex-gold disabled:opacity-50 resize-none" />
+                                        <label className="text-[10px] uppercase tracking-wider text-sd-subtext block mb-1">Description</label>
+                                        <textarea value={spell.description} onChange={e => listSet('spells', i, 'description', e.target.value)} disabled={readOnly} placeholder="Spell effect…" rows={3} className="w-full bg-sd-bg border border-sd-border rounded px-2 py-1 text-xs text-sd-text focus:outline-none focus:border-sd-gold disabled:opacity-50 resize-none" />
                                       </div>
                                       <div>
-                                        <label className="text-[10px] uppercase tracking-wider text-codex-subtext block mb-1">Tier</label>
-                                        <select value={spell.tier} onChange={e => listSet('spells', i, 'tier', Number(e.target.value))} disabled={readOnly} className="bg-codex-bg border border-codex-border rounded px-2 py-1 text-xs text-codex-text focus:outline-none focus:border-codex-gold disabled:opacity-50">
+                                        <label className="text-[10px] uppercase tracking-wider text-sd-subtext block mb-1">Tier</label>
+                                        <select value={spell.tier} onChange={e => listSet('spells', i, 'tier', Number(e.target.value))} disabled={readOnly} className="bg-sd-bg border border-sd-border rounded px-2 py-1 text-xs text-sd-text focus:outline-none focus:border-sd-gold disabled:opacity-50">
                                           {[1,2,3,4,5].map(t => <option key={t} value={t}>Tier {t}</option>)}
                                         </select>
                                       </div>
                                     </>
                                   ) : (
                                     <>
-                                      <div className="flex gap-3 text-xs text-codex-subtext">
-                                        {spell.duration && <span><span className="text-codex-gold font-semibold">Duration:</span> {spell.duration}</span>}
-                                        {spell.range    && <span><span className="text-codex-gold font-semibold">Range:</span> {spell.range}</span>}
+                                      <div className="flex gap-3 text-xs text-sd-subtext">
+                                        {spell.duration && <span><span className="text-sd-gold font-semibold">Duration:</span> {spell.duration}</span>}
+                                        {spell.range    && <span><span className="text-sd-gold font-semibold">Range:</span> {spell.range}</span>}
                                       </div>
-                                      <p className="text-xs text-codex-text leading-relaxed">{spell.description}</p>
+                                      <p className="text-xs text-sd-text leading-relaxed">{spell.description}</p>
                                     </>
                                   )}
                                   {spell.failed && (
@@ -1188,16 +1188,16 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
 
             {/* Add spell UI */}
             {!readOnly && (
-              <div className="border-t border-codex-border/50 pt-3 space-y-2">
+              <div className="border-t border-sd-border/50 pt-3 space-y-2">
                 {/* Tier selector tabs */}
                 {showSpells && (
                   <div className="flex items-center gap-1 flex-wrap">
-                    <span className="text-[10px] uppercase tracking-wider text-codex-subtext mr-1">Tier:</span>
+                    <span className="text-[10px] uppercase tracking-wider text-sd-subtext mr-1">Tier:</span>
                     {[1,2,3,4,5].map(t => (
                       <button
                         key={t}
                         onClick={() => setSpellPickerTier(t)}
-                        className={`px-2 py-0.5 rounded text-[11px] font-bold border transition-colors ${spellPickerTier === t ? 'bg-codex-gold/20 border-codex-gold text-codex-gold' : 'border-codex-border text-codex-subtext hover:border-codex-gold/50 hover:text-codex-gold'}`}
+                        className={`px-2 py-0.5 rounded text-[11px] font-bold border transition-colors ${spellPickerTier === t ? 'bg-sd-gold/20 border-sd-gold text-sd-gold' : 'border-sd-border text-sd-subtext hover:border-sd-gold/50 hover:text-sd-gold'}`}
                       >T{t}</button>
                     ))}
                   </div>
@@ -1208,7 +1208,7 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                     <select
                       id="spell-picker-select"
                       defaultValue=""
-                      className="flex-1 bg-codex-surface border border-codex-border rounded px-2 py-1.5 text-sm text-codex-text focus:outline-none focus:border-codex-gold"
+                      className="flex-1 bg-sd-surface border border-sd-border rounded px-2 py-1.5 text-sm text-sd-text focus:outline-none focus:border-sd-gold"
                     >
                       <option value="" disabled>— pick a spell to add —</option>
                       {pickerSpells.map(name => (
@@ -1220,18 +1220,18 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                         const sel = document.getElementById('spell-picker-select')
                         if (sel?.value) { addSpellFromLibrary(sel.value); sel.value = '' }
                       }}
-                      className="px-3 py-1.5 bg-codex-gold/10 border border-codex-gold/40 rounded text-codex-gold text-sm font-semibold hover:bg-codex-gold/20 transition-colors"
+                      className="px-3 py-1.5 bg-sd-gold/10 border border-sd-gold/40 rounded text-sd-gold text-sm font-semibold hover:bg-sd-gold/20 transition-colors"
                     >
                       Add
                     </button>
                   </div>
                 ) : showSpells ? (
-                  <p className="text-codex-muted text-xs italic">All Tier {spellPickerTier} spells for {data.class_name} already added.</p>
+                  <p className="text-sd-muted text-xs italic">All Tier {spellPickerTier} spells for {data.class_name} already added.</p>
                 ) : null}
 
                 <button
                   onClick={addCustomSpell}
-                  className="flex items-center gap-1.5 text-xs text-codex-subtext hover:text-codex-gold border border-codex-border hover:border-codex-gold/40 rounded px-2.5 py-1.5 transition-colors"
+                  className="flex items-center gap-1.5 text-xs text-sd-subtext hover:text-sd-gold border border-sd-border hover:border-sd-gold/40 rounded px-2.5 py-1.5 transition-colors"
                 >
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
                   Add custom spell
@@ -1242,27 +1242,27 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
         )}
 
         {/* ── Gear ─────────────────────────────────────────────────── */}
-        <section className="bg-codex-card border border-codex-border rounded-xl p-4">
+        <section className="bg-sd-card border border-sd-border rounded-xl p-4">
           <SectionHeader>Gear</SectionHeader>
           <div className="flex justify-between items-center mb-3">
-            <span className="text-xs text-codex-subtext">
-              Carry capacity: <span className="text-codex-text font-semibold">{carryLimit} slots</span>
+            <span className="text-xs text-sd-subtext">
+              Carry capacity: <span className="text-sd-text font-semibold">{carryLimit} slots</span>
             </span>
-            <span className={`text-xs font-semibold ${slotsUsed > carryLimit ? 'text-red-400' : 'text-codex-gold'}`}>
+            <span className={`text-xs font-semibold ${slotsUsed > carryLimit ? 'text-red-400' : 'text-sd-gold'}`}>
               {slotsUsed} / {carryLimit} used
             </span>
           </div>
 
           {/* Column headers (visible on sm+) */}
           <div className="hidden sm:grid grid-cols-[1.25rem_1fr_auto] gap-2 mb-1 px-1">
-            <span className="text-[9px] uppercase tracking-wider text-codex-muted text-center" title="Equipped">Eq</span>
-            <span className="text-[9px] uppercase tracking-wider text-codex-muted">Item</span>
-            <span className="text-[9px] uppercase tracking-wider text-codex-muted text-center w-14">Slots</span>
+            <span className="text-[9px] uppercase tracking-wider text-sd-muted text-center" title="Equipped">Eq</span>
+            <span className="text-[9px] uppercase tracking-wider text-sd-muted">Item</span>
+            <span className="text-[9px] uppercase tracking-wider text-sd-muted text-center w-14">Slots</span>
           </div>
 
           <div className="space-y-2">
             {data.gear.length === 0 && (
-              <p className="text-codex-muted text-xs italic">No gear yet.</p>
+              <p className="text-sd-muted text-xs italic">No gear yet.</p>
             )}
             {data.gear.map((g, i) => (
               <AddRemoveRow key={i} onRemove={() => listRemove('gear', i)} disabled={readOnly}>
@@ -1276,7 +1276,7 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                     checked={!!g.equipped}
                     onChange={e => toggleEquip(i, e.target.checked)}
                     disabled={readOnly || (!g.item && g.type !== 'gear')}
-                    className="w-3.5 h-3.5 rounded cursor-pointer accent-codex-gold
+                    className="w-3.5 h-3.5 rounded cursor-pointer accent-sd-gold
                       disabled:cursor-not-allowed disabled:opacity-40"
                   />
                 </label>
@@ -1306,9 +1306,9 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                     disabled={readOnly}
                     placeholder="Item name"
                     className="
-                      flex-1 bg-codex-surface border border-codex-border rounded px-2 py-1.5
-                      text-sm text-codex-text placeholder-codex-muted
-                      focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/20
+                      flex-1 bg-sd-surface border border-sd-border rounded px-2 py-1.5
+                      text-sm text-sd-text placeholder-sd-muted
+                      focus:outline-none focus:border-sd-gold focus:ring-1 focus:ring-sd-gold/20
                       disabled:opacity-50 disabled:cursor-not-allowed transition-colors
                     "
                   />
@@ -1323,14 +1323,14 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                     disabled={readOnly}
                     min={0}
                     className="
-                      w-14 bg-codex-surface border border-codex-border rounded px-2 py-1.5
-                      text-sm text-codex-text text-center
-                      focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/20
+                      w-14 bg-sd-surface border border-sd-border rounded px-2 py-1.5
+                      text-sm text-sd-text text-center
+                      focus:outline-none focus:border-sd-gold focus:ring-1 focus:ring-sd-gold/20
                       disabled:opacity-50 disabled:cursor-not-allowed transition-colors
                       [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none
                     "
                   />
-                  <span className="text-[10px] text-codex-muted uppercase tracking-wide sm:hidden">sl</span>
+                  <span className="text-[10px] text-sd-muted uppercase tracking-wide sm:hidden">sl</span>
                 </div>
               </AddRemoveRow>
             ))}
@@ -1340,24 +1340,24 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
               <div className="flex flex-col gap-1.5 pt-1">
                 {(data.arrows > 0 || !readOnly) && (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-codex-muted w-5 text-center flex-shrink-0">🏹</span>
-                    <span className="flex-1 text-sm text-codex-text">Arrows</span>
+                    <span className="text-xs text-sd-muted w-5 text-center flex-shrink-0">🏹</span>
+                    <span className="flex-1 text-sm text-sd-text">Arrows</span>
                     {readOnly ? (
-                      <span className="text-sm font-bold text-codex-text font-mono">{data.arrows} / 20</span>
+                      <span className="text-sm font-bold text-sd-text font-mono">{data.arrows} / 20</span>
                     ) : (
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <button
                           onClick={() => set('arrows', Math.max(0, data.arrows - 1))}
                           disabled={data.arrows <= 0}
-                          className="w-7 h-7 rounded border border-codex-border text-codex-muted hover:text-codex-text hover:border-codex-gold/40 flex items-center justify-center text-base leading-none transition-colors disabled:opacity-30"
+                          className="w-7 h-7 rounded border border-sd-border text-sd-muted hover:text-sd-text hover:border-sd-gold/40 flex items-center justify-center text-base leading-none transition-colors disabled:opacity-30"
                         >−</button>
-                        <span className="w-12 text-center text-sm font-bold font-mono text-codex-text">
+                        <span className="w-12 text-center text-sm font-bold font-mono text-sd-text">
                           {data.arrows} / 20
                         </span>
                         <button
                           onClick={() => set('arrows', Math.min(20, data.arrows + 1))}
                           disabled={data.arrows >= 20}
-                          className="w-7 h-7 rounded border border-codex-border text-codex-muted hover:text-codex-text hover:border-codex-gold/40 flex items-center justify-center text-base leading-none transition-colors disabled:opacity-30"
+                          className="w-7 h-7 rounded border border-sd-border text-sd-muted hover:text-sd-text hover:border-sd-gold/40 flex items-center justify-center text-base leading-none transition-colors disabled:opacity-30"
                         >+</button>
                       </div>
                     )}
@@ -1365,24 +1365,24 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                 )}
                 {(data.bolts > 0 || !readOnly) && (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-codex-muted w-5 text-center flex-shrink-0">🎯</span>
-                    <span className="flex-1 text-sm text-codex-text">Crossbow Bolts</span>
+                    <span className="text-xs text-sd-muted w-5 text-center flex-shrink-0">🎯</span>
+                    <span className="flex-1 text-sm text-sd-text">Crossbow Bolts</span>
                     {readOnly ? (
-                      <span className="text-sm font-bold text-codex-text font-mono">{data.bolts} / 20</span>
+                      <span className="text-sm font-bold text-sd-text font-mono">{data.bolts} / 20</span>
                     ) : (
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <button
                           onClick={() => set('bolts', Math.max(0, data.bolts - 1))}
                           disabled={data.bolts <= 0}
-                          className="w-7 h-7 rounded border border-codex-border text-codex-muted hover:text-codex-text hover:border-codex-gold/40 flex items-center justify-center text-base leading-none transition-colors disabled:opacity-30"
+                          className="w-7 h-7 rounded border border-sd-border text-sd-muted hover:text-sd-text hover:border-sd-gold/40 flex items-center justify-center text-base leading-none transition-colors disabled:opacity-30"
                         >−</button>
-                        <span className="w-12 text-center text-sm font-bold font-mono text-codex-text">
+                        <span className="w-12 text-center text-sm font-bold font-mono text-sd-text">
                           {data.bolts} / 20
                         </span>
                         <button
                           onClick={() => set('bolts', Math.min(20, data.bolts + 1))}
                           disabled={data.bolts >= 20}
-                          className="w-7 h-7 rounded border border-codex-border text-codex-muted hover:text-codex-text hover:border-codex-gold/40 flex items-center justify-center text-base leading-none transition-colors disabled:opacity-30"
+                          className="w-7 h-7 rounded border border-sd-border text-sd-muted hover:text-sd-text hover:border-sd-gold/40 flex items-center justify-center text-base leading-none transition-colors disabled:opacity-30"
                         >+</button>
                       </div>
                     )}
@@ -1402,7 +1402,7 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
         </section>
 
         {/* ── Notes ────────────────────────────────────────────────── */}
-        <section className="bg-codex-card border border-codex-border rounded-xl p-4">
+        <section className="bg-sd-card border border-sd-border rounded-xl p-4">
           <SectionHeader>Notes</SectionHeader>
           <textarea
             value={data.notes}
@@ -1411,9 +1411,9 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
             rows={5}
             placeholder="Session notes, NPC names, quest hooks…"
             className="
-              w-full bg-codex-surface border border-codex-border rounded-lg
-              px-3 py-2.5 text-sm text-codex-text placeholder-codex-muted
-              focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/20
+              w-full bg-sd-surface border border-sd-border rounded-lg
+              px-3 py-2.5 text-sm text-sd-text placeholder-sd-muted
+              focus:outline-none focus:border-sd-gold focus:ring-1 focus:ring-sd-gold/20
               disabled:opacity-50 disabled:cursor-not-allowed
               transition-colors resize-y
             "

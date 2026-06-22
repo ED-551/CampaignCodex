@@ -50,7 +50,7 @@ export default function CreateCampaignModal({ onClose, onCreated }) {
     }
   }
 
-  const INPUT = `w-full bg-codex-bg border border-codex-border rounded-lg px-4 py-2.5 text-codex-text placeholder-codex-muted text-sm focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/30 transition-colors`
+  const INPUT = `w-full bg-codex-bg border border-codex-border rounded-lg px-4 py-2.5 text-codex-text placeholder-codex-muted text-base sm:text-sm focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/30 transition-colors`
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

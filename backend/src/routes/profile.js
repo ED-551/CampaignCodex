@@ -63,7 +63,8 @@ router.get('/me', async (req, res) => {
   try {
     const result = await db.query(
       `SELECT id, username, first_name, last_name, display_name_pref, about_text,
-              role_pref, game_interests, profile_theme, supporter_tier, created_at
+              role_pref, game_interests, profile_theme, supporter_tier, created_at,
+              is_moderator, is_admin
        FROM users WHERE id = $1 LIMIT 1`,
       [req.user.sub]
     )
@@ -84,6 +85,8 @@ router.get('/me', async (req, res) => {
         profileTheme:    u.profile_theme     ?? 'default',
         supporterTier:   u.supporter_tier,
         joinedAt:        u.created_at,
+        isModerator:     u.is_moderator,
+        isAdmin:         u.is_admin,
         stats,
       },
     })
@@ -158,9 +161,10 @@ router.get('/:username', [
   try {
     const result = await db.query(
       `SELECT id, username, first_name, display_name_pref, about_text,
-              role_pref, game_interests, profile_theme, supporter_tier, created_at
+              role_pref, game_interests, profile_theme, supporter_tier, created_at,
+              is_moderator, is_admin
        FROM users
-       WHERE username = $1 AND is_admin = false
+       WHERE username = $1
        LIMIT 1`,
       [req.params.username]
     )
@@ -195,6 +199,8 @@ router.get('/:username', [
         profileTheme:  u.profile_theme  ?? 'default',
         supporterTier: u.supporter_tier,
         joinedAt:      u.created_at,
+        isModerator:   u.is_moderator,
+        isAdmin:       u.is_admin,
         stats,
       },
     })

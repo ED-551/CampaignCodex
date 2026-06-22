@@ -6,7 +6,7 @@ import PasswordInput from '../ui/PasswordInput'
 import { ExternalLink } from 'lucide-react'
 
 // Base input classes reused for the inline name-row inputs
-const INPUT_BASE = `w-full bg-codex-surface border rounded-lg px-4 py-2.5 text-codex-text placeholder-codex-muted text-sm focus:outline-none focus:ring-1 transition-colors duration-150`
+const INPUT_BASE = `w-full bg-codex-surface border rounded-lg px-4 py-2.5 text-codex-text placeholder-codex-muted text-base sm:text-sm focus:outline-none focus:ring-1 transition-colors duration-150`
 const INPUT_OK   = `${INPUT_BASE} border-codex-border focus:border-codex-gold focus:ring-codex-gold/30`
 const INPUT_ERR  = `${INPUT_BASE} border-red-500/70 focus:border-red-500 focus:ring-red-500/30`
 

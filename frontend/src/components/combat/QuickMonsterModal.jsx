@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { X, Sword } from 'lucide-react'
 import { api } from '../../utils/api'
 
-const INPUT = `w-full bg-codex-bg border border-codex-border rounded-lg px-3 py-2 text-sm text-codex-text placeholder-codex-muted focus:outline-none focus:border-codex-gold/50 transition-colors`
+const INPUT = `w-full bg-codex-bg border border-codex-border rounded-lg px-3 py-2 text-base sm:text-sm text-codex-text placeholder-codex-muted focus:outline-none focus:border-codex-gold/50 transition-colors`
 
 const LABEL = `block text-xs font-medium text-codex-subtext mb-1.5`
 

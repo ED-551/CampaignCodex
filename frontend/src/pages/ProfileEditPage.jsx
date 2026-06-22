@@ -255,7 +255,7 @@ export default function ProfileEditPage() {
                 onChange={e => set('aboutText', e.target.value.slice(0, MAX_ABOUT))}
                 placeholder="Tell the table who you are — favorite genres, playstyle, anything goes."
                 className="w-full bg-codex-surface border border-codex-border rounded-lg
-                  px-3 py-2.5 text-sm text-codex-text placeholder-codex-muted resize-none
+                  px-3 py-2.5 text-base sm:text-sm text-codex-text placeholder-codex-muted resize-none
                   focus:outline-none focus:border-codex-gold/50 focus:ring-1 focus:ring-codex-gold/20
                   transition-colors leading-relaxed"
               />

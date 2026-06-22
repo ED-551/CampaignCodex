@@ -119,10 +119,10 @@ export default function ModeratorDashboard() {
       {/* ── Nav ── */}
       <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <Link to="/dashboard" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <BookOpen size={16} className="text-codex-gold" />
             <span className="font-display text-sm text-codex-gold tracking-wide">CampaignCodex</span>
-          </div>
+          </Link>
           <div className="flex items-center gap-4">
             <Link to="/dashboard"
               className="text-xs text-codex-subtext hover:text-codex-text transition-colors flex items-center gap-1">
@@ -171,7 +171,7 @@ export default function ModeratorDashboard() {
             onChange={e => setSearch(e.target.value)}
             placeholder="Search by username or email…"
             className="w-full bg-codex-surface border border-codex-border rounded-lg pl-8 pr-4 py-2
-              text-sm text-codex-text placeholder-codex-muted
+              text-base sm:text-sm text-codex-text placeholder-codex-muted
               focus:outline-none focus:border-codex-gold/50 focus:ring-1 focus:ring-codex-gold/20
               transition-colors"
           />

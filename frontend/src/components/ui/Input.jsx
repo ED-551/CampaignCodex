@@ -22,7 +22,7 @@ export default function Input({
           w-full bg-codex-surface border rounded-lg
           px-4 py-2.5
           text-codex-text placeholder-codex-muted
-          text-sm font-body
+          text-base sm:text-sm font-body
           focus:outline-none focus:ring-1
           transition-colors duration-150
           ${error

@@ -21,7 +21,8 @@ const GAME_COLORS = {
 }
 
 export default function AdminDashboard() {
-  const { logout }              = useAuth()
+  const { logout, user }        = useAuth()
+  const isPrimaryAdmin          = user?.username === 'adm_Ffz6NttVTaY'
   const navigate                = useNavigate()
   const [data, setData]               = useState(null)
   const [users, setUsers]             = useState([])
@@ -89,6 +90,19 @@ export default function AdminDashboard() {
     try {
       await api.patch(`/admin/users/${userId}/moderator`, { isModerator: !currentValue })
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_moderator: !currentValue } : u))
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  async function toggleAdmin(userId, currentValue) {
+    try {
+      await api.patch(`/admin/users/${userId}/admin`, { isAdmin: !currentValue })
+      setUsers(prev => prev.map(u =>
+        u.id === userId
+          ? { ...u, is_admin: !currentValue, is_moderator: currentValue ? false : u.is_moderator }
+          : u
+      ))
     } catch (err) {
       alert(err.message)
     }
@@ -486,7 +500,7 @@ export default function AdminDashboard() {
                               className="bg-codex-bg border border-codex-border rounded px-2 py-1 text-xs text-codex-text focus:outline-none focus:border-codex-gold"
                             >
                               {['free','bronze','silver','gold','platinum', ...((u.is_admin || u.is_moderator) ? ['black'] : [])].map(t => (
-                                <option key={t} value={t}>{t}</option>
+                                <option key={t} value={t}>{t === 'black' ? 'Obsidian' : t}</option>
                               ))}
                             </select>
 
@@ -505,8 +519,19 @@ export default function AdminDashboard() {
                               </button>
                             )}
 
+                            {/* Grant Admin — primary admin only, non-admin users only */}
+                            {!u.is_admin && isPrimaryAdmin && (
+                              <button
+                                onClick={() => toggleAdmin(u.id, false)}
+                                title="Grant administrator role"
+                                className="text-[10px] px-2 py-1 rounded border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/60 transition-colors flex items-center gap-1"
+                              >
+                                <Shield size={10} /> Make Admin
+                              </button>
+                            )}
+
                             {/* Revoke Admin — only shown for admin rows (primary adm_ only) */}
-                            {u.is_admin && (
+                            {u.is_admin && isPrimaryAdmin && (
                               <button
                                 onClick={() => { setRevokeError(''); setRevokeTarget({ id: u.id, username: u.username }) }}
                                 title="Revoke admin status"
@@ -691,7 +716,7 @@ export default function AdminDashboard() {
               <p className="text-sm text-codex-subtext leading-relaxed">
                 This will demote{' '}
                 <span className="font-semibold text-codex-text">@{revokeTarget.username}</span>{' '}
-                to a regular user account. Their black tier will be reset to free. This action is immediate and cannot be undone here.
+                to a regular user account. Their Obsidian tier will be reset to free. This action is immediate and cannot be undone here.
               </p>
               {revokeError && <p className="text-sm text-red-400">{revokeError}</p>}
               <div className="flex gap-3">

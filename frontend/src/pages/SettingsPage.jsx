@@ -41,6 +41,21 @@ function Alert({ type, message }) {
   )
 }
 
+const TIER_DISPLAY = {
+  free:     '',               // free members: show nothing
+  bronze:   'Bronze Member',
+  silver:   'Silver Member',
+  gold:     'Gold Member',
+  platinum: 'Platinum Member',
+  black:    'Obsidian Member',
+}
+
+function membershipLabel(user) {
+  if (user?.isAdmin)     return 'Obsidian Member · Administrator'
+  if (user?.isModerator) return 'Obsidian Member · Moderator'
+  return TIER_DISPLAY[user?.supporterTier ?? 'free'] ?? ''
+}
+
 export default function SettingsPage() {
   const { user, logout, updateSettings, changePassword, deleteAccount } = useAuth()
   const navigate = useNavigate()
@@ -195,7 +210,9 @@ export default function SettingsPage() {
             </div>
             <div>
               <div className="text-sm font-semibold text-codex-text">@{user?.username}</div>
-              <div className="text-xs text-codex-muted capitalize">{user?.supporterTier ?? 'free'} member</div>
+              {membershipLabel(user) && (
+                <div className="text-xs text-codex-muted">{membershipLabel(user)}</div>
+              )}
             </div>
           </div>
           <p className="text-xs text-codex-muted">

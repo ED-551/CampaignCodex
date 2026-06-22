@@ -27,7 +27,7 @@ export default function PasswordInput({
             w-full bg-codex-surface border rounded-lg
             px-4 py-2.5 pr-11
             text-codex-text placeholder-codex-muted
-            text-sm font-body
+            text-base sm:text-sm font-body
             focus:outline-none focus:ring-1
             transition-colors duration-150
             [&::-ms-reveal]:hidden [&::-webkit-contacts-auto-fill-button]:hidden

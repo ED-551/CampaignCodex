@@ -7,6 +7,10 @@ const router = express.Router()
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+// The root account that can assign/revoke admin and moderator roles.
+// All other admins have moderation powers but cannot promote users.
+const PRIMARY_ADMIN_USERNAME = 'adm_Ffz6NttVTaY'
+
 // ─── GET /api/admin/stats ─────────────────────────────────────────────────────
 router.get('/stats', requireAdmin, async (req, res) => {
   try {
@@ -177,8 +181,11 @@ router.patch('/users/:id/tier', requireAdmin, async (req, res) => {
 })
 
 // ─── PATCH /api/admin/users/:id/moderator ────────────────────────────────────
-// Assign or remove the moderator role (admin only).
+// Assign or remove the moderator role — primary admin only.
 router.patch('/users/:id/moderator', requireAdmin, async (req, res) => {
+  if (req.user.username !== PRIMARY_ADMIN_USERNAME) {
+    return res.status(403).json({ error: 'Only the primary administrator can assign moderator roles.' })
+  }
   const { isModerator } = req.body
   if (typeof isModerator !== 'boolean') {
     return res.status(400).json({ error: 'isModerator must be a boolean.' })
@@ -305,8 +312,11 @@ router.patch('/users/:id/ban', requireModerator, async (req, res) => {
 })
 
 // ─── PATCH /api/admin/users/:id/admin ────────────────────────────────────────
-// Grant or revoke admin (moderator) status — primary admin only.
+// Grant or revoke admin status — primary admin only.
 router.patch('/users/:id/admin', requireAdmin, async (req, res) => {
+  if (req.user.username !== PRIMARY_ADMIN_USERNAME) {
+    return res.status(403).json({ error: 'Only the primary administrator can assign admin roles.' })
+  }
   const { isAdmin: grantAdmin } = req.body
   if (typeof grantAdmin !== 'boolean') {
     return res.status(400).json({ error: 'isAdmin must be a boolean.' })

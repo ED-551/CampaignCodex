@@ -490,7 +490,7 @@ function RoomView({ room, socket, connected, user, onExit }) {
               rows={1}
               maxLength={500}
               className="flex-1 resize-none bg-codex-surface border border-codex-border rounded-xl
-                px-3 py-2.5 text-sm text-codex-text placeholder-codex-muted
+                px-3 py-2.5 text-base sm:text-sm text-codex-text placeholder-codex-muted
                 focus:outline-none focus:border-codex-gold/50 focus:ring-1 focus:ring-codex-gold/20
                 transition-colors disabled:opacity-40 max-h-32 overflow-y-auto"
               style={{ fieldSizing: 'content' }}

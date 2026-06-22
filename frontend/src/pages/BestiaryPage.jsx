@@ -69,7 +69,7 @@ const SYSTEM_META = {
 const FULL_FORM_SYSTEMS = ['shadowdark', 'morkborg', 'nimble']
 
 const INPUT = `w-full bg-codex-surface border border-codex-border rounded-lg px-4 py-2.5
-  text-codex-text placeholder-codex-muted text-sm
+  text-codex-text placeholder-codex-muted text-base sm:text-sm
   focus:outline-none focus:border-codex-gold focus:ring-1 focus:ring-codex-gold/30
   transition-colors disabled:opacity-40`
 

@@ -165,6 +165,9 @@ export default function ProfilePage() {
                     {profile.displayName && (
                       <p className="text-sm text-codex-subtext mt-0.5">{profile.displayName}</p>
                     )}
+                    {profileMemberLabel(profile) && (
+                      <p className="text-xs text-codex-muted mt-0.5">{profileMemberLabel(profile)}</p>
+                    )}
                   </div>
                   {theme.label && (
                     <span className={`flex-shrink-0 text-[10px] font-bold uppercase tracking-wider
@@ -290,17 +293,35 @@ export default function ProfilePage() {
             </>
           )}
 
+          {/* Member since — anchored inside the card above the bottom bar */}
+          <div className="px-6 pb-3">
+            <p className="text-center text-xs text-codex-muted">
+              Member since {new Date(profile.joinedAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </p>
+          </div>
+
           {/* Bottom bar */}
           <div className={`h-px w-full bg-gradient-to-r from-transparent ${theme.topBar} to-transparent opacity-30`} />
         </div>
-
-        {/* Joined date */}
-        <p className="text-center text-xs text-codex-muted mt-4">
-          Member since {new Date(profile.joinedAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-        </p>
       </main>
     </PageShell>
   )
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const PROFILE_TIER_LABELS = {
+  bronze:   'Bronze Member',
+  silver:   'Silver Member',
+  gold:     'Gold Member',
+  platinum: 'Platinum Member',
+  black:    'Obsidian Member',
+}
+
+function profileMemberLabel(profile) {
+  if (profile?.isAdmin)     return 'Obsidian Member · Administrator'
+  if (profile?.isModerator) return 'Obsidian Member · Moderator'
+  return PROFILE_TIER_LABELS[profile?.supporterTier] ?? ''
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────

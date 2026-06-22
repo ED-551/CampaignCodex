@@ -408,7 +408,7 @@ function ComposeModal({ onClose, onSent, characters, replyTo }) {
                 placeholder="Username…"
                 autoFocus={!replyTo}
                 readOnly={!!replyTo}
-                className="flex-1 bg-transparent text-sm text-codex-text placeholder-codex-muted focus:outline-none"
+                className="flex-1 bg-transparent text-base sm:text-sm text-codex-text placeholder-codex-muted focus:outline-none"
               />
               {recipient && (
                 <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full
@@ -443,7 +443,7 @@ function ComposeModal({ onClose, onSent, characters, replyTo }) {
               onChange={e => setSubject(e.target.value)}
               maxLength={120}
               placeholder="Subject…"
-              className="flex-1 bg-transparent text-sm text-codex-text placeholder-codex-muted focus:outline-none"
+              className="flex-1 bg-transparent text-base sm:text-sm text-codex-text placeholder-codex-muted focus:outline-none"
             />
             {subject.length > 100 && (
               <span className={`text-[10px] shrink-0 ${subjectRemaining < 10 ? 'text-red-400' : 'text-codex-muted'}`}>
@@ -484,7 +484,7 @@ function ComposeModal({ onClose, onSent, characters, replyTo }) {
               maxLength={5000}
               placeholder="Write your message…"
               autoFocus={!!replyTo}
-              className="flex-1 bg-transparent text-sm text-codex-text placeholder-codex-muted
+              className="flex-1 bg-transparent text-base sm:text-sm text-codex-text placeholder-codex-muted
                 focus:outline-none resize-none leading-relaxed min-h-[120px]"
             />
             <div className="flex justify-end pt-1">

@@ -40,7 +40,7 @@ const SIZE_OPTIONS = ['Tiny', 'Small', 'Medium', 'Large', 'Huge'];
 const SAVE_STATES = ['none', 'advantage', 'disadvantage'];
 const SAVE_ICONS = { advantage: '▲', disadvantage: '▼', none: '—' };
 const SAVE_COLORS = {
-  advantage: 'text-emerald-400 border-emerald-500 bg-emerald-900/30',
+  advantage: 'text-ni-gold border-ni-gold bg-ni-gold/12',
   disadvantage: 'text-red-400 border-red-500 bg-red-900/20',
   none: 'text-codex-subtext border-codex-border bg-codex-surface',
 };
@@ -271,7 +271,7 @@ function calcArmor(armor, shield, dex, str = 0, className = '') {
 
 function SectionHeader({ children }) {
   return (
-    <h2 className="font-display text-codex-gold text-xs tracking-widest uppercase mb-3 border-b border-codex-border pb-1">
+    <h2 className="font-display text-ni-gold text-xs tracking-widest uppercase mb-3 border-b border-codex-border pb-1">
       {children}
     </h2>
   );
@@ -295,7 +295,7 @@ function TextInput({ value, onChange, placeholder, className = '', readOnly, max
       maxLength={maxLength}
       disabled={readOnly}
       className={`bg-codex-surface border border-codex-border rounded px-2 py-1.5 text-codex-text text-sm
-        placeholder-codex-muted focus:outline-none focus:border-emerald-500/60 transition-colors
+        placeholder-codex-muted focus:outline-none focus:border-ni-gold/60 transition-colors
         disabled:opacity-60 disabled:cursor-not-allowed w-full ${className}`}
     />
   );
@@ -311,7 +311,7 @@ function NumberInput({ value, onChange, min, max, className = '', readOnly }) {
       max={max}
       disabled={readOnly}
       className={`bg-codex-surface border border-codex-border rounded px-2 py-1.5 text-codex-text text-sm text-center
-        focus:outline-none focus:border-emerald-500/60 transition-colors
+        focus:outline-none focus:border-ni-gold/60 transition-colors
         disabled:opacity-60 disabled:cursor-not-allowed ${className}`}
     />
   );
@@ -324,7 +324,7 @@ function SelectInput({ value, onChange, options, className = '', readOnly }) {
       onChange={e => onChange(e.target.value)}
       disabled={readOnly}
       className={`bg-codex-surface border border-codex-border rounded px-2 py-1.5 text-codex-text text-sm
-        focus:outline-none focus:border-emerald-500/60 transition-colors
+        focus:outline-none focus:border-ni-gold/60 transition-colors
         disabled:opacity-60 disabled:cursor-not-allowed ${className}`}
     >
       {options.map(o => (
@@ -350,7 +350,7 @@ function WeaponQuickPick({ onAdd }) {
         value={value}
         onChange={e => setValue(e.target.value)}
         className="flex-1 bg-codex-surface border border-codex-border rounded px-2 py-1.5 text-codex-text text-sm
-          focus:outline-none focus:border-emerald-500/60 transition-colors"
+          focus:outline-none focus:border-ni-gold/60 transition-colors"
       >
         <option value="">— Quick-add weapon —</option>
         <optgroup label="⚔ Melee">
@@ -371,8 +371,8 @@ function WeaponQuickPick({ onAdd }) {
       <button
         onClick={handleAdd}
         disabled={!value}
-        className="px-3 py-1.5 rounded border border-emerald-500/40 text-emerald-400 text-xs font-medium
-          hover:bg-emerald-900/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        className="px-3 py-1.5 rounded border border-ni-gold/40 text-ni-gold text-xs font-medium
+          hover:bg-ni-gold/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
       >
         Add
       </button>
@@ -395,7 +395,7 @@ function EquipmentQuickAdd({ onAdd }) {
         value={value}
         onChange={e => setValue(e.target.value)}
         className="flex-1 bg-codex-surface border border-codex-border rounded px-2 py-1.5 text-codex-text text-sm
-          focus:outline-none focus:border-emerald-500/60 transition-colors"
+          focus:outline-none focus:border-ni-gold/60 transition-colors"
       >
         <option value="">— Quick-add common item —</option>
         {NIMBLE_ITEMS.map(i => <option key={i.item} value={i.item}>{i.item}</option>)}
@@ -404,7 +404,7 @@ function EquipmentQuickAdd({ onAdd }) {
         onClick={handleAdd}
         disabled={!value}
         className="px-3 py-1.5 rounded border border-codex-border text-codex-subtext text-xs font-medium
-          hover:border-emerald-500/40 hover:text-emerald-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          hover:border-ni-gold/40 hover:text-ni-gold transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
       >
         Add
       </button>
@@ -622,16 +622,16 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-codex-bg text-codex-text font-body">
+    <div className="min-h-screen bg-codex-bg text-codex-text font-nimble">
       {/* Top bar */}
       <div className="sticky top-0 z-10 bg-codex-bg/95 backdrop-blur border-b border-codex-border px-6 py-2 flex items-center justify-between">
-        <span className="font-display text-codex-gold text-sm tracking-widest uppercase">
+        <span className="font-display text-ni-gold text-sm tracking-widest uppercase">
           Nimble Character Sheet
         </span>
         {!readOnly && (
           <span className={`text-xs font-medium transition-opacity duration-300 ${
             saveStatus === 'idle' ? 'opacity-0' : 'opacity-100'
-          } ${saveStatus === 'saving' ? 'text-codex-subtext' : 'text-emerald-400'}`}>
+          } ${saveStatus === 'saving' ? 'text-codex-subtext' : 'text-ni-gold'}`}>
             {saveStatus === 'saving' ? 'Saving…' : 'Saved ✓'}
           </span>
         )}
@@ -722,7 +722,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
                   key={arr.label}
                   onClick={() => applyStatArray(arr.values)}
                   className="px-2 py-0.5 text-xs border border-codex-border rounded text-codex-subtext
-                    hover:border-emerald-500/50 hover:text-emerald-300 transition-colors bg-codex-surface"
+                    hover:border-ni-gold/50 hover:text-ni-gold/80 transition-colors bg-codex-surface"
                 >
                   {arr.label}
                 </button>
@@ -735,10 +735,10 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
           <div className="grid grid-cols-4 gap-3">
             {STAT_KEYS.map(key => (
               <div key={key} className="flex flex-col items-center bg-codex-surface border border-codex-border rounded-lg py-4 px-2 gap-2">
-                <span className="font-display text-codex-gold text-xs tracking-widest uppercase">
+                <span className="font-display text-ni-gold text-xs tracking-widest uppercase">
                   {STAT_LABELS[key]}
                 </span>
-                <span className="text-3xl font-bold text-emerald-300 leading-none min-h-[2.25rem] flex items-center">
+                <span className="text-3xl font-bold text-ni-gold/80 leading-none min-h-[2.25rem] flex items-center">
                   {fmtMod(sheet.stats[key])}
                 </span>
                 <input
@@ -748,7 +748,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
                   min={-2} max={5}
                   disabled={readOnly}
                   className="w-12 bg-transparent border-b border-codex-border text-center text-codex-subtext text-xs
-                    focus:outline-none focus:border-emerald-500/60 disabled:opacity-60 disabled:cursor-not-allowed"
+                    focus:outline-none focus:border-ni-gold/60 disabled:opacity-60 disabled:cursor-not-allowed"
                   aria-label={`${STAT_LABELS[key]} modifier`}
                 />
                 <span className="text-codex-muted text-xs">−2 to +5</span>
@@ -793,10 +793,10 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
             {SKILL_GROUPS.map(group => (
               <div key={group.stat}>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="font-display text-codex-gold text-xs tracking-widest uppercase">
+                  <span className="font-display text-ni-gold text-xs tracking-widest uppercase">
                     {STAT_LABELS[group.stat]}
                   </span>
-                  <span className="text-emerald-400 text-xs">{fmtMod(sheet.stats[group.stat])}</span>
+                  <span className="text-ni-gold text-xs">{fmtMod(sheet.stats[group.stat])}</span>
                   <div className="flex-1 h-px bg-codex-border" />
                 </div>
                 <div className="space-y-2">
@@ -862,7 +862,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
             {/* Armor */}
             <div className="flex flex-col items-center bg-codex-surface border border-codex-border rounded-xl py-4 px-3 gap-1">
               <FieldLabel>Armor</FieldLabel>
-              <span className="text-3xl font-bold text-emerald-400 mt-1 leading-none">{effectiveArmor}</span>
+              <span className="text-3xl font-bold text-ni-gold mt-1 leading-none">{effectiveArmor}</span>
               <span className="text-[10px] text-codex-muted text-center leading-tight mt-1">
                 {sheet.armor
                   ? <>{sheet.armor.name}{sheet.shield ? ` + ${sheet.shield.name}` : ''}</>
@@ -875,7 +875,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
             <div className="flex flex-col items-center bg-codex-surface border border-codex-border rounded-xl py-4 px-3 gap-1">
               <FieldLabel>Initiative</FieldLabel>
               <span className={`text-3xl font-bold mt-1 leading-none ${
-                (sheet.stats.dex || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
+                (sheet.stats.dex || 0) >= 0 ? 'text-ni-gold' : 'text-red-400'
               }`}>
                 {fmtMod(sheet.stats.dex)}
               </span>
@@ -976,7 +976,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
                 onChange={e => setArmor(e.target.value)}
                 disabled={readOnly}
                 className="mt-1 w-full bg-codex-surface border border-codex-border rounded px-2 py-1.5 text-codex-text text-sm
-                  focus:outline-none focus:border-emerald-500/60 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  focus:outline-none focus:border-ni-gold/60 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <option value="">— Unarmored (DEX only) —</option>
                 {ARMOR_TYPES.map(type => (
@@ -997,7 +997,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
                 onChange={e => setShield(e.target.value)}
                 disabled={readOnly}
                 className="mt-1 w-full bg-codex-surface border border-codex-border rounded px-2 py-1.5 text-codex-text text-sm
-                  focus:outline-none focus:border-emerald-500/60 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  focus:outline-none focus:border-ni-gold/60 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <option value="">— No Shield —</option>
                 {SHIELD_ONLY.map(s => (
@@ -1011,7 +1011,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
           <div className="flex items-center gap-4 bg-codex-surface border border-codex-border rounded-lg px-4 py-3 mb-5">
             <div className="flex flex-col">
               <FieldLabel>Effective Armor</FieldLabel>
-              <span className="text-2xl font-bold text-emerald-400 mt-0.5">{effectiveArmor}</span>
+              <span className="text-2xl font-bold text-ni-gold mt-0.5">{effectiveArmor}</span>
             </div>
             <div className="flex-1 text-xs text-codex-muted leading-relaxed">
               {sheet.armor ? (
@@ -1047,7 +1047,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
                         placeholder="Weapon name"
                         disabled={readOnly}
                         className="flex-1 min-w-[140px] bg-codex-card border border-codex-border rounded px-2 py-1 text-codex-text text-sm font-semibold
-                          placeholder-codex-muted focus:outline-none focus:border-emerald-500/60 disabled:opacity-60 disabled:cursor-not-allowed"
+                          placeholder-codex-muted focus:outline-none focus:border-ni-gold/60 disabled:opacity-60 disabled:cursor-not-allowed"
                       />
                       <input
                         type="text"
@@ -1055,8 +1055,8 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
                         onChange={e => updateWeapon(i, 'damage', e.target.value)}
                         placeholder="Damage (e.g. 1d8+STR)"
                         disabled={readOnly}
-                        className="w-36 bg-codex-card border border-emerald-500/30 rounded px-2 py-1 text-emerald-400 text-sm font-mono
-                          placeholder-codex-muted focus:outline-none focus:border-emerald-500/60 disabled:opacity-60 disabled:cursor-not-allowed"
+                        className="w-36 bg-codex-card border border-ni-gold/30 rounded px-2 py-1 text-ni-gold text-sm font-mono
+                          placeholder-codex-muted focus:outline-none focus:border-ni-gold/60 disabled:opacity-60 disabled:cursor-not-allowed"
                       />
                     </div>
                     {/* Type + properties row */}
@@ -1068,7 +1068,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
                         placeholder="Damage type"
                         disabled={readOnly}
                         className="w-32 bg-codex-card border border-codex-border rounded px-2 py-1 text-codex-subtext text-xs
-                          placeholder-codex-muted focus:outline-none focus:border-emerald-500/60 disabled:opacity-60 disabled:cursor-not-allowed"
+                          placeholder-codex-muted focus:outline-none focus:border-ni-gold/60 disabled:opacity-60 disabled:cursor-not-allowed"
                       />
                       <input
                         type="text"
@@ -1077,7 +1077,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
                         placeholder="Properties (2-handed, Reach 2…)"
                         disabled={readOnly}
                         className="flex-1 min-w-[160px] bg-codex-card border border-codex-border rounded px-2 py-1 text-codex-muted text-xs
-                          placeholder-codex-muted focus:outline-none focus:border-emerald-500/60 disabled:opacity-60 disabled:cursor-not-allowed"
+                          placeholder-codex-muted focus:outline-none focus:border-ni-gold/60 disabled:opacity-60 disabled:cursor-not-allowed"
                       />
                     </div>
                     {/* Notes */}
@@ -1088,7 +1088,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
                       placeholder="Notes…"
                       disabled={readOnly}
                       className="mt-2 w-full bg-codex-card border border-codex-border rounded px-2 py-1 text-codex-muted text-xs
-                        placeholder-codex-muted focus:outline-none focus:border-emerald-500/60 disabled:opacity-60 disabled:cursor-not-allowed"
+                        placeholder-codex-muted focus:outline-none focus:border-ni-gold/60 disabled:opacity-60 disabled:cursor-not-allowed"
                     />
                   </div>
                   {!readOnly && (
@@ -1110,7 +1110,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
               <button
                 onClick={addCustomWeapon}
                 className="mt-2 text-xs text-codex-subtext border border-codex-border rounded px-3 py-1
-                  hover:border-emerald-500/40 hover:text-emerald-400 transition-colors"
+                  hover:border-ni-gold/40 hover:text-ni-gold transition-colors"
               >
                 + Custom Weapon
               </button>
@@ -1360,7 +1360,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
                   placeholder="Item name…"
                   disabled={readOnly}
                   className="flex-1 bg-codex-surface border border-codex-border rounded px-2 py-1.5 text-codex-text text-sm
-                    placeholder-codex-muted focus:outline-none focus:border-emerald-500/60 disabled:opacity-60 disabled:cursor-not-allowed"
+                    placeholder-codex-muted focus:outline-none focus:border-ni-gold/60 disabled:opacity-60 disabled:cursor-not-allowed"
                 />
                 <input
                   type="number"
@@ -1370,7 +1370,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
                   disabled={readOnly}
                   title="Slots"
                   className="w-16 bg-codex-surface border border-codex-border rounded px-2 py-1.5 text-codex-text text-sm text-center
-                    focus:outline-none focus:border-emerald-500/60 disabled:opacity-60 disabled:cursor-not-allowed"
+                    focus:outline-none focus:border-ni-gold/60 disabled:opacity-60 disabled:cursor-not-allowed"
                 />
                 <span className="text-codex-subtext text-xs w-8">slots</span>
                 {!readOnly && (
@@ -1390,8 +1390,8 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
               <EquipmentQuickAdd onAdd={name => addEquipment(name)} />
               <button
                 onClick={() => addEquipment(null)}
-                className="mt-2 text-xs text-emerald-400 border border-emerald-500/30 rounded px-3 py-1
-                  hover:bg-emerald-900/20 transition-colors"
+                className="mt-2 text-xs text-ni-gold border border-ni-gold/30 rounded px-3 py-1
+                  hover:bg-ni-gold/10 transition-colors"
               >
                 + Custom Item
               </button>
@@ -1401,7 +1401,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
           {/* Money */}
           <div className="grid grid-cols-3 gap-4 mt-5">
             {[
-              { key: 'gold',   label: 'Gold',   color: 'text-codex-gold' },
+              { key: 'gold',   label: 'Gold',   color: 'text-ni-gold' },
               { key: 'silver', label: 'Silver', color: 'text-gray-300' },
               { key: 'copper', label: 'Copper', color: 'text-amber-700' },
             ].map(({ key, label, color }) => (
@@ -1442,10 +1442,10 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
                   disabled={disabled}
                   className={`px-3 py-1 rounded-full text-sm border transition-all
                     ${selected
-                      ? 'bg-emerald-700/40 border-emerald-500 text-emerald-300'
+                      ? 'bg-ni-gold/30 border-ni-gold text-ni-gold/80'
                       : 'bg-codex-surface border-codex-border text-codex-subtext'
                     }
-                    ${!disabled && !selected ? 'hover:border-emerald-500/50 hover:text-emerald-400' : ''}
+                    ${!disabled && !selected ? 'hover:border-ni-gold/50 hover:text-ni-gold' : ''}
                     ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                   `}
                 >
@@ -1506,7 +1506,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
                     disabled={readOnly}
                     rows={3}
                     className="mt-1 w-full bg-codex-card border border-codex-border rounded px-2 py-1.5 text-codex-text text-sm
-                      placeholder-codex-muted focus:outline-none focus:border-emerald-500/60 transition-colors resize-y
+                      placeholder-codex-muted focus:outline-none focus:border-ni-gold/60 transition-colors resize-y
                       disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                 </div>
@@ -1516,8 +1516,8 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
           {!readOnly && (
             <button
               onClick={addAbility}
-              className="mt-3 text-xs text-emerald-400 border border-emerald-500/30 rounded px-3 py-1
-                hover:bg-emerald-900/20 transition-colors"
+              className="mt-3 text-xs text-ni-gold border border-ni-gold/30 rounded px-3 py-1
+                hover:bg-ni-gold/10 transition-colors"
             >
               + Add Ability
             </button>
@@ -1534,7 +1534,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
             disabled={readOnly}
             rows={6}
             className="w-full bg-codex-surface border border-codex-border rounded px-3 py-2 text-codex-text text-sm
-              placeholder-codex-muted focus:outline-none focus:border-emerald-500/60 transition-colors resize-y
+              placeholder-codex-muted focus:outline-none focus:border-ni-gold/60 transition-colors resize-y
               disabled:opacity-60 disabled:cursor-not-allowed"
           />
         </div>
@@ -1563,8 +1563,8 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
             </div>
             <button
               onClick={rollLevelUp}
-              className="px-4 py-2 rounded-lg bg-emerald-700/30 border border-emerald-500/50 text-emerald-400
-                text-sm font-medium hover:bg-emerald-700/50 transition-colors"
+              className="px-4 py-2 rounded-lg bg-ni-gold/20 border border-ni-gold/50 text-ni-gold
+                text-sm font-medium hover:bg-ni-gold/40 transition-colors"
             >
               Roll Level-Up HP ({sheet.hit_dice || 'd8'} with Advantage)
             </button>
@@ -1572,27 +1572,27 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
 
           {/* Roll result + confirmation */}
           {levelUpRoll && (
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-900/10 p-4 space-y-3">
-              <div className="text-sm font-semibold text-emerald-400">
+            <div className="rounded-xl border border-ni-gold/30 bg-ni-gold/6 p-4 space-y-3">
+              <div className="text-sm font-semibold text-ni-gold">
                 Level {levelUpRoll.nextLvl} — HP Roll Result
               </div>
               <div className="flex items-center gap-4 flex-wrap">
                 <div className="text-center">
                   <div className="text-xs text-codex-muted mb-1">Roll 1</div>
-                  <div className={`text-2xl font-bold ${levelUpRoll.roll1 >= levelUpRoll.roll2 ? 'text-emerald-400' : 'text-codex-muted'}`}>
+                  <div className={`text-2xl font-bold ${levelUpRoll.roll1 >= levelUpRoll.roll2 ? 'text-ni-gold' : 'text-codex-muted'}`}>
                     {levelUpRoll.roll1}
                   </div>
                 </div>
                 <div className="text-codex-muted text-xs">vs</div>
                 <div className="text-center">
                   <div className="text-xs text-codex-muted mb-1">Roll 2</div>
-                  <div className={`text-2xl font-bold ${levelUpRoll.roll2 > levelUpRoll.roll1 ? 'text-emerald-400' : 'text-codex-muted'}`}>
+                  <div className={`text-2xl font-bold ${levelUpRoll.roll2 > levelUpRoll.roll1 ? 'text-ni-gold' : 'text-codex-muted'}`}>
                     {levelUpRoll.roll2}
                   </div>
                 </div>
                 <div className="flex-1 border-l border-codex-border pl-4">
                   <div className="text-xs text-codex-muted">HP Gain</div>
-                  <div className="text-3xl font-bold text-emerald-400">+{levelUpRoll.hpGain}</div>
+                  <div className="text-3xl font-bold text-ni-gold">+{levelUpRoll.hpGain}</div>
                 </div>
                 {levelUpRoll.newMana > sheet.mana_max && (
                   <div className="flex-1 border-l border-codex-border pl-4">
@@ -1605,8 +1605,8 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
               <div className="flex gap-2">
                 <button
                   onClick={confirmLevelUp}
-                  className="px-4 py-2 rounded-lg bg-emerald-700/50 border border-emerald-500 text-emerald-300
-                    text-sm font-medium hover:bg-emerald-700/70 transition-colors"
+                  className="px-4 py-2 rounded-lg bg-ni-gold/40 border border-ni-gold text-ni-gold/80
+                    text-sm font-medium hover:bg-ni-gold/55 transition-colors"
                 >
                   ✓ Confirm — Apply to Sheet
                 </button>

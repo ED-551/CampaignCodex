@@ -45,7 +45,7 @@ const TIER_CONFIG = {
     letter:      'P',
   },
   black: {
-    label:       'Administrator',
+    label:       'Obsidian Member',
     outerFill:   '#0a0a0a',
     gradFrom:    '#2e2e2e',
     gradTo:      '#060606',
