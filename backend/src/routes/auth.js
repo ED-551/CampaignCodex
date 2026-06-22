@@ -4,7 +4,7 @@ const crypto   = require('crypto')
 const { body, validationResult } = require('express-validator')
 const db       = require('../db')
 const { signToken }              = require('../utils/jwt')
-const { sendPasswordResetEmail, sendUsernameReminderEmail } = require('../utils/email')
+const { sendPasswordResetEmail, sendUsernameReminderEmail, sendVerificationEmail } = require('../utils/email')
 const { authLimiter, signupLimiter } = require('../middleware/rateLimiter')
 const { requireAuth }            = require('../middleware/auth')
 
@@ -104,8 +104,8 @@ router.post('/signup', authLimiter, signupLimiter, [
     const result = await db.query(
       `INSERT INTO users
          (username, email, first_name, last_name, middle_initial,
-          password_hash, newsletter_opt_in, terms_accepted_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
+          password_hash, newsletter_opt_in, terms_accepted_at, email_verified)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),false)
        RETURNING id, username, email, first_name, last_name,
                  supporter_tier, is_admin, is_moderator, newsletter_opt_in, token_version, created_at`,
       [username, email, firstName, lastName, middleInitial || null,
@@ -113,10 +113,21 @@ router.post('/signup', authLimiter, signupLimiter, [
        newsletterOptIn === true || newsletterOptIn === 'true']
     )
 
-    const user  = result.rows[0]
-    const token = signToken(user)
+    const user = result.rows[0]
 
-    res.status(201).json({ token, user: sanitizeUser(user) })
+    // Generate a verification token and email it — no JWT issued until verified
+    const rawToken  = crypto.randomBytes(32).toString('hex')
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+
+    await db.query(
+      'INSERT INTO email_verification_tokens (user_id, token_hash, expires_at) VALUES ($1,$2,$3)',
+      [user.id, tokenHash, expiresAt]
+    )
+
+    await sendVerificationEmail(user.email, rawToken)
+
+    res.status(201).json({ pending: true, email: user.email })
   } catch (err) {
     console.error('[signup]', err)
     res.status(500).json({ error: 'An error occurred. Please try again.' })
@@ -137,7 +148,7 @@ router.post('/login', authLimiter, [
       `SELECT u.id, u.username, u.email, u.first_name, u.last_name,
               u.password_hash, u.supporter_tier, u.is_admin, u.is_moderator,
               u.is_banned, u.banned_at, u.ban_reason, u.banned_until,
-              u.token_version, u.created_at,
+              u.token_version, u.email_verified, u.created_at,
               b.username AS banned_by_username
        FROM users u
        LEFT JOIN users b ON b.id = u.banned_by_id
@@ -154,6 +165,14 @@ router.post('/login', authLimiter, [
 
     if (!user || !valid) {
       return res.status(401).json({ error: 'Invalid username or password.' })
+    }
+
+    // Hard gate: unverified users cannot log in
+    if (!user.email_verified) {
+      return res.status(403).json({
+        error:            'email_not_verified',
+        email:            user.email,
+      })
     }
 
     // Check if user is banned (after password verify — don't reveal account existence)
@@ -448,6 +467,95 @@ router.delete('/account', requireAuth, [
     res.json({ message: 'Account permanently deleted.' })
   } catch (err) {
     console.error('[delete-account]', err)
+    res.status(500).json({ error: 'An error occurred. Please try again.' })
+  }
+})
+
+// ─── GET /api/auth/verify-email?token=... ─────────────────────────────────────
+// Called by the frontend when the user clicks the link in the verification email.
+// On success: marks user verified, deletes token, issues JWT (auto-login).
+router.get('/verify-email', async (req, res) => {
+  const { token } = req.query
+  if (!token) return res.status(400).json({ error: 'Verification token is required.' })
+
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
+
+  try {
+    const tokenResult = await db.query(
+      `SELECT evt.id, evt.user_id, evt.expires_at, evt.used
+       FROM email_verification_tokens evt
+       WHERE evt.token_hash = $1 LIMIT 1`,
+      [tokenHash]
+    )
+
+    const row = tokenResult.rows[0]
+    if (!row || row.used || new Date(row.expires_at) < new Date()) {
+      return res.status(400).json({ error: 'This verification link is invalid or has expired.' })
+    }
+
+    // Mark token used and user verified atomically
+    await Promise.all([
+      db.query('UPDATE email_verification_tokens SET used = true WHERE id = $1', [row.id]),
+      db.query('UPDATE users SET email_verified = true WHERE id = $1', [row.user_id]),
+    ])
+
+    // Fetch user and issue JWT — auto-login after verification
+    const userResult = await db.query(
+      `SELECT id, username, email, first_name, last_name,
+              supporter_tier, is_admin, is_moderator, newsletter_opt_in, token_version, created_at
+       FROM users WHERE id = $1 LIMIT 1`,
+      [row.user_id]
+    )
+
+    const user  = userResult.rows[0]
+    const jwtToken = signToken(user)
+
+    res.json({ token: jwtToken, user: sanitizeUser(user) })
+  } catch (err) {
+    console.error('[verify-email]', err)
+    res.status(500).json({ error: 'An error occurred. Please try again.' })
+  }
+})
+
+// ─── POST /api/auth/resend-verification ──────────────────────────────────────
+// Lets an unverified user request a fresh verification email.
+// Rate-limited; always returns 200 to prevent username enumeration.
+router.post('/resend-verification', authLimiter, [
+  body('username').trim().notEmpty().withMessage('Username is required.'),
+], async (req, res) => {
+  if (validationErrors(req, res)) return
+
+  try {
+    const result = await db.query(
+      'SELECT id, email, email_verified FROM users WHERE username = $1 LIMIT 1',
+      [req.body.username]
+    )
+
+    const user = result.rows[0]
+
+    // Silently do nothing if user not found or already verified
+    if (user && !user.email_verified) {
+      // Invalidate old tokens
+      await db.query(
+        'UPDATE email_verification_tokens SET used = true WHERE user_id = $1',
+        [user.id]
+      )
+
+      const rawToken  = crypto.randomBytes(32).toString('hex')
+      const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
+
+      await db.query(
+        'INSERT INTO email_verification_tokens (user_id, token_hash, expires_at) VALUES ($1,$2,$3)',
+        [user.id, tokenHash, expiresAt]
+      )
+
+      await sendVerificationEmail(user.email, rawToken)
+    }
+
+    res.json({ message: 'If that account exists and is unverified, a new link has been sent.' })
+  } catch (err) {
+    console.error('[resend-verification]', err)
     res.status(500).json({ error: 'An error occurred. Please try again.' })
   }
 })

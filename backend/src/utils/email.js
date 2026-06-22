@@ -245,4 +245,60 @@ async function sendUsernameReminderEmail(toEmail, username) {
   return { ok: true }
 }
 
-module.exports = { sendPasswordResetEmail, sendUsernameReminderEmail, sendBroadcastEmail }
+/**
+ * Send an email-verification link to a newly registered user.
+ * Called immediately after INSERT on signup — the user cannot log in
+ * until they click this link (hard gate: email_verified = false blocks login).
+ *
+ * @param {string} toEmail         - Recipient's email address.
+ * @param {string} verificationToken - Opaque raw token to embed in the URL.
+ */
+async function sendVerificationEmail(toEmail, verificationToken) {
+  const link = `${CLIENT}/verify-email?token=${verificationToken}`
+
+  if (!API_KEY) {
+    console.log('\n─── VERIFICATION EMAIL (stub) ───────────────────────')
+    console.log(`To:   ${toEmail}`)
+    console.log(`Link: ${link}`)
+    console.log('────────────────────────────────────────────────────\n')
+    return { ok: true, stub: true }
+  }
+
+  const html = wrapHtml(`
+    <p>Thanks for creating a CampaignCodex account! One quick step to get started:</p>
+    <p style="margin:24px 0">
+      <a href="${link}"
+         style="display:inline-block;background:#c9a84c;color:#0a0b0f;
+                padding:12px 24px;border-radius:8px;font-weight:600;
+                text-decoration:none">
+        Verify My Email
+      </a>
+    </p>
+    <p style="font-size:13px;color:#6b7280">
+      This link expires in 24 hours. If you didn't create an account, you can safely ignore this email.
+    </p>
+  `)
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method:  'POST',
+    headers: {
+      'Authorization': `Bearer ${API_KEY}`,
+      'Content-Type':  'application/json',
+    },
+    body: JSON.stringify({
+      from:    `CampaignCodex <${FROM}>`,
+      to:      [toEmail],
+      subject: 'Verify your CampaignCodex email',
+      html,
+    }),
+  })
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(`Resend error: ${JSON.stringify(err)}`)
+  }
+
+  return { ok: true }
+}
+
+module.exports = { sendPasswordResetEmail, sendUsernameReminderEmail, sendBroadcastEmail, sendVerificationEmail }

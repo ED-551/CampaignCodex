@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { api } from '../../utils/api'
 import Input from '../ui/Input'
 import PasswordInput from '../ui/PasswordInput'
 
@@ -18,9 +19,12 @@ export default function LoginForm() {
   const navigate                = useNavigate()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError]       = useState('')
-  const [banInfo, setBanInfo]   = useState(null)   // { banReason, bannedUntil, bannedByUsername, isPermanent }
-  const [loading, setLoading]   = useState(false)
+  const [error, setError]             = useState('')
+  const [banInfo, setBanInfo]         = useState(null)
+  const [unverifiedEmail, setUnverifiedEmail] = useState('')  // set when email_not_verified
+  const [resendLoading, setResendLoading]     = useState(false)
+  const [resendMsg, setResendMsg]             = useState('')
+  const [loading, setLoading]         = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -47,6 +51,8 @@ export default function LoginForm() {
           bannedByUsername: err.data.bannedByUsername,
           isPermanent:      err.data.isPermanent,
         })
+      } else if (err.status === 403 && err.data?.error === 'email_not_verified') {
+        setUnverifiedEmail(err.data.email || '')
       } else if (err.status === 429) {
         setError('Too many login attempts from this IP. Please wait 15 minutes before trying again.')
       } else {
@@ -55,6 +61,73 @@ export default function LoginForm() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // ── Email not verified screen ─────────────────────────────────────────────────
+  if (unverifiedEmail) {
+    async function handleResend() {
+      setResendLoading(true)
+      setResendMsg('')
+      try {
+        await api.post('/auth/resend-verification', { username: username.trim() })
+        setResendMsg('A new verification link has been sent.')
+      } catch {
+        setResendMsg('Could not resend. Please try again in a moment.')
+      } finally {
+        setResendLoading(false)
+      }
+    }
+
+    return (
+      <div className="flex flex-col gap-5">
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 flex flex-col gap-3">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl leading-none mt-0.5">📬</span>
+            <div>
+              <p className="text-sm font-semibold text-amber-400">Email not verified</p>
+              <p className="text-xs text-codex-subtext mt-0.5 leading-relaxed">
+                We sent a verification link to{' '}
+                <span className="text-codex-text font-medium">{unverifiedEmail}</span> when you
+                signed up. Click that link to activate your account.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-codex-bg/60 border border-codex-border rounded-lg px-4 py-3">
+            <p className="text-xs text-codex-muted leading-relaxed">
+              <span className="text-codex-subtext font-medium">Why is this required?</span>{' '}
+              Email verification prevents spam accounts and protects the CampaignCodex
+              community. It takes just one click.
+            </p>
+          </div>
+
+          <p className="text-xs text-codex-muted">
+            Didn't get it? Check your spam folder, then:
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleResend}
+          disabled={resendLoading}
+          className="w-full py-2.5 px-4 rounded-lg border border-codex-border text-codex-subtext hover:text-codex-text hover:border-codex-gold/50 text-sm font-medium transition-all duration-150 disabled:opacity-50"
+        >
+          {resendLoading ? 'Sending…' : 'Resend verification email'}
+        </button>
+
+        {resendMsg && (
+          <p className="text-xs text-center text-codex-gold">{resendMsg}</p>
+        )}
+
+        <button
+          type="button"
+          onClick={() => { setUnverifiedEmail(''); setResendMsg('') }}
+          className="text-xs text-codex-subtext hover:text-codex-text transition-colors text-center"
+        >
+          ← Back to sign in
+        </button>
+      </div>
+    )
   }
 
   // ── Ban screen ───────────────────────────────────────────────────────────────

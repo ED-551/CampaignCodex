@@ -27,6 +27,7 @@ import SecretReviewPage   from './pages/SecretReviewPage'
 import DonatePage         from './pages/DonatePage'
 import ProfilePage       from './pages/ProfilePage'
 import ProfileEditPage   from './pages/ProfileEditPage'
+import VerifyEmailPage   from './pages/VerifyEmailPage'
 
 export default function App() {
   return (
@@ -45,6 +46,7 @@ export default function App() {
               <Route path="/signup"          element={<LandingPage />} />
               <Route path="/forgot-password" element={<LandingPage />} />
               <Route path="/reset-password"  element={<LandingPage />} />
+              <Route path="/verify-email"    element={<VerifyEmailPage />} />
 
               {/* ── Public: legal / support ── */}
               <Route path="/terms"  element={<TermsPage />} />

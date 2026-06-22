@@ -507,3 +507,21 @@ CREATE INDEX IF NOT EXISTS idx_user_blocks_blocker
   ON user_blocks(blocker_id, blocked_id);
 CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked
   ON user_blocks(blocked_id, blocker_id);
+
+-- ─── EMAIL VERIFICATION ───────────────────────────────────────────────────────
+-- DEFAULT true grandfathers every account created before this feature shipped.
+-- New signups explicitly INSERT email_verified = false; they must click the
+-- link in the confirmation email before they can log in (hard gate).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT true;
+
+-- Single-use tokens; follow the same pattern as password_reset_tokens.
+-- token_hash is SHA-256 of the raw token embedded in the link — raw value never stored.
+CREATE TABLE IF NOT EXISTS email_verification_tokens (
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash VARCHAR(255) NOT NULL UNIQUE,
+  expires_at TIMESTAMP   NOT NULL,
+  used       BOOLEAN     NOT NULL DEFAULT false,
+  created_at TIMESTAMP   NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_evt_user ON email_verification_tokens(user_id);

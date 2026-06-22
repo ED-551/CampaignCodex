@@ -30,10 +30,14 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signup = useCallback(async (formData) => {
-    const { token, user } = await api.post('/auth/signup', formData)
-    setToken(token)
-    setUser(user)
-    return user
+    const data = await api.post('/auth/signup', formData)
+    // Hard-gate: backend returns { pending: true, email } when email verification
+    // is required. No token is issued until the user clicks the link.
+    if (data.pending) return { pending: true, email: data.email }
+    // Fallback for any future codepath that skips verification (e.g. admin-created accounts)
+    setToken(data.token)
+    setUser(data.user)
+    return { pending: false }
   }, [])
 
   const logout = useCallback(() => {
