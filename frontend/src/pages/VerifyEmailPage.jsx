@@ -1,27 +1,24 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { api } from '../utils/api'
-import { setToken } from '../utils/api'
-import { useAuth } from '../context/AuthContext'
+import { api, setToken } from '../utils/api'
 
 /**
  * /verify-email?token=...
  *
  * Automatically processes the verification token from the email link.
- * On success: stores JWT, updates auth context, redirects to dashboard.
+ * On success: stores JWT, then does a full-page redirect to /dashboard so
+ * AuthContext re-mounts and picks up the new token from localStorage.
  * On failure: shows error with a resend option.
  */
 export default function VerifyEmailPage() {
-  const [params]   = useSearchParams()
-  const navigate   = useNavigate()
-  const { login: _login, signup: _signup, ...auth } = useAuth()
+  const [params] = useSearchParams()
 
-  const [status, setStatus]           = useState('verifying') // verifying | success | error
-  const [errorMsg, setErrorMsg]       = useState('')
-  const [username, setUsername]       = useState('')
+  const [status, setStatus]               = useState('verifying') // verifying | success | error
+  const [errorMsg, setErrorMsg]           = useState('')
+  const [username, setUsername]           = useState('')
   const [resendLoading, setResendLoading] = useState(false)
-  const [resendMsg, setResendMsg]     = useState('')
+  const [resendMsg, setResendMsg]         = useState('')
 
   useEffect(() => {
     const token = params.get('token')
@@ -33,11 +30,11 @@ export default function VerifyEmailPage() {
 
     api.get(`/auth/verify-email?token=${token}`)
       .then(data => {
-        // Auto-login: store the JWT and reload auth state
         setToken(data.token)
-        // Give the context a moment to pick up the new token, then redirect
         setStatus('success')
-        setTimeout(() => navigate('/dashboard', { replace: true }), 1800)
+        // Full-page redirect so AuthContext re-initialises from localStorage
+        // and ProtectedRoute sees the authenticated user.
+        setTimeout(() => { window.location.replace('/dashboard') }, 1800)
       })
       .catch(err => {
         setErrorMsg(err.message || 'This verification link is invalid or has expired.')
