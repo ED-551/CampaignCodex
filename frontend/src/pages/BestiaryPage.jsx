@@ -319,7 +319,7 @@ export default function BestiaryPage() {
         </Link>
 
         {/* ── Section header ── */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
           <div className="flex items-center gap-3">
             <span className="text-3xl">{meta.icon}</span>
             <div>
@@ -331,7 +331,7 @@ export default function BestiaryPage() {
           </div>
 
           {shareMode ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={toggleSelectAll}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
@@ -366,7 +366,7 @@ export default function BestiaryPage() {
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {/* Inbox — always visible; badge shows pending count */}
               <Link
                 to="/bestiary/shares"

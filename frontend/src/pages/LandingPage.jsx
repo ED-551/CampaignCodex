@@ -27,7 +27,7 @@ export default function LandingPage() {
   const Form = view.form
 
   return (
-    <div className="relative min-h-screen w-full flex items-center justify-center overflow-x-hidden py-8 bg-codex-bg">
+    <div className="relative min-h-screen w-full flex items-start sm:items-center justify-center overflow-x-hidden py-6 sm:py-8 bg-codex-bg">
       <Helmet><title>CampaignCodex — Digital Companion for Tabletop RPGs</title></Helmet>
 
       {/* Background radial glow */}
@@ -68,7 +68,7 @@ export default function LandingPage() {
         <div className="h-px w-full bg-gradient-to-r from-transparent via-codex-gold to-transparent opacity-60" />
 
         {/* Header */}
-        <div className="px-8 pt-12 pb-6 text-center">
+        <div className="px-6 sm:px-8 pt-8 sm:pt-12 pb-6 text-center">
           {/* Logo */}
           <div className="mb-5 flex flex-col items-center gap-2">
             <div className="w-10 h-10 rounded-lg bg-codex-gold/10 border border-codex-gold/30 flex items-center justify-center">

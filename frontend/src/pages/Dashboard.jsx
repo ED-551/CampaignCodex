@@ -205,16 +205,20 @@ export default function Dashboard() {
               <button
                 onClick={() => navigate('/moderator')}
                 className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-blue-400 hover:text-blue-300 hover:bg-blue-400/5 transition-colors border border-blue-400/30"
+                title="Moderator Dashboard"
               >
-                <Shield size={13} /> Mod
+                <Shield size={13} />
+                <span className="hidden sm:inline">Mod</span>
               </button>
             )}
             {user?.isAdmin && (
               <button
                 onClick={() => navigate('/admin')}
                 className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-purple-400 hover:text-purple-300 hover:bg-purple-400/5 transition-colors border border-purple-400/30"
+                title="Admin Dashboard"
               >
-                <Shield size={13} /> Admin
+                <Shield size={13} />
+                <span className="hidden sm:inline">Admin</span>
               </button>
             )}
 

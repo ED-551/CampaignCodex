@@ -110,78 +110,42 @@ export default function CharacterPage() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-8">
-        <Link
-          to={campaignId ? `/campaigns/${campaignId}` : '/dashboard'}
-          className="inline-flex items-center gap-1.5 text-sm text-codex-subtext hover:text-codex-text transition-colors mb-6"
-        >
-          <ArrowLeft size={14} /> Back
-        </Link>
+      {/*
+        When a character sheet is loaded we bypass the constrained <main> entirely.
+        The sheet component has its own full-page wrapper + padding; wrapping it
+        in another max-w-5xl px-4 container creates double horizontal padding and
+        makes the content appear narrower than it should on mobile.
+        Instead, the ← Back link and Danger Zone each get their own slim,
+        properly-padded wrappers while the sheet fills the full available width.
+      */}
+      {character && SheetComponent ? (
+        <>
+          {/* Back + optional GM banner — slim, padded strip above the sheet */}
+          <div className="max-w-5xl mx-auto px-4 pt-6 pb-2">
+            <Link
+              to={campaignId ? `/campaigns/${campaignId}` : '/dashboard'}
+              className="inline-flex items-center gap-1.5 text-sm text-codex-subtext hover:text-codex-text transition-colors"
+            >
+              <ArrowLeft size={14} /> Back
+            </Link>
 
-        {/* ── New character: run the wizard ── */}
-        {isNew && (
-          <>
-            {!system && (
-              <div className="text-center text-red-400 py-24">
-                No game system selected. <Link to="/dashboard" className="underline">Go back to Dashboard.</Link>
+            {isGM && (
+              <div className="mt-4 flex items-start gap-3 px-4 py-3 rounded-xl
+                bg-codex-gold/5 border border-codex-gold/20 text-sm">
+                <span className="text-codex-gold mt-0.5">⚔️</span>
+                <div>
+                  <p className="text-codex-text font-medium">Game Master View</p>
+                  <p className="text-xs text-codex-subtext mt-0.5">
+                    You are editing <span className="text-codex-text font-medium">{character.owner_username}'s</span> sheet
+                    as the campaign GM. Changes save immediately and are visible to the player.
+                    Portrait changes are restricted to the player.
+                  </p>
+                </div>
               </div>
             )}
-
-            {system && !WizardComponent && (
-              <div className="text-center text-red-400 py-24">
-                Unknown game system: {system}
-              </div>
-            )}
-
-            {system && WizardComponent && !creating && (
-              <Suspense fallback={<WizardSkeleton />}>
-                <WizardComponent
-                  onComplete={handleWizardComplete}
-                  onCancel={() => navigate(campaignId ? `/campaigns/${campaignId}` : '/dashboard')}
-                />
-              </Suspense>
-            )}
-
-            {creating && (
-              <div className="text-center text-codex-muted animate-pulse py-24">
-                Forging your character…
-              </div>
-            )}
-
-            {error && (
-              <p className="text-center text-red-400 mt-4">{error}</p>
-            )}
-          </>
-        )}
-
-        {/* ── Loading existing character ── */}
-        {loading && !isNew && (
-          <div className="text-center text-codex-muted animate-pulse py-24">Loading character sheet…</div>
-        )}
-
-        {/* ── Error loading ── */}
-        {error && !isNew && (
-          <div className="text-center text-red-400 py-24">{error}</div>
-        )}
-
-        {/* ── GM access banner ── */}
-        {isGM && (
-          <div className="mb-6 flex items-start gap-3 px-4 py-3 rounded-xl
-            bg-codex-gold/5 border border-codex-gold/20 text-sm">
-            <span className="text-codex-gold mt-0.5">⚔️</span>
-            <div>
-              <p className="text-codex-text font-medium">Game Master View</p>
-              <p className="text-xs text-codex-subtext mt-0.5">
-                You are editing <span className="text-codex-text font-medium">{character.owner_username}'s</span> sheet
-                as the campaign GM. Changes save immediately and are visible to the player.
-                Portrait changes are restricted to the player.
-              </p>
-            </div>
           </div>
-        )}
 
-        {/* ── Existing character sheet ── */}
-        {character && SheetComponent && (
+          {/* Sheet — full available width, no extra wrapping constraints */}
           <Suspense fallback={<div className="text-center text-codex-muted animate-pulse py-24">Loading sheet…</div>}>
             <SheetComponent
               character={character}
@@ -189,40 +153,97 @@ export default function CharacterPage() {
               readOnly={readOnly || (!isOwner && !isGM)}
             />
           </Suspense>
-        )}
 
-        {character && !SheetComponent && (
-          <div className="text-center text-red-400 py-24">
-            Unknown game system: {character.game_system}
-          </div>
-        )}
-
-        {/* ── Danger Zone — only visible to owner, not on new/wizard flow ── */}
-        {character && isOwner && !readOnly && (
-          <div className="mt-16 border-t border-codex-border pt-8">
-            <div className="flex items-start justify-between gap-6">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-codex-muted mb-1">
-                  Danger Zone
-                </p>
-                <p className="text-sm text-codex-subtext">
-                  Permanently delete this character sheet. This cannot be undone.
-                </p>
+          {/* Danger Zone */}
+          {isOwner && !readOnly && (
+            <div className="max-w-5xl mx-auto px-4 mt-8 pb-12 border-t border-codex-border pt-8">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-codex-muted mb-1">
+                    Danger Zone
+                  </p>
+                  <p className="text-sm text-codex-subtext">
+                    Permanently delete this character sheet. This cannot be undone.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowDeleteModal(true)}
+                  className="flex items-center gap-2 flex-shrink-0 px-4 py-2 rounded-lg
+                    border border-codex-border bg-codex-surface self-start
+                    text-sm text-codex-muted hover:text-red-400 hover:border-red-500/40 hover:bg-red-500/5
+                    transition-all duration-150"
+                >
+                  <Trash2 size={14} />
+                  Delete character
+                </button>
               </div>
-              <button
-                onClick={() => setShowDeleteModal(true)}
-                className="flex items-center gap-2 flex-shrink-0 px-4 py-2 rounded-lg
-                  border border-codex-border bg-codex-surface
-                  text-sm text-codex-muted hover:text-red-400 hover:border-red-500/40 hover:bg-red-500/5
-                  transition-all duration-150"
-              >
-                <Trash2 size={14} />
-                Delete character
-              </button>
             </div>
-          </div>
-        )}
-      </main>
+          )}
+        </>
+      ) : (
+        /* Wizard / loading / error — use the normal constrained main */
+        <main className="max-w-5xl mx-auto px-4 py-8">
+          <Link
+            to={campaignId ? `/campaigns/${campaignId}` : '/dashboard'}
+            className="inline-flex items-center gap-1.5 text-sm text-codex-subtext hover:text-codex-text transition-colors mb-6"
+          >
+            <ArrowLeft size={14} /> Back
+          </Link>
+
+          {/* ── New character: run the wizard ── */}
+          {isNew && (
+            <>
+              {!system && (
+                <div className="text-center text-red-400 py-24">
+                  No game system selected. <Link to="/dashboard" className="underline">Go back to Dashboard.</Link>
+                </div>
+              )}
+
+              {system && !WizardComponent && (
+                <div className="text-center text-red-400 py-24">
+                  Unknown game system: {system}
+                </div>
+              )}
+
+              {system && WizardComponent && !creating && (
+                <Suspense fallback={<WizardSkeleton />}>
+                  <WizardComponent
+                    onComplete={handleWizardComplete}
+                    onCancel={() => navigate(campaignId ? `/campaigns/${campaignId}` : '/dashboard')}
+                  />
+                </Suspense>
+              )}
+
+              {creating && (
+                <div className="text-center text-codex-muted animate-pulse py-24">
+                  Forging your character…
+                </div>
+              )}
+
+              {error && (
+                <p className="text-center text-red-400 mt-4">{error}</p>
+              )}
+            </>
+          )}
+
+          {/* ── Loading existing character ── */}
+          {loading && !isNew && (
+            <div className="text-center text-codex-muted animate-pulse py-24">Loading character sheet…</div>
+          )}
+
+          {/* ── Error loading ── */}
+          {error && !isNew && (
+            <div className="text-center text-red-400 py-24">{error}</div>
+          )}
+
+          {/* Unknown sheet type for loaded character */}
+          {character && !SheetComponent && (
+            <div className="text-center text-red-400 py-24">
+              Unknown game system: {character.game_system}
+            </div>
+          )}
+        </main>
+      )}
 
       {/* ── Delete confirmation modal ── */}
       {showDeleteModal && character && (
