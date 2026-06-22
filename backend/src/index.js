@@ -73,6 +73,10 @@ const app        = express()
 const httpServer = http.createServer(app)
 const PORT       = process.env.PORT || 3001
 
+// Trust nginx reverse proxy (which is behind Cloudflare) — needed for
+// express-rate-limit to read the correct client IP from X-Forwarded-For.
+app.set('trust proxy', 1)
+
 // ─── Security Headers ─────────────────────────────────────────────────────────
 // contentSecurityPolicy blocks inline script injection (XSS mitigation).
 // unsafe-inline for styles is required by Tailwind CSS.
