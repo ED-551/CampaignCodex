@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, MapPin, Globe } from 'lucide-react'
 import { RESTAURANTS } from '../data/edsEats'
 
 export default function SecretReviewPage() {
@@ -13,7 +13,7 @@ export default function SecretReviewPage() {
     return null
   }
 
-  const { name, address, quote, rating, fullReview } = restaurant
+  const { name, address, website, quote, rating, fullReview } = restaurant
 
   return (
     <div className="min-h-screen bg-codex-bg text-codex-text">
@@ -75,6 +75,39 @@ export default function SecretReviewPage() {
               <p className="text-sm italic text-codex-subtext">"{quote}"</p>
             </div>
           </div>
+        )}
+
+        {/* ── Restaurant info card ── */}
+        {(address || website) && (
+          <>
+            <div className="h-px bg-gradient-to-r from-codex-gold/20 via-codex-gold/10 to-transparent mt-10 mb-8" />
+            <div className="border border-codex-border rounded-xl bg-codex-card px-6 py-5">
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-codex-muted mb-4">
+                Field Intel
+              </p>
+              <div className="space-y-3">
+                {address && (
+                  <div className="flex items-start gap-3">
+                    <MapPin size={13} className="text-codex-gold/60 mt-0.5 flex-shrink-0" />
+                    <p className="text-sm text-codex-subtext">{address}</p>
+                  </div>
+                )}
+                {website && (
+                  <div className="flex items-start gap-3">
+                    <Globe size={13} className="text-codex-gold/60 mt-0.5 flex-shrink-0" />
+                    <a
+                      href={website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-codex-gold/80 hover:text-codex-gold transition-colors duration-150"
+                    >
+                      {website.replace('https://', '')}
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
         )}
 
       </div>
