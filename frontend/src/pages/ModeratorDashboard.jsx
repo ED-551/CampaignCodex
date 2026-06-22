@@ -122,10 +122,6 @@ export default function ModeratorDashboard() {
           <div className="flex items-center gap-3">
             <BookOpen size={16} className="text-codex-gold" />
             <span className="font-display text-sm text-codex-gold tracking-wide">CampaignCodex</span>
-            <span className="text-codex-border">·</span>
-            <span className="flex items-center gap-1 text-xs text-blue-400">
-              <Shield size={11} /> Moderator Dashboard
-            </span>
           </div>
           <div className="flex items-center gap-4">
             <Link to="/dashboard"
