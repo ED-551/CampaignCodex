@@ -16,7 +16,7 @@
 set -euo pipefail
 
 # ── Config ────────────────────────────────────────────────────────────────────
-ENV_FILE="/home/ragnarok1414/campaigncodex/backend/.env"
+ENV_FILE="/home/ragnarok1414/CampaignCodex/backend/.env"
 BACKUP_DIR="/home/ragnarok1414/backups/campaigncodex"
 KEEP_DAYS=7
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
