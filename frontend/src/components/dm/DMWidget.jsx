@@ -15,7 +15,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MessageCircle, X, ChevronLeft, Send, Search, UserPlus,
-         Users, Bell, MoreHorizontal, UserCheck, UserX, Clock, ExternalLink } from 'lucide-react'
+         Users, Bell, MoreHorizontal, UserCheck, UserX, Clock, ExternalLink,
+         Trash2 } from 'lucide-react'
 import { useDM }     from '../../context/DMContext'
 import { useSocial } from '../../context/SocialContext'
 import { useAuth }   from '../../context/AuthContext'
@@ -189,10 +190,11 @@ function TabBtn({ active, onClick, children }) {
 
 // ─── Messages Tab (existing DM thread list + search) ─────────────────────────
 function MessagesTab({ openConvos, unread, onSelect, closeDM, onNewDM }) {
-  const [searching, setSearching] = useState(false)
-  const [query,     setQuery]     = useState('')
-  const [results,   setResults]   = useState([])
-  const [searchErr, setSearchErr] = useState('')
+  const [searching,    setSearching]    = useState(false)
+  const [query,        setQuery]        = useState('')
+  const [results,      setResults]      = useState([])
+  const [searchErr,    setSearchErr]    = useState('')
+  const [confirmingId, setConfirmingId] = useState(null)
   const { getFriendStatus, sendFriendRequest, outgoingSet } = useSocial()
   const [requestingId, setRequestingId] = useState(null)
   const debounceRef = useRef(null)
@@ -316,6 +318,32 @@ function MessagesTab({ openConvos, unread, onSelect, closeDM, onNewDM }) {
           <ul className="py-1 flex flex-col">
             {openConvos.map(({ userId, username }) => {
               const count = unread[userId] ?? 0
+              const isConfirming = confirmingId === userId
+
+              if (isConfirming) {
+                return (
+                  <li key={userId} className="flex items-center gap-2 px-4 py-2.5 bg-codex-bg/60">
+                    <span className="flex-1 text-xs text-codex-subtext truncate">
+                      Remove <strong>{username}</strong>?
+                    </span>
+                    <button
+                      onClick={() => { closeDM(userId); setConfirmingId(null) }}
+                      className="px-2 py-1 rounded text-[11px] font-medium text-red-400
+                        bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 transition-colors"
+                    >
+                      Remove
+                    </button>
+                    <button
+                      onClick={() => setConfirmingId(null)}
+                      className="px-2 py-1 rounded text-[11px] text-codex-muted
+                        border border-codex-border hover:text-codex-text transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </li>
+                )
+              }
+
               return (
                 <li key={userId} className="group relative">
                   <button
@@ -337,11 +365,11 @@ function MessagesTab({ openConvos, unread, onSelect, closeDM, onNewDM }) {
                     )}
                   </button>
                   <button
-                    onClick={e => { e.stopPropagation(); closeDM(userId) }}
+                    onClick={e => { e.stopPropagation(); setConfirmingId(userId) }}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1
                       text-codex-muted hover:text-red-400 rounded transition-colors
                       opacity-0 group-hover:opacity-100"
-                    title="Close conversation"
+                    title="Remove from list"
                   >
                     <X size={12} />
                   </button>
@@ -357,6 +385,38 @@ function MessagesTab({ openConvos, unread, onSelect, closeDM, onNewDM }) {
 
 // ─── Friends Tab ──────────────────────────────────────────────────────────────
 function FriendsTab({ friends, newFriendIds, onDM }) {
+  const navigate  = useNavigate()
+  const { unfriend, blockUser } = useSocial()
+  const { closeDM } = useDM()
+
+  const [openMenuId,   setOpenMenuId]   = useState(null)
+  const [confirmAction, setConfirmAction] = useState(null) // { friendId, username, type: 'unfriend'|'block' }
+  const [actioning,    setActioning]    = useState(false)
+  const menuRef = useRef(null)
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setOpenMenuId(null)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  async function handleConfirm() {
+    if (!confirmAction || actioning) return
+    setActioning(true)
+    try {
+      if (confirmAction.type === 'unfriend') {
+        await unfriend(confirmAction.friendId)
+      } else {
+        await blockUser(confirmAction.friendId)
+        closeDM(confirmAction.friendId)
+      }
+    } catch {}
+    setActioning(false)
+    setConfirmAction(null)
+  }
+
   if (friends.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 px-6 text-center">
@@ -369,32 +429,108 @@ function FriendsTab({ friends, newFriendIds, onDM }) {
   }
 
   return (
-    <ul className="py-1 flex flex-col overflow-y-auto h-full">
-      {friends.map(f => {
-        const isNew = newFriendIds?.has(f.friend_id)
-        return (
-          <li key={f.friend_id}
-            className={`flex items-center gap-3 px-4 py-2.5 transition-colors
-              ${isNew ? 'bg-codex-gold/10 animate-pulse-once' : 'hover:bg-codex-bg'}`}
-          >
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-codex-bg border border-codex-border
-              flex items-center justify-center text-sm font-bold text-codex-subtext uppercase">
-              {f.friend_username[0]}
-            </div>
-            <span className="flex-1 text-sm text-codex-text truncate">{f.friend_username}</span>
-            {isNew && <span className="w-1.5 h-1.5 rounded-full bg-codex-gold flex-shrink-0" />}
+    <div className="relative h-full flex flex-col">
+      {/* Confirm overlay */}
+      {confirmAction && (
+        <div className="absolute inset-0 z-10 bg-codex-bg/90 backdrop-blur-sm flex flex-col
+          items-center justify-center gap-4 px-6 text-center rounded-b-2xl">
+          <div>
+            <p className="text-sm font-semibold text-codex-text mb-1">
+              {confirmAction.type === 'unfriend' ? 'Unfriend' : 'Block'} {confirmAction.username}?
+            </p>
+            <p className="text-xs text-codex-subtext leading-relaxed">
+              {confirmAction.type === 'unfriend'
+                ? 'They will be removed from your friends list. You can send them a new request later.'
+                : 'They won\'t be able to message you or see your profile. You can unblock from Settings.'}
+            </p>
+          </div>
+          <div className="flex gap-3 w-full">
             <button
-              onClick={() => onDM(f.friend_id, f.friend_username)}
-              className="flex-shrink-0 p-1.5 rounded-lg text-codex-muted hover:text-codex-gold
-                hover:bg-codex-gold/10 transition-colors"
-              title={`Message ${f.friend_username}`}
+              onClick={() => setConfirmAction(null)}
+              className="flex-1 py-2 rounded-lg border border-codex-border text-xs text-codex-subtext
+                hover:text-codex-text transition-colors"
             >
-              <MessageCircle size={13} />
+              Cancel
             </button>
-          </li>
-        )
-      })}
-    </ul>
+            <button
+              onClick={handleConfirm}
+              disabled={actioning}
+              className="flex-1 py-2 rounded-lg bg-red-500/15 border border-red-500/40 text-xs
+                font-semibold text-red-400 hover:bg-red-500/25 transition-colors disabled:opacity-40"
+            >
+              {actioning ? '…' : confirmAction.type === 'unfriend' ? 'Unfriend' : 'Block'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <ul className="py-1 flex flex-col overflow-y-auto flex-1" ref={menuRef}>
+        {friends.map(f => {
+          const isNew    = newFriendIds?.has(f.friend_id)
+          const menuOpen = openMenuId === f.friend_id
+          return (
+            <li key={f.friend_id}
+              className={`relative flex items-center gap-3 px-4 py-2.5 transition-colors
+                ${isNew ? 'bg-codex-gold/10 animate-pulse-once' : 'hover:bg-codex-bg'}`}
+            >
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-codex-bg border border-codex-border
+                flex items-center justify-center text-sm font-bold text-codex-subtext uppercase">
+                {f.friend_username[0]}
+              </div>
+              <span className="flex-1 text-sm text-codex-text truncate">{f.friend_username}</span>
+              {isNew && <span className="w-1.5 h-1.5 rounded-full bg-codex-gold flex-shrink-0" />}
+
+              {/* ··· dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setOpenMenuId(menuOpen ? null : f.friend_id)}
+                  className="p-1.5 rounded-lg text-codex-muted hover:text-codex-text
+                    hover:bg-codex-bg transition-colors"
+                  title="Options"
+                >
+                  <MoreHorizontal size={13} />
+                </button>
+
+                {menuOpen && (
+                  <div className="absolute right-0 bottom-8 w-40 bg-codex-card border border-codex-border
+                    rounded-xl shadow-xl z-20 py-1 flex flex-col overflow-hidden">
+                    <button
+                      onClick={() => { setOpenMenuId(null); onDM(f.friend_id, f.friend_username) }}
+                      className="flex items-center gap-2 px-3 py-2 text-xs text-codex-text
+                        hover:bg-codex-bg transition-colors text-left"
+                    >
+                      <MessageCircle size={12} /> Chat
+                    </button>
+                    <button
+                      onClick={() => { setOpenMenuId(null); navigate(`/profile/${f.friend_username}`) }}
+                      className="flex items-center gap-2 px-3 py-2 text-xs text-codex-text
+                        hover:bg-codex-bg transition-colors text-left"
+                    >
+                      <ExternalLink size={12} /> View Profile
+                    </button>
+                    <div className="h-px bg-codex-border mx-2 my-1" />
+                    <button
+                      onClick={() => { setOpenMenuId(null); setConfirmAction({ friendId: f.friend_id, username: f.friend_username, type: 'unfriend' }) }}
+                      className="flex items-center gap-2 px-3 py-2 text-xs text-codex-muted
+                        hover:text-red-400 hover:bg-red-500/5 transition-colors text-left"
+                    >
+                      <UserX size={12} /> Unfriend
+                    </button>
+                    <button
+                      onClick={() => { setOpenMenuId(null); setConfirmAction({ friendId: f.friend_id, username: f.friend_username, type: 'block' }) }}
+                      className="flex items-center gap-2 px-3 py-2 text-xs text-red-400/70
+                        hover:text-red-400 hover:bg-red-500/5 transition-colors text-left"
+                    >
+                      <Trash2 size={12} /> Block User
+                    </button>
+                  </div>
+                )}
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
   )
 }
 

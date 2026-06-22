@@ -68,6 +68,7 @@ const profileRoutes    = require('./routes/profile')
 const bestiaryRoutes       = require('./routes/bestiary')
 const bestiarySharesRoutes = require('./routes/bestiaryShares')
 const encounterRoutes      = require('./routes/encounters')
+const dmsRoutes            = require('./routes/dms')
 
 const app        = express()
 const httpServer = http.createServer(app)
@@ -125,6 +126,7 @@ app.use('/api/profile',          profileRoutes)
 app.use('/api/bestiary/shares',  bestiarySharesRoutes)
 app.use('/api/bestiary',         bestiaryRoutes)
 app.use('/api/encounters',       encounterRoutes)
+app.use('/api/dms',              dmsRoutes)
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

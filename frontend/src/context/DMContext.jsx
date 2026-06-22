@@ -21,6 +21,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { useAuth } from './AuthContext'
 import { useSocket } from './SocketContext'
+import { api } from '../utils/api'
 
 const DMContext = createContext(null)
 
@@ -38,6 +39,26 @@ export function DMProvider({ children }) {
   // Ref to avoid stale closure in socket handler
   const activeUserIdRef = useRef(null)
   useEffect(() => { activeUserIdRef.current = activeUserId }, [activeUserId])
+
+  // ── Hydrate / clear conversation list on auth state change ────────────────
+  // On login: fetch all past conversation partners from the DB so the DMs tab
+  // is pre-populated even after a page refresh.
+  // On logout: wipe all in-memory DM state so the next user starts clean.
+  useEffect(() => {
+    if (!user) {
+      setOpenConvos([])
+      setMessages({})
+      setUnread({})
+      setActiveUserId(null)
+      setWidgetOpen(false)
+      return
+    }
+    api.get('/dms/conversations')
+      .then(({ conversations }) => {
+        setOpenConvos(conversations.map(c => ({ userId: c.user_id, username: c.username })))
+      })
+      .catch(() => {})
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Incoming DM listener ───────────────────────────────────────────────────
   // Registered once when socket is ready. Uses the ref for activeUserId so we
