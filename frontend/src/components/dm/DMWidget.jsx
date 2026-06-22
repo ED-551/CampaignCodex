@@ -384,23 +384,43 @@ function MessagesTab({ openConvos, unread, onSelect, closeDM, onNewDM }) {
 }
 
 // ─── Friends Tab ──────────────────────────────────────────────────────────────
+// The dropdown uses position:fixed with coordinates derived from getBoundingClientRect()
+// so it always renders within the viewport regardless of scroll position or
+// whether the item is near the top or bottom of the list.
 function FriendsTab({ friends, newFriendIds, onDM }) {
-  const navigate  = useNavigate()
+  const navigate = useNavigate()
   const { unfriend, blockUser } = useSocial()
   const { closeDM } = useDM()
 
-  const [openMenuId,   setOpenMenuId]   = useState(null)
-  const [confirmAction, setConfirmAction] = useState(null) // { friendId, username, type: 'unfriend'|'block' }
-  const [actioning,    setActioning]    = useState(false)
-  const menuRef = useRef(null)
+  const [openMenuId,    setOpenMenuId]    = useState(null)
+  const [menuPos,       setMenuPos]       = useState(null)   // { top, right } in px
+  const [confirmAction, setConfirmAction] = useState(null)   // { friendId, username, type }
+  const [actioning,     setActioning]     = useState(false)
+  const dropdownRef = useRef(null)
 
+  // Close dropdown on outside click
   useEffect(() => {
-    function handleClick(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setOpenMenuId(null)
+    if (!openMenuId) return
+    function handle(e) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setOpenMenuId(null)
+      }
     }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [openMenuId])
+
+  function handleMenuToggle(e, friendId) {
+    if (openMenuId === friendId) { setOpenMenuId(null); return }
+    const rect    = e.currentTarget.getBoundingClientRect()
+    const MENU_H  = 152  // approx height of the 4-item dropdown
+    const below   = window.innerHeight - rect.bottom - 8
+    setMenuPos({
+      top:   below >= MENU_H ? rect.bottom + 4 : rect.top - MENU_H - 4,
+      right: window.innerWidth - rect.right,
+    })
+    setOpenMenuId(friendId)
+  }
 
   async function handleConfirm() {
     if (!confirmAction || actioning) return
@@ -417,6 +437,8 @@ function FriendsTab({ friends, newFriendIds, onDM }) {
     setConfirmAction(null)
   }
 
+  const activeFriend = openMenuId ? friends.find(f => f.friend_id === openMenuId) : null
+
   if (friends.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 px-6 text-center">
@@ -430,7 +452,7 @@ function FriendsTab({ friends, newFriendIds, onDM }) {
 
   return (
     <div className="relative h-full flex flex-col">
-      {/* Confirm overlay */}
+      {/* Confirm overlay — inside the widget, above the list */}
       {confirmAction && (
         <div className="absolute inset-0 z-10 bg-codex-bg/90 backdrop-blur-sm flex flex-col
           items-center justify-center gap-4 px-6 text-center rounded-b-2xl">
@@ -441,7 +463,7 @@ function FriendsTab({ friends, newFriendIds, onDM }) {
             <p className="text-xs text-codex-subtext leading-relaxed">
               {confirmAction.type === 'unfriend'
                 ? 'They will be removed from your friends list. You can send them a new request later.'
-                : 'They won\'t be able to message you or see your profile. You can unblock from Settings.'}
+                : "They won't be able to message you or see your profile. You can unblock from Settings."}
             </p>
           </div>
           <div className="flex gap-3 w-full">
@@ -464,13 +486,12 @@ function FriendsTab({ friends, newFriendIds, onDM }) {
         </div>
       )}
 
-      <ul className="py-1 flex flex-col overflow-y-auto flex-1" ref={menuRef}>
+      <ul className="py-1 flex flex-col overflow-y-auto flex-1">
         {friends.map(f => {
-          const isNew    = newFriendIds?.has(f.friend_id)
-          const menuOpen = openMenuId === f.friend_id
+          const isNew = newFriendIds?.has(f.friend_id)
           return (
             <li key={f.friend_id}
-              className={`relative flex items-center gap-3 px-4 py-2.5 transition-colors
+              className={`flex items-center gap-3 px-4 py-2.5 transition-colors
                 ${isNew ? 'bg-codex-gold/10 animate-pulse-once' : 'hover:bg-codex-bg'}`}
             >
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-codex-bg border border-codex-border
@@ -479,57 +500,57 @@ function FriendsTab({ friends, newFriendIds, onDM }) {
               </div>
               <span className="flex-1 text-sm text-codex-text truncate">{f.friend_username}</span>
               {isNew && <span className="w-1.5 h-1.5 rounded-full bg-codex-gold flex-shrink-0" />}
-
-              {/* ··· dropdown */}
-              <div className="relative">
-                <button
-                  onClick={() => setOpenMenuId(menuOpen ? null : f.friend_id)}
-                  className="p-1.5 rounded-lg text-codex-muted hover:text-codex-text
-                    hover:bg-codex-bg transition-colors"
-                  title="Options"
-                >
-                  <MoreHorizontal size={13} />
-                </button>
-
-                {menuOpen && (
-                  <div className="absolute right-0 bottom-8 w-40 bg-codex-card border border-codex-border
-                    rounded-xl shadow-xl z-20 py-1 flex flex-col overflow-hidden">
-                    <button
-                      onClick={() => { setOpenMenuId(null); onDM(f.friend_id, f.friend_username) }}
-                      className="flex items-center gap-2 px-3 py-2 text-xs text-codex-text
-                        hover:bg-codex-bg transition-colors text-left"
-                    >
-                      <MessageCircle size={12} /> Chat
-                    </button>
-                    <button
-                      onClick={() => { setOpenMenuId(null); navigate(`/profile/${f.friend_username}`) }}
-                      className="flex items-center gap-2 px-3 py-2 text-xs text-codex-text
-                        hover:bg-codex-bg transition-colors text-left"
-                    >
-                      <ExternalLink size={12} /> View Profile
-                    </button>
-                    <div className="h-px bg-codex-border mx-2 my-1" />
-                    <button
-                      onClick={() => { setOpenMenuId(null); setConfirmAction({ friendId: f.friend_id, username: f.friend_username, type: 'unfriend' }) }}
-                      className="flex items-center gap-2 px-3 py-2 text-xs text-codex-muted
-                        hover:text-red-400 hover:bg-red-500/5 transition-colors text-left"
-                    >
-                      <UserX size={12} /> Unfriend
-                    </button>
-                    <button
-                      onClick={() => { setOpenMenuId(null); setConfirmAction({ friendId: f.friend_id, username: f.friend_username, type: 'block' }) }}
-                      className="flex items-center gap-2 px-3 py-2 text-xs text-red-400/70
-                        hover:text-red-400 hover:bg-red-500/5 transition-colors text-left"
-                    >
-                      <Trash2 size={12} /> Block User
-                    </button>
-                  </div>
-                )}
-              </div>
+              <button
+                onClick={e => handleMenuToggle(e, f.friend_id)}
+                className="p-1.5 rounded-lg text-codex-muted hover:text-codex-text
+                  hover:bg-codex-bg transition-colors flex-shrink-0"
+                title="Options"
+              >
+                <MoreHorizontal size={13} />
+              </button>
             </li>
           )
         })}
       </ul>
+
+      {/* Dropdown rendered fixed to viewport — never clipped by overflow:hidden */}
+      {openMenuId && menuPos && activeFriend && (
+        <div
+          ref={dropdownRef}
+          style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 60 }}
+          className="w-44 bg-codex-card border border-codex-border rounded-xl shadow-xl py-1 flex flex-col overflow-hidden"
+        >
+          <button
+            onClick={() => { setOpenMenuId(null); onDM(activeFriend.friend_id, activeFriend.friend_username) }}
+            className="flex items-center gap-2 px-3 py-2 text-xs text-codex-text
+              hover:bg-codex-bg transition-colors text-left"
+          >
+            <MessageCircle size={12} /> Chat
+          </button>
+          <button
+            onClick={() => { setOpenMenuId(null); navigate(`/profile/${activeFriend.friend_username}`) }}
+            className="flex items-center gap-2 px-3 py-2 text-xs text-codex-text
+              hover:bg-codex-bg transition-colors text-left"
+          >
+            <ExternalLink size={12} /> View Profile
+          </button>
+          <div className="h-px bg-codex-border mx-2 my-1" />
+          <button
+            onClick={() => { setOpenMenuId(null); setConfirmAction({ friendId: activeFriend.friend_id, username: activeFriend.friend_username, type: 'unfriend' }) }}
+            className="flex items-center gap-2 px-3 py-2 text-xs text-codex-muted
+              hover:text-red-400 hover:bg-red-500/5 transition-colors text-left"
+          >
+            <UserX size={12} /> Unfriend
+          </button>
+          <button
+            onClick={() => { setOpenMenuId(null); setConfirmAction({ friendId: activeFriend.friend_id, username: activeFriend.friend_username, type: 'block' }) }}
+            className="flex items-center gap-2 px-3 py-2 text-xs text-red-400/70
+              hover:text-red-400 hover:bg-red-500/5 transition-colors text-left"
+          >
+            <Trash2 size={12} /> Block User
+          </button>
+        </div>
+      )}
     </div>
   )
 }
