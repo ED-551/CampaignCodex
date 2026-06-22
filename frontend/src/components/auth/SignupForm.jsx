@@ -128,7 +128,11 @@ export default function SignupForm() {
         navigate('/dashboard', { replace: true })
       }
     } catch (err) {
-      setError(err.message || 'Sign up failed. Please try again.')
+      if (err.status === 429) {
+        setError('Too many sign-up attempts from this connection. Please wait a few minutes and try again.')
+      } else {
+        setError(err.message || 'Sign up failed. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
