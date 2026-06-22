@@ -11,7 +11,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import {
   BookOpen, ArrowLeft, MessageCircle, UserPlus, UserCheck, Clock,
-  Swords, Shield, Users, Scroll, User,
+  Swords, Shield, Users, Scroll, User, Feather,
 } from 'lucide-react'
 import { useAuth }   from '../context/AuthContext'
 import { useDM }     from '../context/DMContext'
@@ -258,7 +258,7 @@ export default function ProfilePage() {
           {!isOwnProfile && (
             <>
               <div className="h-px bg-codex-border/60 mx-6" />
-              <div className="px-6 py-4 flex gap-3">
+              <div className="px-6 py-4 flex gap-3 flex-wrap">
                 <FriendButton
                   status={friendStatus}
                   loading={friendLoading}
@@ -272,6 +272,14 @@ export default function ProfilePage() {
                     hover:text-codex-text hover:border-codex-muted transition-colors"
                 >
                   <MessageCircle size={14} /> Message
+                </button>
+                <button
+                  onClick={() => navigate('/ravens', { state: { composeTo: { id: profile.id, username: profile.username } } })}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm
+                    bg-codex-surface border border-codex-border text-codex-subtext
+                    hover:text-codex-text hover:border-codex-muted transition-colors"
+                >
+                  <Feather size={14} /> Raven
                 </button>
               </div>
             </>

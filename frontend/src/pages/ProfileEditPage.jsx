@@ -376,6 +376,17 @@ export default function ProfileEditPage() {
   )
 }
 
+// ─── Member label helper (mirrors ProfilePage logic) ─────────────────────────
+const PREVIEW_TIER_LABELS = {
+  bronze: 'Bronze Member', silver: 'Silver Member',
+  gold: 'Gold Member', platinum: 'Platinum Member', black: 'Obsidian Member',
+}
+function previewMemberLabel(profile) {
+  if (profile?.isAdmin)     return 'Obsidian Member · Administrator'
+  if (profile?.isModerator) return 'Obsidian Member · Moderator'
+  return PREVIEW_TIER_LABELS[profile?.supporterTier] ?? ''
+}
+
 // ─── Preview card — mirrors ProfilePage's card exactly ────────────────────────
 function PreviewCard({ form, profile, theme }) {
   if (!profile) return null
@@ -404,6 +415,9 @@ function PreviewCard({ form, profile, theme }) {
                   </h2>
                   {displayName && (
                     <p className="text-sm text-codex-subtext mt-0.5">{displayName}</p>
+                  )}
+                  {previewMemberLabel(profile) && (
+                    <p className="text-xs text-codex-muted mt-0.5">{previewMemberLabel(profile)}</p>
                   )}
                 </div>
                 {theme.label && (
@@ -460,11 +474,15 @@ function PreviewCard({ form, profile, theme }) {
           </>
         )}
 
+        {/* Member since — inside the card, above the bottom bar */}
+        <div className="px-6 pb-3">
+          <p className="text-center text-xs text-codex-muted">
+            Member since {new Date(profile.joinedAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          </p>
+        </div>
+
         <div className={`h-px w-full bg-gradient-to-r from-transparent ${theme.topBar} to-transparent opacity-30`} />
       </div>
-      <p className="text-center text-xs text-codex-muted mt-4">
-        Member since {new Date(profile.joinedAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-      </p>
     </div>
   )
 }

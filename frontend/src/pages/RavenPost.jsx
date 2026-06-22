@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import {
   BookOpen, ArrowLeft, Send, Trash2, Reply,
@@ -313,11 +313,13 @@ function MessageView({ messageId, isInbox, onReply, onDelete, onBack }) {
 }
 
 // ─── Compose Modal ────────────────────────────────────────────────────────────
-function ComposeModal({ onClose, onSent, characters, replyTo }) {
+function ComposeModal({ onClose, onSent, characters, replyTo, composeTo }) {
   const [recipient, setRecipient]       = useState(
-    replyTo ? { id: replyTo.sender_id, username: replyTo.sender_username } : null
+    replyTo   ? { id: replyTo.sender_id, username: replyTo.sender_username }
+    : composeTo ? { id: composeTo.id,       username: composeTo.username }
+    : null
   )
-  const [toInput, setToInput]           = useState(replyTo?.sender_username ?? '')
+  const [toInput, setToInput]           = useState(replyTo?.sender_username ?? composeTo?.username ?? '')
   const [searchResults, setSearchResults] = useState([])
   const [searching, setSearching]       = useState(false)
   const [subject, setSubject]           = useState(replyTo ? `Re: ${replyTo.subject.replace(/^(Re:\s*)+/i, '')}` : '')
@@ -558,6 +560,7 @@ function NoSelection() {
 export default function RavenPost() {
   const { user, logout }            = useAuth()
   const navigate                    = useNavigate()
+  const location                    = useLocation()
 
   const [tab, setTab]               = useState('inbox')
   const [messages, setMessages]     = useState([])
@@ -568,9 +571,18 @@ export default function RavenPost() {
   const [selectedId, setSelectedId] = useState(null)
   const [composing, setComposing]   = useState(false)
   const [replyTo, setReplyTo]       = useState(null)
+  const [composeTo, setComposeTo]   = useState(null)  // pre-filled recipient from profile page
   const [characters, setCharacters] = useState([])
 
   const [mobileView, setMobileView] = useState('list')
+
+  // Open compose with pre-filled recipient when navigated from a profile page
+  useEffect(() => {
+    if (location.state?.composeTo) {
+      setComposeTo(location.state.composeTo)
+      setComposing(true)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadMessages = useCallback(async (activeTab = tab, activePage = page) => {
     setLoadingList(true)
@@ -757,10 +769,11 @@ export default function RavenPost() {
 
       {composing && (
         <ComposeModal
-          onClose={() => { setComposing(false); setReplyTo(null); setMobileView(selectedId ? 'detail' : 'list') }}
+          onClose={() => { setComposing(false); setReplyTo(null); setComposeTo(null); setMobileView(selectedId ? 'detail' : 'list') }}
           onSent={handleSent}
           characters={characters}
           replyTo={replyTo}
+          composeTo={!replyTo ? composeTo : null}
         />
       )}
     </div>
