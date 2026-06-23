@@ -3,6 +3,7 @@ const { randomInt } = require('crypto')
 const { body, validationResult } = require('express-validator')
 const db      = require('../db')
 const { requireAuth } = require('../middleware/auth')
+const { joinInviteLimiter } = require('../middleware/rateLimiter')
 
 const router = express.Router()
 
@@ -100,6 +101,9 @@ router.post('/', requireAuth, [
 })
 
 // ─── GET /api/campaigns/:id ───────────────────────────────────────────────────
+// Access control: only the GM, active/past members, or an admin may view a
+// campaign. Without this check any authenticated user who knows a campaign UUID
+// could read the full member list and character names.
 router.get('/:id', requireAuth, async (req, res) => {
   if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid campaign ID.' })
   try {
@@ -117,6 +121,21 @@ router.get('/:id', requireAuth, async (req, res) => {
        WHERE c.id = $1`, [req.params.id]
     )
     if (!camp.rows[0]) return res.status(404).json({ error: 'Campaign not found.' })
+
+    const isGM    = camp.rows[0].gm_user_id === req.user.sub
+    const isAdmin = req.user.isAdmin === true
+
+    // Non-GM, non-admin callers must be a member (active or departed).
+    // A single indexed lookup — cheaper than hydrating the full member list first.
+    if (!isGM && !isAdmin) {
+      const memberCheck = await db.query(
+        'SELECT 1 FROM campaign_members WHERE campaign_id = $1 AND user_id = $2 LIMIT 1',
+        [req.params.id, req.user.sub]
+      )
+      if (!memberCheck.rows.length) {
+        return res.status(403).json({ error: 'You do not have access to this campaign.' })
+      }
+    }
 
     const members = await db.query(
       `SELECT cm.id, cm.user_id, cm.character_id, cm.joined_at, cm.left_at,
@@ -138,7 +157,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 })
 
 // ─── POST /api/campaigns/join ─────────────────────────────────────────────────
-router.post('/join', requireAuth, [
+router.post('/join', requireAuth, joinInviteLimiter, [
   body('joinCode').trim().notEmpty().withMessage('Join code is required.'),
 ], async (req, res) => {
   if (validationErrors(req, res)) return
@@ -146,8 +165,21 @@ router.post('/join', requireAuth, [
   const code = req.body.joinCode.toUpperCase().trim()
 
   try {
+    // Single query: fetches campaign + GM's supporter_tier + active member count.
+    // Previously these were 3 separate round-trips. The subquery uses the partial
+    // index idx_campaign_members_active (campaign_id WHERE left_at IS NULL) so
+    // counting active members adds negligible overhead.
+    // is_active + is_deleted guards prevent joining a paused or deleted campaign
+    // even if the join code is already known to the joiner.
     const campResult = await db.query(
-      'SELECT * FROM campaigns WHERE join_code = $1 AND is_active = true LIMIT 1',
+      `SELECT c.*,
+              u.supporter_tier AS gm_supporter_tier,
+              (SELECT COUNT(*)::int FROM campaign_members cm
+               WHERE cm.campaign_id = c.id AND cm.left_at IS NULL) AS active_member_count
+       FROM campaigns c
+       JOIN users u ON u.id = c.gm_user_id
+       WHERE c.join_code = $1 AND c.is_active = true AND c.is_deleted = false
+       LIMIT 1`,
       [code]
     )
     if (!campResult.rows[0]) {
@@ -170,15 +202,9 @@ router.post('/join', requireAuth, [
       return res.status(409).json({ error: 'You are already in this campaign.' })
     }
 
-    // Check player cap — determined by GM's tier
-    const gmResult = await db.query(
-      'SELECT supporter_tier FROM users WHERE id = $1', [campaign.gm_user_id]
-    )
-    const cap = tierCap(gmResult.rows[0]?.supporter_tier ?? 'free')
-    const memberCount = await db.query(
-      'SELECT COUNT(*) FROM campaign_members WHERE campaign_id = $1 AND left_at IS NULL', [campaign.id]
-    )
-    if (parseInt(memberCount.rows[0].count) >= cap) {
+    // Cap derived from GM tier fetched above — no extra query needed
+    const cap = tierCap(campaign.gm_supporter_tier ?? 'free')
+    if (campaign.active_member_count >= cap) {
       return res.status(403).json({ error: `This campaign is full (max ${cap} players).` })
     }
 
@@ -220,13 +246,30 @@ router.delete('/:id', requireAuth, async (req, res) => {
 
 // ─── POST /api/campaigns/:id/dismiss ─────────────────────────────────────────
 // Player dismisses a soft-deleted campaign — removes them from campaign_members.
+// Requires the campaign to be soft-deleted (is_deleted = true) — prevents this
+// endpoint from being used to silently exit an active campaign with no audit trail.
+// Active campaign exits must go through POST /leave which records a left_at timestamp.
 router.post('/:id/dismiss', requireAuth, async (req, res) => {
   if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid campaign ID.' })
   try {
-    await db.query(
-      'DELETE FROM campaign_members WHERE campaign_id = $1 AND user_id = $2',
+    const campResult = await db.query(
+      'SELECT is_deleted FROM campaigns WHERE id = $1 LIMIT 1',
+      [req.params.id]
+    )
+    if (!campResult.rows[0]) {
+      return res.status(404).json({ error: 'Campaign not found.' })
+    }
+    if (!campResult.rows[0].is_deleted) {
+      return res.status(400).json({ error: 'Campaign is still active. Use the Leave endpoint to exit an active campaign.' })
+    }
+
+    const result = await db.query(
+      'DELETE FROM campaign_members WHERE campaign_id = $1 AND user_id = $2 RETURNING id',
       [req.params.id, req.user.sub]
     )
+    if (!result.rowCount) {
+      return res.status(404).json({ error: 'You are not a member of this campaign.' })
+    }
     res.json({ message: 'Campaign dismissed.' })
   } catch (err) {
     console.error('[campaigns/dismiss]', err)
@@ -271,10 +314,16 @@ router.delete('/:id/members/:memberId', requireAuth, async (req, res) => {
     if (camp.rows[0].gm_user_id !== req.user.sub && !req.user.isAdmin) {
       return res.status(403).json({ error: 'Only the GM can remove members.' })
     }
-    await db.query(
-      'DELETE FROM campaign_members WHERE id = $1 AND campaign_id = $2 AND left_at IS NOT NULL',
+    // RETURNING id lets us detect the two silent-failure cases:
+    // (a) memberId not in this campaign at all, (b) member is still active
+    // (left_at IS NULL) — active members must use /leave, not this endpoint.
+    const result = await db.query(
+      'DELETE FROM campaign_members WHERE id = $1 AND campaign_id = $2 AND left_at IS NOT NULL RETURNING id',
       [req.params.memberId, req.params.id]
     )
+    if (!result.rowCount) {
+      return res.status(404).json({ error: 'Member not found or is still an active participant.' })
+    }
     res.json({ message: 'Member record removed.' })
   } catch (err) {
     console.error('[campaigns/remove-member]', err)
@@ -284,7 +333,9 @@ router.delete('/:id/members/:memberId', requireAuth, async (req, res) => {
 
 // ─── POST /api/campaigns/:id/invite ──────────────────────────────────────────
 // GM invites a player by username.
-router.post('/:id/invite', requireAuth, [
+// joinInviteLimiter bounds this at 30/hr so a GM cannot enumerate user accounts
+// by probing invite payloads, and cannot spam a target's membership slots.
+router.post('/:id/invite', requireAuth, joinInviteLimiter, [
   body('username').trim().notEmpty().withMessage('Username is required.'),
 ], async (req, res) => {
   if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid campaign ID.' })
@@ -293,9 +344,18 @@ router.post('/:id/invite', requireAuth, [
   const { username } = req.body
 
   try {
-    // Fetch campaign
+    // Single query: campaign + GM supporter_tier + active member count.
+    // is_active + is_deleted guards prevent inviting into a paused or
+    // soft-deleted campaign where the GM still holds the campaign object.
     const campResult = await db.query(
-      'SELECT * FROM campaigns WHERE id = $1', [req.params.id]
+      `SELECT c.*,
+              u.supporter_tier AS gm_supporter_tier,
+              (SELECT COUNT(*)::int FROM campaign_members cm
+               WHERE cm.campaign_id = c.id AND cm.left_at IS NULL) AS active_member_count
+       FROM campaigns c
+       JOIN users u ON u.id = c.gm_user_id
+       WHERE c.id = $1 AND c.is_active = true AND c.is_deleted = false`,
+      [req.params.id]
     )
     if (!campResult.rows[0]) return res.status(404).json({ error: 'Campaign not found.' })
 
@@ -321,25 +381,24 @@ router.post('/:id/invite', requireAuth, [
       return res.status(400).json({ error: 'You cannot invite yourself.' })
     }
 
-    // Cannot invite someone who has any row in campaign_members (active or departed)
+    // Check for an existing membership row — differentiate active vs departed
+    // so the GM gets an actionable error instead of a generic "already a member".
     const existing = await db.query(
-      'SELECT id FROM campaign_members WHERE campaign_id = $1 AND user_id = $2',
+      'SELECT left_at FROM campaign_members WHERE campaign_id = $1 AND user_id = $2 LIMIT 1',
       [campaign.id, targetUser.id]
     )
     if (existing.rows.length) {
-      return res.status(409).json({ error: 'This user already was a member of this campaign.' })
+      const departed = existing.rows[0].left_at !== null
+      return res.status(409).json({
+        error: departed
+          ? 'This user previously left this campaign and cannot be re-invited.'
+          : 'This user is already an active member of this campaign.',
+      })
     }
 
-    // Check player cap — determined by GM's tier, count active members only
-    const gmResult = await db.query(
-      'SELECT supporter_tier FROM users WHERE id = $1', [campaign.gm_user_id]
-    )
-    const cap = tierCap(gmResult.rows[0]?.supporter_tier ?? 'free')
-    const memberCount = await db.query(
-      'SELECT COUNT(*) FROM campaign_members WHERE campaign_id = $1 AND left_at IS NULL',
-      [campaign.id]
-    )
-    if (parseInt(memberCount.rows[0].count) >= cap) {
+    // Cap derived from GM tier fetched above — no extra query needed
+    const cap = tierCap(campaign.gm_supporter_tier ?? 'free')
+    if (campaign.active_member_count >= cap) {
       return res.status(403).json({ error: `This campaign is full (max ${cap} players).` })
     }
 

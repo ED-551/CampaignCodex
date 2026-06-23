@@ -19,6 +19,11 @@ const router = express.Router()
 const GAME_SYSTEMS = ['shadowdark', 'morkborg', 'nimble']
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+// Hoisted to module scope so the Set is created once and reused across all
+// requests. Previously it was defined inline inside both POST and PUT handlers,
+// which allocated a new Set object on every call.
+const VALID_HIT_DICE = new Set(['d4', 'd6', 'd8', 'd10', 'd12'])
+
 function validationErrors(req, res) {
   const errors = validationResult(req)
   if (!errors.isEmpty()) {
@@ -74,8 +79,6 @@ router.post('/', requireAuth, [
 
   const { name, gameSystem, description, tags, monsters = [] } = req.body
 
-  const VALID_HIT_DICE = new Set(['d4', 'd6', 'd8', 'd10', 'd12'])
-
   // Sanitise each monster entry — only allow known keys through
   const clean = monsters.map(m => ({
     monsterId:  m.monsterId  || null,
@@ -96,10 +99,13 @@ router.post('/', requireAuth, [
   }))
 
   try {
+    // Explicit column list avoids leaking user_id and any future internal columns
+    // that get added to the table — user_id is redundant (the caller owns it).
     const result = await db.query(
       `INSERT INTO encounters (user_id, game_system, name, description, tags, monsters)
        VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
+       RETURNING id, game_system, name, description, tags, monsters,
+                 times_used, created_at, updated_at`,
       [req.user.sub, gameSystem, name, description || null, tags || null,
        JSON.stringify(clean)]
     )
@@ -116,14 +122,21 @@ router.get('/:id', requireAuth, async (req, res) => {
   if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid encounter ID.' })
 
   try {
+    // user_id is fetched only for the ownership check; it is not included in
+    // the response shape so internal IDs are not leaked to the client.
     const result = await db.query(
-      'SELECT * FROM encounters WHERE id = $1', [req.params.id]
+      `SELECT id, user_id, game_system, name, description, tags, monsters,
+              times_used, created_at, updated_at
+       FROM encounters WHERE id = $1`,
+      [req.params.id]
     )
     if (!result.rows[0]) return res.status(404).json({ error: 'Encounter not found.' })
     if (result.rows[0].user_id !== req.user.sub && !req.user.isAdmin) {
       return res.status(403).json({ error: 'Access denied.' })
     }
-    res.json({ encounter: result.rows[0] })
+    // Strip user_id from response — caller already knows they own it
+    const { user_id: _, ...encounter } = result.rows[0]
+    res.json({ encounter })
   } catch (err) {
     console.error('[encounters/get]', err)
     res.status(500).json({ error: 'Failed to fetch encounter.' })
@@ -157,7 +170,7 @@ router.put('/:id', requireAuth, [
 
     const { name, description, tags, monsters = [] } = req.body
 
-    const VALID_HIT_DICE = new Set(['d4', 'd6', 'd8', 'd10', 'd12'])
+    // VALID_HIT_DICE is defined at module scope — no need to re-create it here
     const clean = monsters.map(m => ({
       monsterId:  m.monsterId  || null,
       name:       String(m.name  ?? '').slice(0, 100),
@@ -180,7 +193,8 @@ router.put('/:id', requireAuth, [
       `UPDATE encounters
        SET name = $1, description = $2, tags = $3, monsters = $4
        WHERE id = $5
-       RETURNING *`,
+       RETURNING id, game_system, name, description, tags, monsters,
+                 times_used, created_at, updated_at`,
       [name, description || null, tags || null, JSON.stringify(clean), req.params.id]
     )
     res.json({ encounter: result.rows[0] })

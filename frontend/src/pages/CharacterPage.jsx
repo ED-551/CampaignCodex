@@ -40,10 +40,14 @@ export default function CharacterPage() {
   // Load existing character
   useEffect(() => {
     if (isNew) return
+    // cancelled guard prevents stale fetch from writing state after unmount
+    // or when the character id changes (navigating between character sheets).
+    let cancelled = false
     api.get(`/characters/${id}`)
-      .then(({ character }) => setCharacter(character))
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false))
+      .then(({ character }) => { if (!cancelled) setCharacter(character) })
+      .catch(err => { if (!cancelled) setError(err.message) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [id, isNew])
 
   // Called by wizard when all steps are complete

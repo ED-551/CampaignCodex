@@ -532,25 +532,51 @@ router.post('/start', requireAuth, [
 // Returns the active combat session.
 // GMs receive the full session; non-GMs have monster HP sanitized.
 router.get('/:campaignId/active', requireAuth, async (req, res) => {
+  // UUID guard — prevents SQL injection and disambiguates 400 from 404
+  if (!UUID_RE.test(req.params.campaignId)) {
+    return res.status(400).json({ error: 'Invalid campaign ID.' })
+  }
+
   try {
-    // Fetch campaign to check GM status
+    // Single query: campaign existence + GM status in one round-trip.
+    // Membership check (UNION) is included so non-members receive 404 instead
+    // of seeing sanitized combat data they have no business viewing. Previously
+    // any authenticated user could read combat state for any campaign by knowing
+    // the campaign UUID — they got HP labels not numbers, but still saw PC names,
+    // AC values, initiative, and conditions.
     const campResult = await db.query(
-      'SELECT gm_user_id FROM campaigns WHERE id = $1',
-      [req.params.campaignId]
+      `SELECT gm_user_id,
+              EXISTS (
+                SELECT 1 FROM campaign_members
+                WHERE campaign_id = $1 AND user_id = $2 AND left_at IS NULL
+              ) AS is_member
+       FROM campaigns
+       WHERE id = $1 AND is_deleted = false`,
+      [req.params.campaignId, req.user.sub]
     )
     if (!campResult.rows[0]) {
       return res.status(404).json({ error: 'Campaign not found.' })
     }
 
+    const { gm_user_id, is_member } = campResult.rows[0]
+    const isGM = req.user.sub === gm_user_id
+
+    // Access control: must be GM or an active campaign member
+    if (!isGM && !is_member) {
+      return res.status(404).json({ error: 'No active combat session.' })
+    }
+
     const result = await db.query(
-      'SELECT * FROM combat_sessions WHERE campaign_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1',
+      `SELECT id, campaign_id, is_active, combatants, round_number, combat_mode, created_at, updated_at
+       FROM combat_sessions
+       WHERE campaign_id = $1 AND is_active = true
+       ORDER BY created_at DESC LIMIT 1`,
       [req.params.campaignId]
     )
     if (!result.rows[0]) return res.status(404).json({ error: 'No active combat session.' })
 
-    const session  = result.rows[0]
-    const isGM     = req.user.sub === campResult.rows[0].gm_user_id
-
+    const session = result.rows[0]
+    // Non-GMs see HP labels (Healthy / Bloodied / etc.) instead of raw numbers
     if (!isGM) {
       session.combatants = sanitizeCombatants(session.combatants)
     }
@@ -565,6 +591,9 @@ router.get('/:campaignId/active', requireAuth, async (req, res) => {
 // ─── PATCH /api/combat/:id ────────────────────────────────────────────────────
 // Update combatants array or round number
 router.patch('/:id', requireAuth, async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid session ID.' })
+  }
   const { combatants, round_number, combat_mode } = req.body
   try {
     const session = await db.query('SELECT campaign_id FROM combat_sessions WHERE id = $1', [req.params.id])
@@ -575,12 +604,16 @@ router.patch('/:id', requireAuth, async (req, res) => {
     const validModes = ['standard', 'legendary', 'mb_pending', 'mb_players', 'mb_enemies']
     const safeMode = combat_mode && validModes.includes(combat_mode) ? combat_mode : null
 
+    // Explicit columns — RETURNING * would leak is_active and any future
+    // internal columns added to combat_sessions. campaign_id is omitted since
+    // the GM already knows which campaign they're managing.
     const result = await db.query(
       `UPDATE combat_sessions SET
          combatants   = COALESCE($1::jsonb, combatants),
          round_number = COALESCE($2, round_number),
          combat_mode  = COALESCE($3, combat_mode)
-       WHERE id = $4 RETURNING *`,
+       WHERE id = $4
+       RETURNING id, campaign_id, is_active, combatants, round_number, combat_mode, created_at, updated_at`,
       [
         combatants ? JSON.stringify(combatants.map(sanitizeCombatant).filter(Boolean)) : null,
         round_number || null,

@@ -1,16 +1,22 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import { api, setToken, clearToken } from '../utils/api'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [user,    setUser]    = useState(null)
-  const [loading, setLoading] = useState(true)   // true on first load
+  // Lazy initializer: loading starts true only when a stored token exists and
+  // needs verification against the server.  If there is no token the user is
+  // definitely logged out — starting false avoids a synchronous setLoading(false)
+  // inside the effect body, which would trigger an extra render and violates the
+  // react-hooks/set-state-in-effect lint rule.
+  const [loading, setLoading] = useState(() => Boolean(localStorage.getItem('cc_token')))
 
   // On mount: verify stored token and load user
   useEffect(() => {
     const token = localStorage.getItem('cc_token')
-    if (!token) { setLoading(false); return }
+    // No token → loading is already false (set by lazy initializer above); nothing to do.
+    if (!token) return
 
     api.get('/auth/me')
       .then(({ user }) => setUser(user))
@@ -46,9 +52,14 @@ export function AuthProvider({ children }) {
   }, [])
 
   const updateSettings = useCallback(async (fields) => {
-    const { user: updated } = await api.patch('/auth/settings', fields)
-    setUser(updated)
-    return updated
+    // When an email change triggers re-verification, the response includes
+    // requiresVerification: true alongside the updated user. Return the full
+    // response so callers can branch on that flag (e.g. show "check your inbox"
+    // instead of "saved"). setUser still runs so emailVerified flips to false
+    // in AuthContext, which causes ProtectedRoute to redirect to /verify-pending.
+    const res = await api.patch('/auth/settings', fields)
+    setUser(res.user)
+    return res   // { user, requiresVerification? }
   }, [])
 
   const changePassword = useCallback(async (currentPassword, newPassword, confirmPassword) => {
@@ -65,8 +76,18 @@ export function AuthProvider({ children }) {
   const isAdmin     = Boolean(user?.isAdmin)
   const isModerator = Boolean(user?.isModerator)
 
+  // Memoize the value object so all consumers only re-render when something
+  // actually changed. Without this, every AuthProvider render (e.g. from a
+  // parent re-render) creates a new object reference and forces every useAuth()
+  // consumer to re-render even if user/loading haven't moved.
+  const value = useMemo(() => ({
+    user, loading,
+    login, signup, logout, updateSettings, changePassword, deleteAccount,
+    isAdmin, isModerator,
+  }), [user, loading, isAdmin, isModerator, login, signup, logout, updateSettings, changePassword, deleteAccount])
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout, updateSettings, changePassword, deleteAccount, isAdmin, isModerator }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+// useNavigate added alongside useSearchParams — line 130 calls navigate() which
+// was previously a ReferenceError (the hook was imported but never declared).
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { api, setToken } from '../utils/api'
 
@@ -13,6 +15,8 @@ import { api, setToken } from '../utils/api'
  */
 export default function VerifyEmailPage() {
   const [params] = useSearchParams()
+  // Declared here so the onClick on line ~130 resolves correctly.
+  const navigate  = useNavigate()
 
   const [status, setStatus]               = useState('verifying') // verifying | success | error
   const [errorMsg, setErrorMsg]           = useState('')

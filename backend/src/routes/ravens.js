@@ -65,7 +65,9 @@ router.get('/inbox', requireAuth, [
   query('page').optional().isInt({ min: 1 }).toInt(),
 ], async (req, res) => {
   if (validationErrors(req, res)) return
-  const page   = req.query.page ?? 1
+  // parseInt || 1 guards against ?page= (empty string) — toInt() produces NaN
+  // which is not nullish, so ?? 1 would not catch it, causing OFFSET NaN in SQL.
+  const page   = parseInt(req.query.page, 10) || 1
   const offset = (page - 1) * PAGE_SIZE
 
   try {
@@ -119,7 +121,8 @@ router.get('/sent', requireAuth, [
   query('page').optional().isInt({ min: 1 }).toInt(),
 ], async (req, res) => {
   if (validationErrors(req, res)) return
-  const page   = req.query.page ?? 1
+  // Same NaN guard as inbox — see comment above.
+  const page   = parseInt(req.query.page, 10) || 1
   const offset = (page - 1) * PAGE_SIZE
 
   try {
@@ -167,6 +170,11 @@ router.get('/sent', requireAuth, [
 
 // ─── GET /api/ravens/:id ─────────────────────────────────────────────────────
 // Full message. Only sender or recipient may read it.
+//
+// Ownership is enforced in the SQL WHERE clause (not post-fetch) so that an
+// unauthorized user gets a 404 rather than triggering a 403 after the row has
+// already been hydrated into memory. Using rm.* is also avoided — explicit
+// columns prevent future schema additions from leaking to the client.
 router.get('/:id', requireAuth, async (req, res) => {
   if (!isUUID(req.params.id)) {
     return res.status(400).json({ error: 'Invalid message ID.' })
@@ -175,7 +183,9 @@ router.get('/:id', requireAuth, async (req, res) => {
   try {
     const result = await db.query(
       `SELECT
-         rm.*,
+         rm.id, rm.sender_id, rm.recipient_id, rm.subject, rm.body,
+         rm.character_id, rm.parent_id, rm.read_at, rm.created_at,
+         rm.deleted_by_sender, rm.deleted_by_recipient,
          CASE WHEN s.is_admin THEN 'Site Administrator' ELSE s.username END AS sender_username,
          s.supporter_tier AS sender_supporter_tier,
          s.is_admin       AS sender_is_admin,
@@ -186,29 +196,30 @@ router.get('/:id', requireAuth, async (req, res) => {
        JOIN users s  ON s.id = rm.sender_id
        JOIN users r  ON r.id = rm.recipient_id
        LEFT JOIN characters ch ON ch.id = rm.character_id
-       WHERE rm.id = $1`,
-      [req.params.id]
+       WHERE rm.id = $1
+         AND (rm.sender_id = $2 OR rm.recipient_id = $2)`,
+      [req.params.id, req.user.sub]
     )
 
+    // 404 for both "not found" and "not authorized" — don't reveal existence
     const msg = result.rows[0]
     if (!msg) return res.status(404).json({ error: 'Message not found.' })
 
-    // Only sender or recipient may access this message
-    if (msg.sender_id !== req.user.sub && msg.recipient_id !== req.user.sub) {
-      return res.status(403).json({ error: 'Access denied.' })
-    }
-
-    // If recipient is reading and the message was deleted by recipient, deny
+    // Per-side soft-delete visibility
     if (msg.recipient_id === req.user.sub && msg.deleted_by_recipient) {
       return res.status(404).json({ error: 'Message not found.' })
     }
-    // If sender is reading and deleted by sender, deny
     if (msg.sender_id === req.user.sub && msg.deleted_by_sender) {
       return res.status(404).json({ error: 'Message not found.' })
     }
 
     // Recursively fetch the parent chain (up to 5 levels) so the UI can show
     // the full correspondence thread below the current message.
+    //
+    // The user participation filter (sender_id = $2 OR recipient_id = $2) is
+    // applied to BOTH the anchor and recursive parts of the CTE. Without it, a
+    // user who receives a reply could read the full body of ancestor messages
+    // they were never a party to if the chain passes through a third party.
     let thread = []
     if (msg.parent_id) {
       const chainResult = await db.query(
@@ -221,6 +232,7 @@ router.get('/:id', requireAuth, async (req, res) => {
            JOIN users s ON s.id = rm.sender_id
            LEFT JOIN characters ch ON ch.id = rm.character_id
            WHERE rm.id = $1
+             AND (rm.sender_id = $2 OR rm.recipient_id = $2)
            UNION ALL
            SELECT rm.id, rm.parent_id, rm.subject, rm.body, rm.created_at,
                   CASE WHEN s.is_admin THEN 'Site Administrator' ELSE s.username END,
@@ -231,9 +243,10 @@ router.get('/:id', requireAuth, async (req, res) => {
            JOIN users s ON s.id = rm.sender_id
            LEFT JOIN characters ch ON ch.id = rm.character_id
            WHERE c.depth < 5
+             AND (rm.sender_id = $2 OR rm.recipient_id = $2)
          )
          SELECT * FROM chain ORDER BY created_at ASC`,
-        [msg.parent_id]
+        [msg.parent_id, req.user.sub]
       )
       thread = chainResult.rows
     }
@@ -286,6 +299,21 @@ router.post('/', requireAuth, ravensLimiter, [
     )
     if (!recipResult.rows.length) {
       return res.status(404).json({ error: 'Recipient not found.' })
+    }
+
+    // Block check — either party blocking the other prevents raven delivery.
+    // The social block system prevents DMs at the socket layer; this extends
+    // that isolation to the Raven (internal mail) system so a blocked user
+    // cannot route around the block via ravens or bestiary share notifications.
+    const blockCheck = await db.query(
+      `SELECT 1 FROM user_blocks
+       WHERE (blocker_id = $1 AND blocked_id = $2)
+          OR (blocker_id = $2 AND blocked_id = $1)
+       LIMIT 1`,
+      [senderId, recipientId]
+    )
+    if (blockCheck.rows.length) {
+      return res.status(403).json({ error: 'You cannot send a raven to this user.' })
     }
 
     // If character attached, verify it belongs to the sender

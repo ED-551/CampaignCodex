@@ -79,4 +79,21 @@ const signupLimiter = rateLimit({
   },
 })
 
-module.exports = { authLimiter, apiLimiter, ravensLimiter, shareLimiter, signupLimiter }
+/**
+ * Campaign join / invite limiter — 30 attempts per hour per IP.
+ * The global apiLimiter (200/min) is too loose to stop join-code enumeration.
+ * A 7-char code from a 32-char alphabet has ~34 billion combinations, but a
+ * low per-hour cap makes automated guessing impractical without IP rotation.
+ * Invite spam is also bounded — 30/hr is generous for legitimate use.
+ */
+const joinInviteLimiter = rateLimit({
+  windowMs:        60 * 60 * 1000,
+  max:             30,
+  standardHeaders: true,
+  legacyHeaders:   false,
+  message: {
+    error: 'Too many join or invite attempts. Please try again later.',
+  },
+})
+
+module.exports = { authLimiter, apiLimiter, ravensLimiter, shareLimiter, signupLimiter, joinInviteLimiter }

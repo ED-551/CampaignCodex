@@ -30,6 +30,13 @@ require('dotenv').config()
     if (!process.env.CLIENT_URL || process.env.CLIENT_URL.includes('localhost')) {
       errors.push('CLIENT_URL must be set to a non-localhost URL in production — CORS will be misconfigured otherwise.')
     }
+    // PRIMARY_ADMIN_USERNAME is sourced from config.js which falls back to the
+    // compiled-in default when the env var is absent.  In production the default
+    // username is the real admin account, so a missing env var is safe — but warn
+    // so operators know to pin it explicitly rather than relying on the fallback.
+    if (!process.env.PRIMARY_ADMIN_USERNAME) {
+      warnings.push('PRIMARY_ADMIN_USERNAME not set — falling back to compiled-in default. Set this env var to protect against accidental privilege escalation if the default ever changes.')
+    }
   } else {
     if (!process.env.CLIENT_URL) {
       warnings.push('CLIENT_URL not set — CORS defaulting to http://localhost:5173.')

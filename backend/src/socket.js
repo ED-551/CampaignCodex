@@ -353,7 +353,11 @@ function createSocketServer(httpServer) {
 
   // ── Connection handler ───────────────────────────────────────────────────
   io.on('connection', (socket) => {
-    console.log(`[socket] + uid=${socket.userId} (${socket.username})`)
+    // DEV-only: log every connect so the terminal shows live activity during
+    // development without adding noise to production logs.
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[socket] + uid=${socket.userId} (${socket.username})`)
+    }
 
     // ── Per-user room — allows server-side targeted emits from REST routes ────
     // Room name: `user:<userId>`. Each user's tabs all join the same room so
@@ -1008,8 +1012,13 @@ function createSocketServer(httpServer) {
         )
         const isGM = campResult.rows[0]?.gm_user_id === socket.userId
 
+        // Explicit columns — avoids leaking internal fields if combat_sessions
+        // gains new columns in the future.
         const sessResult = await db.query(
-          'SELECT * FROM combat_sessions WHERE campaign_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1',
+          `SELECT id, campaign_id, is_active, combatants, round_number, combat_mode, created_at, updated_at
+           FROM combat_sessions
+           WHERE campaign_id = $1 AND is_active = true
+           ORDER BY created_at DESC LIMIT 1`,
           [campaignId]
         )
         const session = sessResult.rows[0] ?? null
@@ -1372,7 +1381,9 @@ function createSocketServer(httpServer) {
     // socket.currentCombatCampaignId) are cleaned up automatically by Socket.io
     // room bookkeeping — no manual action needed for those.
     socket.on('disconnect', () => {
-      console.log(`[socket] - uid=${socket.userId} (${socket.username})`)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[socket] - uid=${socket.userId} (${socket.username})`)
+      }
 
       // ── Global presence: remove socket, broadcast if last tab went offline ──
       const wentOffline = removePresence(socket.userId, socket.id)

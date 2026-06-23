@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { BookOpen, Users, Scroll, Trophy, Swords, ArrowLeft, Shield, Trash2, X, Mail, Send, ShieldOff } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -21,8 +21,10 @@ const GAME_COLORS = {
 }
 
 export default function AdminDashboard() {
-  const { logout, user }        = useAuth()
-  const isPrimaryAdmin          = user?.username === 'adm_Ffz6NttVTaY'
+  const { logout, user, loading: authLoading } = useAuth()
+  // isPrimaryAdmin is now computed server-side in sanitizeUser() and returned
+  // via /auth/me — the privileged username no longer ships in the JS bundle.
+  const isPrimaryAdmin          = user?.isPrimaryAdmin === true
   const navigate                = useNavigate()
   const [data, setData]               = useState(null)
   const [users, setUsers]             = useState([])
@@ -65,6 +67,13 @@ export default function AdminDashboard() {
   const [rResult, setRResult]     = useState(null)     // { sent, message }
   const [rError, setRError]       = useState('')
   const ravenTimer                = useRef(null)
+
+  // Belt-and-suspenders guard — ProtectedRoute adminOnly is the primary gate.
+  // Uses authLoading so the redirect fires as soon as auth resolves, before the
+  // admin API calls complete, preventing a data flash for non-admins.
+  useEffect(() => {
+    if (!authLoading && !user?.isAdmin) navigate('/dashboard', { replace: true })
+  }, [user, authLoading, navigate])
 
   useEffect(() => {
     Promise.all([api.get('/admin/stats'), api.get('/admin/users')])

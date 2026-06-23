@@ -18,7 +18,7 @@
  *   state: { openConvos, activeUserId, messages, unread, widgetOpen, connected }
  */
 
-import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useAuth } from './AuthContext'
 import { useSocket } from './SocketContext'
 import { api } from '../utils/api'
@@ -60,11 +60,17 @@ export function DMProvider({ children }) {
       setWidgetOpen(false)
       return
     }
+    // cancelled flag guards against the stale-closure race where the user logs
+    // out before the fetch resolves, causing setOpenConvos to run against the
+    // cleared state of the next (or anonymous) session.
+    let cancelled = false
     api.get('/dms/conversations')
       .then(({ conversations }) => {
+        if (cancelled) return
         setOpenConvos(conversations.map(c => ({ userId: c.user_id, username: c.username })))
       })
       .catch(() => {})
+    return () => { cancelled = true }
   }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Incoming DM listener ───────────────────────────────────────────────────
@@ -222,22 +228,26 @@ export function DMProvider({ children }) {
 
   const toggleWidget = useCallback(() => setWidgetOpen(w => !w), [])
 
-  const totalUnread = Object.values(unread).reduce((a, b) => a + b, 0)
+  // DM state updates on every incoming message — high frequency. useMemo prevents
+  // consumers that only read openConvos or widgetOpen from re-rendering when an
+  // unread counter ticks up in a conversation they have closed.
+  // totalUnread is inlined so it updates atomically with the unread map.
+  const value = useMemo(() => ({
+    openConvos,
+    activeUserId,
+    messages,
+    unread,
+    totalUnread: Object.values(unread).reduce((a, b) => a + b, 0),
+    widgetOpen,
+    openDM,
+    closeDM,
+    sendDM,
+    switchTo,
+    toggleWidget,
+  }), [openConvos, activeUserId, messages, unread, widgetOpen, openDM, closeDM, sendDM, switchTo, toggleWidget])
 
   return (
-    <DMContext.Provider value={{
-      openConvos,
-      activeUserId,
-      messages,
-      unread,
-      totalUnread,
-      widgetOpen,
-      openDM,
-      closeDM,
-      sendDM,
-      switchTo,
-      toggleWidget,
-    }}>
+    <DMContext.Provider value={value}>
       {children}
     </DMContext.Provider>
   )

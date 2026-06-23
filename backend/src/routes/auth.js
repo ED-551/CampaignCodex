@@ -7,6 +7,9 @@ const { signToken }              = require('../utils/jwt')
 const { sendPasswordResetEmail, sendUsernameReminderEmail, sendVerificationEmail } = require('../utils/email')
 const { authLimiter, signupLimiter } = require('../middleware/rateLimiter')
 const { requireAuth }            = require('../middleware/auth')
+// PRIMARY_ADMIN_USERNAME sourced from config.js (server-side only) so it never
+// reaches the client bundle — sanitizeUser now returns isPrimaryAdmin as a bool.
+const { PRIMARY_ADMIN_USERNAME } = require('../config')
 
 const router = express.Router()
 
@@ -222,11 +225,15 @@ router.post('/login', authLimiter, [
 })
 
 // ─── GET /api/auth/me ─────────────────────────────────────────────────────────
+// Includes ban and verification status so the frontend can surface a ban notice
+// or redirect unverified users without waiting for the next login attempt.
 router.get('/me', requireAuth, async (req, res) => {
   try {
     const result = await db.query(
       `SELECT id, username, email, first_name, last_name,
-              supporter_tier, supporter_since, is_admin, is_moderator, newsletter_opt_in, created_at
+              supporter_tier, supporter_since, is_admin, is_moderator,
+              newsletter_opt_in, created_at,
+              is_banned, banned_until, ban_reason, email_verified
        FROM users WHERE id = $1 LIMIT 1`,
       [req.user.sub]
     )
@@ -240,6 +247,16 @@ router.get('/me', requireAuth, async (req, res) => {
 
 // ─── PATCH /api/auth/settings ─────────────────────────────────────────────────
 // Update profile fields: firstName, lastName, email, newsletterOptIn
+//
+// Email change path is handled separately from non-email updates:
+//   - Email uniqueness and disposable-domain checks run first.
+//   - The UPDATE sets email_verified = false so the new address is unverified.
+//   - Old verification tokens are marked used; a new one is inserted.
+//   - Verification email is sent BEFORE the transaction commits so that if
+//     delivery fails the old email address is preserved (same pattern as signup).
+//   - token_version is NOT bumped — the current session remains valid, but
+//     ProtectedRoute now redirects to /verify-pending because emailVerified is
+//     false in the /me response.
 router.patch('/settings', requireAuth, [
   body('firstName').optional().trim().notEmpty().withMessage('First name cannot be blank.')
     .isLength({ max: 50 }),
@@ -255,8 +272,15 @@ router.patch('/settings', requireAuth, [
   const userId = req.user.sub
 
   try {
-    // Check email uniqueness if changing
     if (email) {
+      // Reject disposable/throwaway domains on email change, same as signup.
+      const emailDomain = email.split('@')[1]?.toLowerCase()
+      if (emailDomain && BLOCKED_EMAIL_DOMAINS.has(emailDomain)) {
+        return res.status(400).json({ error: 'Please use a permanent email address.' })
+      }
+
+      // Uniqueness check — must run before the transaction so we can return
+      // early without acquiring a client.
       const existing = await db.query(
         'SELECT id FROM users WHERE email = $1 AND id != $2 LIMIT 1',
         [email, userId]
@@ -264,24 +288,72 @@ router.patch('/settings', requireAuth, [
       if (existing.rows.length > 0) {
         return res.status(409).json({ error: 'That email address is already in use.' })
       }
+
+      // Email change requires re-verification — wrap in a transaction so a
+      // failed email delivery rolls back to the old address.
+      const client = await db.getClient()
+      try {
+        await client.query('BEGIN')
+
+        const result = await client.query(
+          `UPDATE users SET
+             first_name        = COALESCE($1, first_name),
+             last_name         = COALESCE($2, last_name),
+             email             = $3,
+             email_verified    = false,
+             newsletter_opt_in = COALESCE($4, newsletter_opt_in)
+           WHERE id = $5
+           RETURNING id, username, email, first_name, last_name, supporter_tier,
+                     supporter_since, is_admin, is_moderator, newsletter_opt_in,
+                     is_banned, banned_until, ban_reason, email_verified, created_at`,
+          [firstName ?? null, lastName ?? null, email,
+           newsletterOptIn !== undefined ? newsletterOptIn : null, userId]
+        )
+        const updatedUser = result.rows[0]
+
+        // Invalidate any outstanding verification tokens for this user.
+        await client.query(
+          'UPDATE email_verification_tokens SET used = true WHERE user_id = $1',
+          [userId]
+        )
+
+        // Issue a fresh token for the new address.
+        const rawToken  = crypto.randomBytes(32).toString('hex')
+        const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+        await client.query(
+          'INSERT INTO email_verification_tokens (user_id, token_hash, expires_at) VALUES ($1,$2,$3)',
+          [userId, tokenHash, expiresAt]
+        )
+
+        // Send to the NEW address before committing — delivery failure here
+        // triggers ROLLBACK, preserving the old verified email.
+        await sendVerificationEmail(email, rawToken)
+
+        await client.query('COMMIT')
+
+        // requiresVerification signals the frontend to redirect to /verify-pending.
+        return res.json({ user: sanitizeUser(updatedUser), requiresVerification: true })
+      } catch (txErr) {
+        await client.query('ROLLBACK')
+        throw txErr
+      } finally {
+        client.release()
+      }
     }
 
+    // Non-email update — simple UPDATE, no verification needed.
     const result = await db.query(
       `UPDATE users SET
          first_name        = COALESCE($1, first_name),
          last_name         = COALESCE($2, last_name),
-         email             = COALESCE($3, email),
-         newsletter_opt_in = COALESCE($4, newsletter_opt_in)
-       WHERE id = $5
-       RETURNING id, username, email, first_name, last_name,
-                 supporter_tier, supporter_since, is_admin, newsletter_opt_in, created_at`,
-      [
-        firstName ?? null,
-        lastName  ?? null,
-        email     ?? null,
-        newsletterOptIn !== undefined ? newsletterOptIn : null,
-        userId,
-      ]
+         newsletter_opt_in = COALESCE($3, newsletter_opt_in)
+       WHERE id = $4
+       RETURNING id, username, email, first_name, last_name, supporter_tier,
+                 supporter_since, is_admin, is_moderator, newsletter_opt_in,
+                 is_banned, banned_until, ban_reason, email_verified, created_at`,
+      [firstName ?? null, lastName ?? null,
+       newsletterOptIn !== undefined ? newsletterOptIn : null, userId]
     )
 
     res.json({ user: sanitizeUser(result.rows[0]) })
@@ -366,8 +438,10 @@ router.post('/forgot-password/request-email', authLimiter, [
   if (validationErrors(req, res)) return
 
   try {
+    // Exclude admin accounts — consistent with forgot-username, and prevents
+    // spamming an admin's inbox with unsolicited password reset emails.
     const result = await db.query(
-      'SELECT id, email FROM users WHERE username = $1 LIMIT 1',
+      'SELECT id, email FROM users WHERE username = $1 AND is_admin = false LIMIT 1',
       [req.body.username]
     )
 
@@ -572,6 +646,9 @@ router.post('/resend-verification', authLimiter, [
 })
 
 // ─── Utility ──────────────────────────────────────────────────────────────────
+// Ban and verification fields are included so the frontend can show a ban notice
+// or redirect unverified users without a separate API call. Fields that may be
+// absent on older DB rows default to safe values (false / null).
 function sanitizeUser(user) {
   return {
     id:               user.id,
@@ -581,12 +658,23 @@ function sanitizeUser(user) {
     lastName:         user.last_name,
     supporterTier:    user.supporter_tier,
     supporterSince:   user.supporter_since,
-    isAdmin:          user.is_admin    ?? false,
-    isModerator:      user.is_moderator ?? false,
+    isAdmin:          user.is_admin       ?? false,
+    isModerator:      user.is_moderator   ?? false,
     newsletterOptIn:  user.newsletter_opt_in ?? false,
     createdAt:        user.created_at,
     sheetLimit:       TIER_SHEET_LIMIT[user.supporter_tier]    ?? 10,
     campaignLimit:    TIER_CAMPAIGN_LIMIT[user.supporter_tier] ?? 6,
+    // Ban state — present on /me and /login; used by frontend to show ban screen
+    isBanned:         user.is_banned      ?? false,
+    bannedUntil:      user.banned_until   ?? null,
+    banReason:        user.ban_reason     ?? null,
+    // Verification gate — frontend uses this to redirect unverified users
+    emailVerified:    user.email_verified ?? false,
+    // isPrimaryAdmin is a boolean computed server-side so the username never
+    // appears in the JS bundle. AdminDashboard reads this instead of comparing
+    // user.username directly, which previously exposed the account name to anyone
+    // who inspected the minified source.
+    isPrimaryAdmin:   user.username === PRIMARY_ADMIN_USERNAME,
   }
 }
 

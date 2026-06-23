@@ -2,14 +2,13 @@ const express = require('express')
 const db      = require('../db')
 const { requireAdmin, requireModerator } = require('../middleware/adminAuth')
 const { sendBroadcastEmail } = require('../utils/email')
+// PRIMARY_ADMIN_USERNAME is consumed in adminAuth.js (requireAdmin middleware).
+// The two highest-privilege gates in this file (assign-moderator, assign-admin)
+// now use req.liveIsPrimaryAdmin set by requireAdmin — no direct import needed here.
 
 const router = express.Router()
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-// The root account that can assign/revoke admin and moderator roles.
-// All other admins have moderation powers but cannot promote users.
-const PRIMARY_ADMIN_USERNAME = 'adm_Ffz6NttVTaY'
 
 // ─── GET /api/admin/stats ─────────────────────────────────────────────────────
 router.get('/stats', requireAdmin, async (req, res) => {
@@ -101,22 +100,32 @@ router.get('/stats', requireAdmin, async (req, res) => {
 })
 
 // ─── GET /api/admin/users ─────────────────────────────────────────────────────
-// Primary admin account is hidden from its own list via WHERE id != $1
+// Primary admin account is hidden from its own list via WHERE id != $1.
+// Returns up to 100 most-recent users plus a `total` count so the admin UI
+// can display "Showing 100 of N" and know when the list is silently truncated.
 router.get('/users', requireAdmin, async (req, res) => {
   try {
-    const result = await db.query(
-      `SELECT id, username, email, first_name, last_name,
-              supporter_tier, supporter_since, created_at,
-              is_admin, is_moderator, is_banned, ban_reason, banned_until,
-              (SELECT COUNT(*) FROM characters c WHERE c.user_id = users.id) AS character_count,
-              (SELECT COUNT(*) FROM campaigns ca WHERE ca.gm_user_id = users.id) AS campaign_count
-       FROM users
-       WHERE id != $1
-       ORDER BY created_at DESC
-       LIMIT 100`,
-      [req.user.sub]
-    )
-    res.json({ users: result.rows })
+    const [usersResult, totalResult] = await Promise.all([
+      db.query(
+        `SELECT id, username, email, first_name, last_name,
+                supporter_tier, supporter_since, created_at,
+                is_admin, is_moderator, is_banned, ban_reason, banned_until,
+                (SELECT COUNT(*)::int FROM characters c  WHERE c.user_id  = users.id) AS character_count,
+                (SELECT COUNT(*)::int FROM campaigns  ca WHERE ca.gm_user_id = users.id) AS campaign_count
+         FROM users
+         WHERE id != $1
+         ORDER BY created_at DESC
+         LIMIT 100`,
+        [req.user.sub]
+      ),
+      // Total count lets the UI show "Showing X of Y users" so the admin knows
+      // when the capped list doesn't represent the full user base.
+      db.query(
+        'SELECT COUNT(*)::int AS total FROM users WHERE id != $1',
+        [req.user.sub]
+      ),
+    ])
+    res.json({ users: usersResult.rows, total: totalResult.rows[0].total })
   } catch (err) {
     console.error('[admin/users]', err)
     res.status(500).json({ error: 'Failed to fetch users.' })
@@ -165,11 +174,23 @@ router.patch('/users/:id/tier', requireAdmin, async (req, res) => {
       }
     }
 
+    // supporter_since tracks *when* a user first became a supporter, not when
+    // their tier was last changed. The original CASE was:
+    //   WHEN tier != 'free' THEN NOW() ELSE NULL
+    // which reset the date to NOW() every time an admin re-granted the same
+    // non-free tier — wiping out the original support date. The corrected logic:
+    //   • free → non-free : set NOW()  (first time becoming a supporter)
+    //   • non-free → non-free: keep existing date (don't overwrite original date)
+    //   • any → free: clear to NULL (no longer a supporter)
     const result = await db.query(
       `UPDATE users SET supporter_tier = $1::text,
-         supporter_since = CASE WHEN $1::text != 'free' THEN NOW() ELSE NULL END
+         supporter_since = CASE
+           WHEN $1::text != 'free' AND supporter_tier  = 'free' THEN NOW()
+           WHEN $1::text  = 'free'                              THEN NULL
+           ELSE supporter_since
+         END
        WHERE id = $2
-       RETURNING id, username, supporter_tier`,
+       RETURNING id, username, supporter_tier, supporter_since`,
       [tier, req.params.id]
     )
     if (!result.rows[0]) return res.status(404).json({ error: 'User not found.' })
@@ -183,7 +204,10 @@ router.patch('/users/:id/tier', requireAdmin, async (req, res) => {
 // ─── PATCH /api/admin/users/:id/moderator ────────────────────────────────────
 // Assign or remove the moderator role — primary admin only.
 router.patch('/users/:id/moderator', requireAdmin, async (req, res) => {
-  if (req.user.username !== PRIMARY_ADMIN_USERNAME) {
+  // req.liveIsPrimaryAdmin is set by requireAdmin using a fresh DB read of the
+  // username column. Using the live value prevents a secondary admin from
+  // escalating privileges via a crafted or stale JWT username claim.
+  if (!req.liveIsPrimaryAdmin) {
     return res.status(403).json({ error: 'Only the primary administrator can assign moderator roles.' })
   }
   const { isModerator } = req.body
@@ -230,7 +254,10 @@ router.patch('/users/:id/moderator', requireAdmin, async (req, res) => {
 // Duration options: '1day' | '1week' | '1month' | 'permanent'
 router.patch('/users/:id/ban', requireModerator, async (req, res) => {
   const { isBanned, reason, duration } = req.body
-  const isPrimaryAdmin = req.user.isAdmin === true
+  // Use the live DB value attached by requireModerator — never trust the JWT
+  // isAdmin claim, which can be stale if the requester was demoted between
+  // token issuance and this request.
+  const isPrimaryAdmin = req.liveIsAdmin === true
 
   if (typeof isBanned !== 'boolean') {
     return res.status(400).json({ error: 'isBanned must be a boolean.' })
@@ -314,7 +341,8 @@ router.patch('/users/:id/ban', requireModerator, async (req, res) => {
 // ─── PATCH /api/admin/users/:id/admin ────────────────────────────────────────
 // Grant or revoke admin status — primary admin only.
 router.patch('/users/:id/admin', requireAdmin, async (req, res) => {
-  if (req.user.username !== PRIMARY_ADMIN_USERNAME) {
+  // Same live-DB gate as /moderator — see comment there.
+  if (!req.liveIsPrimaryAdmin) {
     return res.status(403).json({ error: 'Only the primary administrator can assign admin roles.' })
   }
   const { isAdmin: grantAdmin } = req.body

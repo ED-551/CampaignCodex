@@ -55,15 +55,19 @@ router.post('/', requireAuth, [
   const { characterName, gameSystem, campaignId, sheetData } = req.body
 
   try {
-    // Check the user's tier sheet limit
-    const tierResult = await db.query(
-      'SELECT supporter_tier FROM users WHERE id = $1', [req.user.sub]
+    // Single query: fetch supporter_tier AND current character count together.
+    // Previously this was two sequential round-trips; the subquery shares the
+    // same users-table lookup so both values arrive in one network call.
+    const limitRow = await db.query(
+      `SELECT u.supporter_tier,
+              (SELECT COUNT(*)::int FROM characters c WHERE c.user_id = u.id) AS char_count
+       FROM users u
+       WHERE u.id = $1`,
+      [req.user.sub]
     )
-    const limit = tierLimit(tierResult.rows[0]?.supporter_tier ?? 'free')
-    const countResult = await db.query(
-      'SELECT COUNT(*) FROM characters WHERE user_id = $1', [req.user.sub]
-    )
-    if (parseInt(countResult.rows[0].count) >= limit) {
+    const { supporter_tier, char_count } = limitRow.rows[0] ?? {}
+    const limit = tierLimit(supporter_tier ?? 'free')
+    if (char_count >= limit) {
       return res.status(403).json({
         error: `You've reached your character sheet limit (${limit}). ${
           limit === FREE_LIMIT

@@ -22,7 +22,7 @@
  *   unblockUser(userId) → Promise
  */
 
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
 import { useAuth }   from './AuthContext'
 import { useSocket } from './SocketContext'
 import { api }       from '../utils/api'
@@ -54,15 +54,20 @@ export function SocialProvider({ children }) {
     let cancelled = false
     async function load() {
       try {
-        const [friendsRes, incomingRes, outgoingRes] = await Promise.all([
+        // blocksRes added alongside friends/requests so blockedSet is populated
+        // immediately on page load. Previously it started empty and only updated
+        // optimistically mid-session, so a refresh wiped all block state.
+        const [friendsRes, incomingRes, outgoingRes, blocksRes] = await Promise.all([
           api.get('/social/friends'),
           api.get('/social/friend-requests/incoming'),
           api.get('/social/friend-requests/outgoing'),
+          api.get('/social/blocks'),
         ])
         if (cancelled) return
         setFriends(friendsRes.friends ?? [])
         setIncomingRequests(incomingRes.requests ?? [])
         setOutgoingSet(new Set((outgoingRes.outgoing ?? []).map(r => r.receiver_id)))
+        setBlockedSet(new Set((blocksRes.blocked ?? []).map(b => b.blocked_id)))
         setLoaded(true)
       } catch { /* network errors silently ignored on mount */ }
     }
@@ -106,6 +111,21 @@ export function SocialProvider({ children }) {
   const clearNewRequests = useCallback(() => setNewRequestIds(new Set()), [])
   const clearNewFriends  = useCallback(() => setNewFriendIds(new Set()),  [])
 
+  // ── refreshFriends ────────────────────────────────────────────────────────
+  // Declared BEFORE the callbacks that call it (sendFriendRequest, respondToRequest)
+  // so those callbacks can list it as a stable dep without violating
+  // react-hooks/immutability ("accessed before declared").
+  // The empty catch is surfaced in DEV so stale friend lists are debuggable
+  // while staying silent in production (network hiccup on a non-critical refresh).
+  const refreshFriends = useCallback(async () => {
+    try {
+      const res = await api.get('/social/friends')
+      setFriends(res.friends ?? [])
+    } catch (err) {
+      if (import.meta.env.DEV) console.warn('[SocialContext] refreshFriends failed', err)
+    }
+  }, [])
+
   // ── getFriendStatus ───────────────────────────────────────────────────────
   const getFriendStatus = useCallback((userId) => {
     if (blockedSet.has(userId)) return 'blocked'
@@ -126,7 +146,7 @@ export function SocialProvider({ children }) {
       setOutgoingSet(prev => new Set([...prev, userId]))
     }
     return res
-  }, [])
+  }, [refreshFriends])
 
   // ── respondToRequest ──────────────────────────────────────────────────────
   const respondToRequest = useCallback(async (requestId, action) => {
@@ -135,7 +155,7 @@ export function SocialProvider({ children }) {
     if (action === 'accepted') {
       await refreshFriends()
     }
-  }, [])
+  }, [refreshFriends])
 
   // ── unfriend ──────────────────────────────────────────────────────────────
   const unfriend = useCallback(async (friendId) => {
@@ -158,35 +178,40 @@ export function SocialProvider({ children }) {
     setBlockedSet(prev => { const n = new Set(prev); n.delete(userId); return n })
   }, [])
 
-  // ── helpers ───────────────────────────────────────────────────────────────
-  async function refreshFriends() {
-    try {
-      const res = await api.get('/social/friends')
-      setFriends(res.friends ?? [])
-    } catch {}
-  }
-
-  const totalIncoming = incomingRequests.length
+  // SocialContext is updated frequently by real-time socket events (friend requests,
+  // acceptances). Without useMemo, every socket-driven state update creates a new
+  // value object and forces ALL useSocial() consumers to re-render — including
+  // components that only care about blockedSet or friends. The memo ensures
+  // consumers only re-render when the slice of state they observe actually changed.
+  //
+  // totalIncoming is inlined here rather than computed as a bare expression above
+  // so that it changes atomically with incomingRequests inside the same memo.
+  const value = useMemo(() => ({
+    friends,
+    incomingRequests,
+    outgoingSet,
+    blockedSet,
+    loaded,
+    totalIncoming: incomingRequests.length,
+    newRequestIds,
+    newFriendIds,
+    clearNewRequests,
+    clearNewFriends,
+    getFriendStatus,
+    sendFriendRequest,
+    respondToRequest,
+    unfriend,
+    blockUser,
+    unblockUser,
+  }), [
+    friends, incomingRequests, outgoingSet, blockedSet, loaded,
+    newRequestIds, newFriendIds,
+    clearNewRequests, clearNewFriends, getFriendStatus,
+    refreshFriends, sendFriendRequest, respondToRequest, unfriend, blockUser, unblockUser,
+  ])
 
   return (
-    <SocialContext.Provider value={{
-      friends,
-      incomingRequests,
-      outgoingSet,
-      blockedSet,
-      loaded,
-      totalIncoming,
-      newRequestIds,
-      newFriendIds,
-      clearNewRequests,
-      clearNewFriends,
-      getFriendStatus,
-      sendFriendRequest,
-      respondToRequest,
-      unfriend,
-      blockUser,
-      unblockUser,
-    }}>
+    <SocialContext.Provider value={value}>
       {children}
     </SocialContext.Provider>
   )

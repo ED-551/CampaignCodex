@@ -20,7 +20,7 @@ const db              = require('../db')
  *     → DB query checks users.token_version === jwt.tv
  *     → req.user is populated and next() is called
  *
- * Attaches req.user = { sub, username, isAdmin, tier, tv }
+ * Attaches req.user = { sub, username, isAdmin, isModerator, tier, tv }
  *
  * @param {import('express').Request}  req
  * @param {import('express').Response} res
@@ -48,13 +48,29 @@ async function requireAuth(req, res, next) {
     // The `?? 1` fallback handles tokens minted before tv was introduced:
     // those tokens have no `tv` claim, so we treat them as version 1, which
     // matches the column's DEFAULT 1 for existing accounts.
+    //
+    // We also fetch is_banned and banned_until so that banned users are
+    // blocked on every REST request — not just at login. Without this check,
+    // a banned user with an active JWT could continue calling the API for up
+    // to 24 hours after the ban was issued (the token lifetime).
     const result = await db.query(
-      'SELECT token_version FROM users WHERE id = $1 LIMIT 1',
+      'SELECT token_version, is_banned, banned_until FROM users WHERE id = $1 LIMIT 1',
       [payload.sub]
     )
     const row = result.rows[0]
     if (!row || row.token_version !== (payload.tv ?? 1)) {
       return res.status(401).json({ error: 'Session expired. Please sign in again.' })
+    }
+
+    // Block actively banned users. Timed bans that have already expired are
+    // allowed through — auto-lift happens at the next successful login rather
+    // than on every request, to avoid a DB write on every API call.
+    if (row.is_banned) {
+      const bannedUntil = row.banned_until ? new Date(row.banned_until) : null
+      if (!bannedUntil || bannedUntil > new Date()) {
+        return res.status(403).json({ error: 'Your account has been suspended.' })
+      }
+      // Expired timed ban — fall through and allow the request.
     }
 
     req.user = payload

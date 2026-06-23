@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { Shield, ArrowLeft, BookOpen, Search, Users, UserX, CheckCircle, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -10,7 +10,7 @@ import { usePresence } from '../hooks/usePresence'
 const PAGE_SIZE = 25
 
 export default function ModeratorDashboard() {
-  const { logout }                      = useAuth()
+  const { logout, user, loading: authLoading } = useAuth()
   const navigate                        = useNavigate()
   const [users, setUsers]               = useState([])
   const [loading, setLoading]           = useState(true)
@@ -23,6 +23,13 @@ export default function ModeratorDashboard() {
   const [banReason, setBanReason]       = useState('')
   const [banDuration, setBanDuration]   = useState('permanent')
   const [banError, setBanError]         = useState('')
+
+  // Belt-and-suspenders guard — ProtectedRoute moderatorOnly is the primary gate.
+  // Uses authLoading (not page loading) so the redirect fires as soon as auth
+  // resolves, before the moderator API call even completes, avoiding a 403 flash.
+  useEffect(() => {
+    if (!authLoading && !user?.isModerator && !user?.isAdmin) navigate('/dashboard', { replace: true })
+  }, [user, authLoading, navigate])
 
   useEffect(() => {
     api.get('/admin/moderator/users')

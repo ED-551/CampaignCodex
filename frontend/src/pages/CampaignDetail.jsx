@@ -55,8 +55,15 @@ export default function CampaignDetail() {
   const combatTrackerRef = useRef(null)
 
   useEffect(() => {
+    // cancelled flag prevents stale fetch results from writing to state after
+    // the component unmounts or the campaign `id` changes (e.g. browser back/forward).
+    // Without this guard, navigating away before the request resolves causes a
+    // React DEV warning and could overwrite a new campaign's data with old data.
+    let cancelled = false
+
     api.get(`/campaigns/${id}`)
       .then(({ campaign, members }) => {
+        if (cancelled) return
         setCampaign(campaign)
         setMembers(members)
         setGmCharacter(campaign.gm_character_id ? {
@@ -86,8 +93,10 @@ export default function CampaignDetail() {
         }
         setUserTierMap(tierMap)
       })
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false))
+      .catch(err => { if (!cancelled) setError(err.message) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+
+    return () => { cancelled = true }
   }, [id])
 
   function copyCode() {

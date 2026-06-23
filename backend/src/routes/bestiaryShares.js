@@ -108,6 +108,20 @@ router.post('/', requireAuth, shareLimiter, [
     const gameSystem  = systems[0]
     const systemLabel = SYSTEM_LABELS[gameSystem] ?? gameSystem
 
+    // Block check — prevent shares when either party has blocked the other.
+    // Mirrors the block enforcement in ravens.js so users cannot circumvent a
+    // social block by gifting monsters instead of sending a direct message.
+    const blockCheck = await db.query(
+      `SELECT 1 FROM user_blocks
+       WHERE (blocker_id = $1 AND blocked_id = $2)
+          OR (blocker_id = $2 AND blocked_id = $1)
+       LIMIT 1`,
+      [senderId, toUserId]
+    )
+    if (blockCheck.rows.length) {
+      return res.status(403).json({ error: 'You cannot share monsters with this user.' })
+    }
+
     // Build snapshot (strip user_id from each record for clean transfer)
     const snapshot = monsters.map(m => ({
       id:        m.id,
@@ -117,41 +131,55 @@ router.post('/', requireAuth, shareLimiter, [
       stat_data: m.stat_data,
     }))
 
-    // Insert the share record
-    const shareResult = await db.query(
-      `INSERT INTO bestiary_shares (from_user_id, to_user_id, game_system, monsters_data)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, game_system, created_at`,
-      [senderId, toUserId, gameSystem, JSON.stringify(snapshot)]
-    )
-    const share = shareResult.rows[0]
+    // Wrap share creation and raven notification in one transaction — if the
+    // raven INSERT fails after the share is committed the recipient ends up with
+    // a share they were never notified about. Atomicity prevents that split state.
+    const client = await db.getClient()
+    try {
+      await client.query('BEGIN')
 
-    // Compose automated Raven notification
-    const monsterCount = monsters.length
-    const monsterList  = monsters.map(m => `• ${m.name}`).join('\n')
-    const subject = `📦 ${senderUsername} shared ${monsterCount} monster${monsterCount !== 1 ? 's' : ''} from their ${systemLabel} bestiary`
-    const body_   = [
-      `${senderUsername} has gifted you ${monsterCount} monster${monsterCount !== 1 ? 's' : ''} from their ${systemLabel} bestiary!\n`,
-      `Monsters included:\n${monsterList}\n`,
-      `Visit your Bestiary Shares inbox to review and add them to your collection:`,
-      `/bestiary/shares`,
-    ].join('\n')
+      const shareResult = await client.query(
+        `INSERT INTO bestiary_shares (from_user_id, to_user_id, game_system, monsters_data)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, game_system, created_at`,
+        [senderId, toUserId, gameSystem, JSON.stringify(snapshot)]
+      )
+      const share = shareResult.rows[0]
 
-    await db.query(
-      `INSERT INTO raven_messages (sender_id, recipient_id, subject, body)
-       VALUES ($1, $2, $3, $4)`,
-      [senderId, toUserId, subject, body_]
-    )
+      // Compose automated Raven notification
+      const monsterCount = monsters.length
+      const monsterList  = monsters.map(m => `• ${m.name}`).join('\n')
+      const subject = `📦 ${senderUsername} shared ${monsterCount} monster${monsterCount !== 1 ? 's' : ''} from their ${systemLabel} bestiary`
+      const body_   = [
+        `${senderUsername} has gifted you ${monsterCount} monster${monsterCount !== 1 ? 's' : ''} from their ${systemLabel} bestiary!\n`,
+        `Monsters included:\n${monsterList}\n`,
+        `Visit your Bestiary Shares inbox to review and add them to your collection:`,
+        `/bestiary/shares`,
+      ].join('\n')
 
-    res.status(201).json({
-      share: {
-        id:            share.id,
-        to_username:   recipient.username,
-        monster_count: monsterCount,
-        game_system:   gameSystem,
-        created_at:    share.created_at,
-      },
-    })
+      await client.query(
+        `INSERT INTO raven_messages (sender_id, recipient_id, subject, body)
+         VALUES ($1, $2, $3, $4)`,
+        [senderId, toUserId, subject, body_]
+      )
+
+      await client.query('COMMIT')
+
+      res.status(201).json({
+        share: {
+          id:            share.id,
+          to_username:   recipient.username,
+          monster_count: monsterCount,
+          game_system:   gameSystem,
+          created_at:    share.created_at,
+        },
+      })
+    } catch (txErr) {
+      await client.query('ROLLBACK')
+      throw txErr
+    } finally {
+      client.release()
+    }
   } catch (err) {
     console.error('[shares/create]', err)
     res.status(500).json({ error: 'Failed to send share.' })
@@ -200,20 +228,29 @@ router.post('/:id/accept', requireAuth, [
   }
   if (validationErrors(req, res)) return
 
+  const client = await db.getClient()
   try {
-    // Fetch and lock the share row
-    const shareResult = await db.query(
+    await client.query('BEGIN')
+
+    // SELECT FOR UPDATE locks the share row before reading it. Without this lock,
+    // two simultaneous accept requests can both see status='pending', both insert
+    // every monster, and both flip status='accepted' — doubling the recipient's
+    // bestiary. The second request now waits at this line until the first commits,
+    // at which point status is 'accepted' and the WHERE clause returns 0 rows.
+    const shareResult = await client.query(
       `SELECT * FROM bestiary_shares
-       WHERE id = $1 AND to_user_id = $2 AND status = 'pending'`,
+       WHERE id = $1 AND to_user_id = $2 AND status = 'pending'
+       FOR UPDATE`,
       [req.params.id, req.user.sub]
     )
 
     if (!shareResult.rows.length) {
+      await client.query('ROLLBACK')
       return res.status(404).json({ error: 'Share not found or already processed.' })
     }
 
-    const share     = shareResult.rows[0]
-    let   monsters  = share.monsters_data ?? []
+    const share    = shareResult.rows[0]
+    let   monsters = share.monsters_data ?? []
 
     // If specific IDs were requested, filter to just those
     const { monsterIds } = req.body
@@ -221,21 +258,28 @@ router.post('/:id/accept', requireAuth, [
       const idSet = new Set(monsterIds)
       monsters    = monsters.filter(m => idSet.has(m.id))
       if (monsters.length === 0) {
+        await client.query('ROLLBACK')
         return res.status(400).json({ error: 'No valid monsters selected.' })
       }
     }
 
-    // Fetch the sender's username for attribution
-    const senderRow = await db.query(
+    // Fetch the sender's username for attribution (same client, inside transaction)
+    const senderRow = await client.query(
       'SELECT username FROM users WHERE id = $1 LIMIT 1',
       [share.from_user_id]
     )
     const senderUsername = senderRow.rows[0]?.username ?? null
 
-    // Insert each monster into the recipient's bestiary, stamping attribution
+    // Insert each monster, validating stat_data before serialisation.
+    // An array or primitive would silently write bad JSON and corrupt the stat block.
     const inserted = []
     for (const m of monsters) {
-      const result = await db.query(
+      const statData = m.stat_data
+      const safeStatData = (statData && typeof statData === 'object' && !Array.isArray(statData))
+        ? JSON.stringify(statData)
+        : '{}'
+
+      const result = await client.query(
         `INSERT INTO monsters (user_id, game_system, name, challenge, tags, stat_data, shared_from_username)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id, name, challenge, tags, stat_data, game_system, shared_from_username, created_at`,
@@ -245,23 +289,28 @@ router.post('/:id/accept', requireAuth, [
           String(m.name ?? '').slice(0, 100),
           m.challenge ? String(m.challenge).slice(0, 50) : null,
           m.tags      ? String(m.tags).slice(0, 200)     : null,
-          m.stat_data ? JSON.stringify(m.stat_data) : '{}',
+          safeStatData,
           senderUsername,
         ]
       )
       inserted.push(result.rows[0])
     }
 
-    // Mark the share as accepted
-    await db.query(
+    // Flip status — the FOR UPDATE lock guarantees only one concurrent request
+    // reaches this point with status='pending'.
+    await client.query(
       `UPDATE bestiary_shares SET status = 'accepted' WHERE id = $1`,
       [req.params.id]
     )
 
+    await client.query('COMMIT')
     res.json({ accepted: inserted })
   } catch (err) {
+    await client.query('ROLLBACK')
     console.error('[shares/accept]', err)
     res.status(500).json({ error: 'Failed to accept share.' })
+  } finally {
+    client.release()
   }
 })
 

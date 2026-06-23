@@ -80,6 +80,10 @@ export function SocketProvider({ children }) {
     }
   }, [user?.id]) // Re-run only when the logged-in user changes
 
+  // SocketContext intentionally does NOT use useMemo here: socketRef.current is a
+  // ref value and the react-hooks/refs rule prohibits accessing refs inside hook
+  // callbacks. With only one piece of state (connected), the object is cheap to
+  // recreate, and this Provider only re-renders when connected actually changes.
   return (
     <SocketContext.Provider value={{ socket: socketRef.current, connected }}>
       {children}

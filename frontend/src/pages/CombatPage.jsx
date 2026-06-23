@@ -127,24 +127,31 @@ export default function CombatPage() {
 
   // ── Load campaign + active session ──────────────────────────────────────────
   useEffect(() => {
+    // cancelled guard — prevents state updates on unmount or when campaignId
+    // changes mid-flight (navigating between two campaign combat pages).
+    let cancelled = false
+
     async function load() {
       try {
         const { campaign: c } = await api.get(`/campaigns/${campaignId}`)
+        if (cancelled) return
         setCampaign(c)
         try {
           const { session: s } = await api.get(`/combat/${campaignId}/active`)
+          if (cancelled) return
           setSession(s)
           const cs = s.combatants ?? []
           setCombatants(cs)
           initialMonsterCount.current = cs.filter(c => c.type === 'monster' || c.type === 'npc').length
         } catch { /* no active session yet */ }
       } catch (err) {
-        setError(err.message)
+        if (!cancelled) setError(err.message)
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
     load()
+    return () => { cancelled = true }
   }, [campaignId])
 
   // ── Socket: join combat room ─────────────────────────────────────────────────

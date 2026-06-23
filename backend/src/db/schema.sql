@@ -187,9 +187,17 @@ CREATE INDEX IF NOT EXISTS idx_characters_user_id    ON characters(user_id);
 CREATE INDEX IF NOT EXISTS idx_characters_campaign   ON characters(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_members_camp ON campaign_members(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_members_user ON campaign_members(user_id);
+-- Partial index: only active members (left_at IS NULL). Used by the active-member
+-- count subquery in /join and /invite — stays small as campaigns accumulate history.
+CREATE INDEX IF NOT EXISTS idx_campaign_members_active
+  ON campaign_members(campaign_id)
+  WHERE left_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_campaigns_gm          ON campaigns(gm_user_id);
 CREATE INDEX IF NOT EXISTS idx_campaigns_join_code   ON campaigns(join_code);
 CREATE INDEX IF NOT EXISTS idx_prt_user              ON password_reset_tokens(user_id);
+-- token_hash lookup for password-reset redemption — no UNIQUE constraint so
+-- PostgreSQL does not create an implicit index; must be explicit.
+CREATE INDEX IF NOT EXISTS idx_prt_token_hash        ON password_reset_tokens(token_hash);
 -- Partial index: only rows where newsletter is opted in (used by admin broadcast query)
 CREATE INDEX IF NOT EXISTS idx_users_newsletter_optin
   ON users(created_at ASC)
@@ -243,6 +251,8 @@ CREATE TABLE IF NOT EXISTS raven_messages (
   subject              VARCHAR(120) NOT NULL,
   body                 TEXT         NOT NULL,
   character_id         UUID         REFERENCES characters(id) ON DELETE SET NULL,
+  -- parent_id enables threaded replies; NULL = top-level raven (most messages)
+  parent_id            UUID         REFERENCES raven_messages(id) ON DELETE SET NULL,
   read_at              TIMESTAMP,                -- null = unread
   deleted_by_sender    BOOLEAN      NOT NULL DEFAULT false,
   deleted_by_recipient BOOLEAN      NOT NULL DEFAULT false,
@@ -261,6 +271,12 @@ CREATE INDEX IF NOT EXISTS idx_ravens_sender
 CREATE INDEX IF NOT EXISTS idx_ravens_unread
   ON raven_messages(recipient_id)
   WHERE read_at IS NULL AND deleted_by_recipient = false;
+
+-- Thread-chain traversal (recursive CTE in GET /:id walks parent_id links).
+-- Partial: skips the ~90 % of top-level messages where parent_id IS NULL.
+CREATE INDEX IF NOT EXISTS idx_ravens_parent_id
+  ON raven_messages(parent_id)
+  WHERE parent_id IS NOT NULL;
 
 -- ─── CAMPAIGN MESSAGES (real-time campaign chat) ──────────────────────────────
 -- username is denormalized: stores the username at time of send (avoids JOIN on

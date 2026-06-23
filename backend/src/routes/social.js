@@ -293,6 +293,24 @@ router.delete('/friend/:friendId', [
   }
 })
 
+// ─── GET /api/social/blocks ───────────────────────────────────────────────────
+// Returns all user IDs that the current user has blocked. Used by SocialContext
+// to hydrate blockedSet on page load — previously the set was always empty at
+// startup and only updated optimistically on block/unblock actions within a
+// session, meaning a page refresh lost all block state.
+router.get('/blocks', async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT blocked_id FROM user_blocks WHERE blocker_id = $1`,
+      [req.user.sub]
+    )
+    res.json({ blocked: result.rows })
+  } catch (err) {
+    console.error('[social/blocks]', err)
+    res.status(500).json({ error: 'Failed to load blocks.' })
+  }
+})
+
 // ─── POST /api/social/block/:targetId ────────────────────────────────────────
 // Block a user. Requires { confirm: true } in the body to prevent accidental calls.
 // Automatically removes any existing friendship with the blocked user.
@@ -310,9 +328,16 @@ router.post('/block/:targetId', [
     return res.status(400).json({ error: 'Cannot block yourself.' })
   }
 
+  // db.getClient() checks out a dedicated connection from the pool.
+  // The previous code used db.query('BEGIN') / db.query('COMMIT') which are
+  // pool-level methods — each call may land on a *different* connection, so the
+  // BEGIN would open a transaction on connection A while the INSERT and DELETE
+  // executed on connections B and C outside any transaction (auto-committed).
+  // Checking out a client ensures all statements share the same connection.
+  const client = await db.getClient()
   try {
     // Verify target exists
-    const target = await db.query(
+    const target = await client.query(
       'SELECT id FROM users WHERE id = $1 LIMIT 1',
       [targetId]
     )
@@ -320,11 +345,13 @@ router.post('/block/:targetId', [
       return res.status(404).json({ error: 'User not found.' })
     }
 
-    // Use a transaction so the block + friendship removal are atomic
-    await db.query('BEGIN')
+    // Atomic: block row must exist before the friendship row is removed.
+    // If the DELETE succeeds but the INSERT fails (theoretically impossible with
+    // ON CONFLICT DO NOTHING, but defensive), the ROLLBACK restores the friendship.
+    await client.query('BEGIN')
     try {
       // Insert block (ignore if already blocked)
-      await db.query(
+      await client.query(
         `INSERT INTO user_blocks (blocker_id, blocked_id)
          VALUES ($1, $2)
          ON CONFLICT DO NOTHING`,
@@ -332,16 +359,16 @@ router.post('/block/:targetId', [
       )
 
       // Remove any existing friendship or pending requests between the two
-      await db.query(
+      await client.query(
         `DELETE FROM friend_requests
          WHERE (sender_id = $1 AND receiver_id = $2)
             OR (sender_id = $2 AND receiver_id = $1)`,
         [myId, targetId]
       )
 
-      await db.query('COMMIT')
+      await client.query('COMMIT')
     } catch (txErr) {
-      await db.query('ROLLBACK')
+      await client.query('ROLLBACK')
       throw txErr
     }
 
@@ -349,6 +376,9 @@ router.post('/block/:targetId', [
   } catch (err) {
     console.error('[social/block]', err)
     res.status(500).json({ error: 'Failed to block user.' })
+  } finally {
+    // Always release the client back to the pool — even if an early return fires.
+    client.release()
   }
 })
 

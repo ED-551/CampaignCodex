@@ -100,8 +100,16 @@ export default function SettingsPage() {
     }
     setProfileLoading(true)
     try {
-      await updateSettings(trimmed)
-      setProfileStatus({ type: 'success', msg: 'Profile updated successfully.' })
+      const res = await updateSettings(trimmed)
+      // If the email was changed, the backend resets email_verified to false and
+      // sends a new verification link. Signal that to the user rather than
+      // showing the generic "saved" message — they need to act before anything
+      // works again (ProtectedRoute redirects to /verify-pending on next load).
+      if (res.requiresVerification) {
+        setProfileStatus({ type: 'success', msg: 'Email updated — check your inbox to verify the new address.' })
+      } else {
+        setProfileStatus({ type: 'success', msg: 'Profile updated successfully.' })
+      }
     } catch (err) {
       setProfileStatus({ type: 'error', msg: err.message || 'Update failed. Please try again.' })
     } finally {
