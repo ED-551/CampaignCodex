@@ -187,11 +187,6 @@ CREATE INDEX IF NOT EXISTS idx_characters_user_id    ON characters(user_id);
 CREATE INDEX IF NOT EXISTS idx_characters_campaign   ON characters(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_members_camp ON campaign_members(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_members_user ON campaign_members(user_id);
--- Partial index: only active members (left_at IS NULL). Used by the active-member
--- count subquery in /join and /invite — stays small as campaigns accumulate history.
-CREATE INDEX IF NOT EXISTS idx_campaign_members_active
-  ON campaign_members(campaign_id)
-  WHERE left_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_campaigns_gm          ON campaigns(gm_user_id);
 CREATE INDEX IF NOT EXISTS idx_campaigns_join_code   ON campaigns(join_code);
 CREATE INDEX IF NOT EXISTS idx_prt_user              ON password_reset_tokens(user_id);
@@ -228,6 +223,11 @@ ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS is_deleted  BOOLEAN   NOT NULL DE
 ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS deleted_at  TIMESTAMP;
 -- Player leave support: soft-leave keeps the record for GM awareness
 ALTER TABLE campaign_members ADD COLUMN IF NOT EXISTS left_at TIMESTAMP;
+-- Partial index: only active members (left_at IS NULL). Used by the active-member
+-- count subquery in /join and /invite — stays small as campaigns accumulate history.
+CREATE INDEX IF NOT EXISTS idx_campaign_members_active
+  ON campaign_members(campaign_id)
+  WHERE left_at IS NULL;
 -- GM character: the GM can optionally play a character in their own campaign
 ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS gm_character_id UUID REFERENCES characters(id) ON DELETE SET NULL;
 
