@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { BookOpen, Heart, ArrowLeft, ExternalLink } from 'lucide-react'
+import { Heart, ArrowLeft, ExternalLink } from 'lucide-react'
+import TopBar from '../components/layout/TopBar'
 
 const RULEBOOKS = [
   {
@@ -36,21 +37,7 @@ export default function DonatePage() {
   return (
     <div className="min-h-screen bg-codex-bg">
       <Helmet><title>Support CampaignCodex</title></Helmet>
-      {/* Header */}
-      <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <BookOpen size={16} className="text-codex-gold" />
-            <span className="font-display text-sm text-codex-gold tracking-wide">CampaignCodex</span>
-          </div>
-          <Link
-            to="/settings"
-            className="flex items-center gap-1.5 text-xs text-codex-subtext hover:text-codex-text transition-colors"
-          >
-            <ArrowLeft size={12} /> Back to Settings
-          </Link>
-        </div>
-      </header>
+      <TopBar />
 
       <main className="max-w-2xl mx-auto px-4 py-12 space-y-10">
 

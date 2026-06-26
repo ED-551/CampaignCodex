@@ -10,13 +10,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "idb": "^8.0.3",
+    "immer": "^11.1.8",
     "lucide-react": "^1.18.0",
+    "pixi.js": "^8.19.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-helmet-async": "^3.0.0",
     "react-joyride": "^3.1.0",
     "react-router-dom": "^7.17.0",
-    "socket.io-client": "^4.8.3"
+    "socket.io-client": "^4.8.3",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -30,6 +34,7 @@
     "globals": "^17.6.0",
     "postcss": "^8.5.15",
     "tailwindcss": "^3.4.19",
+    "typescript": "^6.0.3",
     "vite": "^8.0.12"
   }
 }

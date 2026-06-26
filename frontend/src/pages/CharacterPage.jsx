@@ -1,9 +1,10 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
 import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { ArrowLeft, BookOpen, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Trash2, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../utils/api'
+import TopBar from '../components/layout/TopBar'
 
 // Lazy-load character sheets
 const SHEETS = {
@@ -26,6 +27,7 @@ export default function CharacterPage() {
   const { user }                        = useAuth()
   const isNew                           = id === 'new'
   const readOnly                        = searchParams.get('readOnly') === 'true'
+  const mode                            = searchParams.get('mode')       // 'edit' = wizard edit flow
   const system                          = searchParams.get('system')
   const campaignId                      = searchParams.get('campaignId')
 
@@ -92,46 +94,50 @@ export default function CharacterPage() {
     }
   }
 
+  // Called by wizard when saving edits to an existing character
+  async function handleWizardEdit(sheetData) {
+    await handleSave(sheetData)
+    navigate(`/characters/${id}`, { replace: true })
+  }
+
   const SheetComponent  = SHEETS[character?.game_system || system]
-  const WizardComponent = WIZARDS[system]
+  const WizardComponent = WIZARDS[system] ?? WIZARDS[character?.game_system]
   const isOwner         = character && user && character.user_id === user.id
   // Backend includes viewer_is_gm so we don't need a separate campaign fetch
   const isGM            = character?.viewer_is_gm === true && !isOwner
+  const isEditMode      = mode === 'edit' && !!character && isOwner && !readOnly
 
   return (
     <div className="min-h-screen bg-codex-bg">
       <Helmet><title>{character?.name ? `${character.name} — CampaignCodex` : 'Character — CampaignCodex'}</title></Helmet>
-      {/* Nav */}
-      <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link to="/dashboard" className="flex items-center gap-2 text-codex-gold">
-            <BookOpen size={16} />
-            <span className="font-display text-sm tracking-wide">CampaignCodex</span>
-          </Link>
-          {saveStatus === 'saving' && <span className="text-xs text-codex-muted animate-pulse">Saving…</span>}
-          {saveStatus === 'saved'  && <span className="text-xs text-emerald-400">Saved ✓</span>}
-          {saveStatus === 'error'  && <span className="text-xs text-red-400">Save failed</span>}
-        </div>
-      </header>
+      <TopBar />
+
+      {/* ── Edit mode: show wizard pre-filled with existing data ── */}
+      {isEditMode && WizardComponent && (
+        <Suspense fallback={<WizardSkeleton />}>
+          <WizardComponent
+            initialData={character.sheet_data}
+            isEditMode={true}
+            onComplete={handleWizardEdit}
+            onCancel={() => navigate(`/characters/${id}`, { replace: true })}
+          />
+        </Suspense>
+      )}
 
       {/*
-        When a character sheet is loaded we bypass the constrained <main> entirely.
-        The sheet component has its own full-page wrapper + padding; wrapping it
-        in another max-w-5xl px-4 container creates double horizontal padding and
-        makes the content appear narrower than it should on mobile.
-        Instead, the ← Back link and Danger Zone each get their own slim,
-        properly-padded wrappers while the sheet fills the full available width.
+        Sheet view: bypass constrained <main> — each sheet has its own full-page
+        wrapper. Back button and Danger Zone get their own slim padded strips.
       */}
-      {character && SheetComponent ? (
+      {!isEditMode && character && SheetComponent ? (
         <>
-          {/* Back + optional GM banner — slim, padded strip above the sheet */}
+          {/* Back + optional GM banner */}
           <div className="max-w-7xl mx-auto px-4 pt-6 pb-2">
-            <Link
-              to={campaignId ? `/campaigns/${campaignId}` : '/dashboard'}
+            <button
+              onClick={() => navigate(-1)}
               className="inline-flex items-center gap-1.5 text-sm text-codex-subtext hover:text-codex-text transition-colors"
             >
               <ArrowLeft size={14} /> Back
-            </Link>
+            </button>
 
             {isGM && (
               <div className="mt-4 flex items-start gap-3 px-4 py-3 rounded-xl
@@ -142,19 +148,19 @@ export default function CharacterPage() {
                   <p className="text-xs text-codex-subtext mt-0.5">
                     You are editing <span className="text-codex-text font-medium">{character.owner_username}'s</span> sheet
                     as the campaign GM. Changes save immediately and are visible to the player.
-                    Portrait changes are restricted to the player.
                   </p>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Sheet — full available width, no extra wrapping constraints */}
+          {/* Sheet — full available width */}
           <Suspense fallback={<div className="text-center text-codex-muted animate-pulse py-24">Loading sheet…</div>}>
             <SheetComponent
               character={character}
               onSave={handleSave}
               readOnly={readOnly || (!isOwner && !isGM)}
+              onEdit={isOwner && !readOnly ? () => navigate(`/characters/${id}?mode=edit`) : undefined}
             />
           </Suspense>
 
@@ -184,7 +190,7 @@ export default function CharacterPage() {
             </div>
           )}
         </>
-      ) : (
+      ) : !isEditMode ? (
         /* Wizard / loading / error — use the normal constrained main */
         <main className="max-w-7xl mx-auto px-4 py-8">
           <Link
@@ -247,7 +253,7 @@ export default function CharacterPage() {
             </div>
           )}
         </main>
-      )}
+      ) : null}
 
       {/* ── Delete confirmation modal ── */}
       {showDeleteModal && character && (

@@ -4,6 +4,7 @@ import {
   weaponToAttack, detectWeapon, detectArmor, computeAC,
   SD_SPELLS, SD_SPELLS_BY_CLASS, SD_SPELLS_KNOWN,
 } from '../../../utils/shadowdark'
+import UploadZone from '../../ui/UploadZone'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -464,7 +465,9 @@ function AttackWeaponCell({ value, stats, onChange, disabled }) {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export default function ShadowdarkSheet({ character, onSave, readOnly = false }) {
+export default function ShadowdarkSheet({ character, onSave, readOnly = false, onEdit }) {
+  // statsLocked: identity/ability score fields are read-only; only HP, gear, spells remain editable
+  const statsLocked = !!onEdit
   const [data, setData]             = useState(() => buildDefaults(character.sheet_data || {}))
   const [saveStatus, setSaveStatus] = useState('idle') // 'idle' | 'saving' | 'saved' | 'error'
   const [expandedSpells, setExpandedSpells] = useState({})
@@ -682,30 +685,72 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
       <div className="max-w-5xl mx-auto p-4 space-y-6">
 
         {/* Sheet Title */}
-        <div className="text-center pt-2 pb-1">
-          <h1 className="font-display text-2xl text-sd-gold tracking-wide">Shadowdark</h1>
-          <p className="text-sd-subtext text-xs mt-0.5 tracking-wider uppercase">Character Sheet</p>
-          {readOnly && (
-            <span className="inline-block mt-1 text-[10px] uppercase tracking-widest text-sd-muted border border-sd-border rounded px-2 py-0.5">
-              View Only
-            </span>
+        <div className="flex items-center justify-between pt-2 pb-1">
+          <div>
+            <h1 className="font-display text-2xl text-sd-gold tracking-wide">Shadowdark</h1>
+            <p className="text-sd-subtext text-xs mt-0.5 tracking-wider uppercase">Character Sheet</p>
+            {readOnly && (
+              <span className="inline-block mt-1 text-[10px] uppercase tracking-widest text-sd-muted border border-sd-border rounded px-2 py-0.5">
+                View Only
+              </span>
+            )}
+          </div>
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-sd-gold/40
+                text-sd-gold text-xs font-medium hover:bg-sd-gold/10 transition-colors"
+            >
+              ✏ Edit Character
+            </button>
           )}
         </div>
 
         {/* ── Identity ─────────────────────────────────────────────── */}
         <section className="bg-sd-card border border-sd-border rounded-xl p-4">
           <SectionHeader>Identity</SectionHeader>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <FieldInput label="Name"       value={data.name}       onChange={e => set('name', e.target.value)}       disabled={readOnly} className="sm:col-span-2" />
-            <FieldSelect label="Alignment" value={data.alignment}  onChange={e => set('alignment', e.target.value)}  disabled={readOnly}
-              options={['Lawful', 'Neutral', 'Chaotic']} />
-            <FieldInput label="Ancestry"   value={data.ancestry}   onChange={e => set('ancestry', e.target.value)}   disabled={readOnly} />
-            <FieldInput label="Class"      value={data.class_name} onChange={e => set('class_name', e.target.value)} disabled={readOnly} />
-            <FieldInput label="Title"      value={data.title}      onChange={e => set('title', e.target.value)}      disabled={readOnly} />
-            <FieldInput label="Level"      value={data.level}      onChange={e => set('level', clamp(e.target.value, 0, 10))} type="number" min={0} max={10} disabled={readOnly} />
-            <FieldInput label="XP"         value={data.xp}         onChange={e => set('xp', Math.max(0, Number(e.target.value)))} type="number" min={0} disabled={readOnly} />
-            <FieldInput label="Background" value={data.background} onChange={e => set('background', e.target.value)} disabled={readOnly} />
-            <FieldInput label="Deity"      value={data.deity}      onChange={e => set('deity', e.target.value)}      disabled={readOnly} />
+          <div className="flex gap-4">
+            {/* Cathedral portrait */}
+            <div className="flex-shrink-0 flex flex-col items-center gap-1">
+              <div
+                className="w-16 bg-sd-surface border border-sd-border flex items-end justify-center overflow-hidden"
+                style={{ height: 88, borderRadius: '50% 50% 0 0 / 40% 40% 0 0' }}
+                title="Character portrait"
+              >
+                {data.portrait_url
+                  ? <img src={data.portrait_url} alt="portrait" className="w-full h-full object-cover object-top" />
+                  : (
+                    <svg viewBox="0 0 64 88" className="w-full opacity-20 text-sd-subtext fill-current">
+                      <circle cx="32" cy="28" r="14" />
+                      <ellipse cx="32" cy="72" rx="22" ry="18" />
+                    </svg>
+                  )
+                }
+              </div>
+              {!readOnly && !statsLocked && (
+                <UploadZone
+                  purpose="portrait"
+                  currentUrl={data.portrait_url}
+                  onUploaded={(url) => set('portrait_url', url)}
+                  onRemoved={() => set('portrait_url', '')}
+                  label="Photo"
+                  compact
+                />
+              )}
+            </div>
+
+            <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <FieldInput label="Name"       value={data.name}       onChange={e => set('name', e.target.value)}       disabled={readOnly || statsLocked} className="sm:col-span-2" />
+              <FieldSelect label="Alignment" value={data.alignment}  onChange={e => set('alignment', e.target.value)}  disabled={readOnly || statsLocked}
+                options={['Lawful', 'Neutral', 'Chaotic']} />
+              <FieldInput label="Ancestry"   value={data.ancestry}   onChange={e => set('ancestry', e.target.value)}   disabled={readOnly || statsLocked} />
+              <FieldInput label="Class"      value={data.class_name} onChange={e => set('class_name', e.target.value)} disabled={readOnly || statsLocked} />
+              <FieldInput label="Title"      value={data.title}      onChange={e => set('title', e.target.value)}      disabled={readOnly || statsLocked} />
+              <FieldInput label="Level"      value={data.level}      onChange={e => set('level', clamp(e.target.value, 0, 10))} type="number" min={0} max={10} disabled={readOnly || statsLocked} />
+              <FieldInput label="XP"         value={data.xp}         onChange={e => set('xp', Math.max(0, Number(e.target.value)))} type="number" min={0} disabled={readOnly || statsLocked} />
+              <FieldInput label="Background" value={data.background} onChange={e => set('background', e.target.value)} disabled={readOnly || statsLocked} />
+              <FieldInput label="Deity"      value={data.deity}      onChange={e => set('deity', e.target.value)}      disabled={readOnly || statsLocked} />
+            </div>
           </div>
         </section>
 
@@ -719,7 +764,7 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                 label={STAT_LABELS[s]}
                 value={data.stats[s]}
                 onChange={e => setStat(s, e.target.value)}
-                disabled={readOnly}
+                disabled={readOnly || statsLocked}
               />
             ))}
           </div>
@@ -750,7 +795,7 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                   type="number"
                   value={data.hp_max}
                   onChange={e => set('hp_max', Number(e.target.value))}
-                  disabled={readOnly}
+                  disabled={readOnly || statsLocked}
                   className="
                     w-12 text-center text-xl font-semibold text-sd-text bg-transparent
                     border-none focus:outline-none
@@ -773,7 +818,7 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false })
                   type="number"
                   value={data.ac}
                   onChange={e => set('ac', Number(e.target.value))}
-                  disabled={readOnly}
+                  disabled={readOnly || statsLocked}
                   className="
                     w-full text-center text-3xl font-bold text-sd-text bg-transparent
                     border-none focus:outline-none

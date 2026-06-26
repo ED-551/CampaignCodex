@@ -19,7 +19,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { ArrowLeft, BookOpen, Send, Users, Eye } from 'lucide-react'
+import { ArrowLeft, Send, Users, Eye } from 'lucide-react'
+import TopBar from '../components/layout/TopBar'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
 import DiceRollBubble from '../components/chat/DiceRollBubble'
@@ -130,23 +131,7 @@ export default function ChatPage() {
   return (
     <div className="min-h-screen bg-codex-bg flex flex-col">
       <Helmet><title>Chat — CampaignCodex</title></Helmet>
-      {/* Nav */}
-      <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-3">
-          <Link to="/dashboard" className="flex items-center gap-2 text-codex-gold">
-            <BookOpen size={16} />
-            <span className="font-display text-sm tracking-wide">CampaignCodex</span>
-          </Link>
-          <span className="text-codex-border">/</span>
-          <span className="text-sm text-codex-subtext">Chatrooms</span>
-          {breadcrumb && (
-            <>
-              <span className="text-codex-border">/</span>
-              <span className="text-sm text-codex-text">{breadcrumb}</span>
-            </>
-          )}
-        </div>
-      </header>
+      <TopBar />
 
       {/* Content */}
       {activeView?.type === 'room' ? (
@@ -511,7 +496,7 @@ function RoomView({ room, socket, connected, user, onExit }) {
 
         {/* ── Who's Here sidebar (desktop always visible, mobile toggled) ── */}
         <aside className={`
-          ${showWho ? 'flex' : 'hidden'} sm:flex
+          ${showWho ? 'flex' : 'hidden'}
           flex-col w-44 shrink-0
         `}>
           <div className="bg-codex-surface border border-codex-border rounded-xl p-3 flex flex-col gap-2 h-full">

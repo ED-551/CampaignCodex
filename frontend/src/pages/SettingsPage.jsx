@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { BookOpen, User, Mail, Lock, Bell, CheckCircle, AlertCircle, ArrowLeft, LogOut, Trash2, X, Heart } from 'lucide-react'
+import { User, Mail, Lock, Bell, CheckCircle, AlertCircle, ArrowLeft, Trash2, X, Heart } from 'lucide-react'
+import TopBar from '../components/layout/TopBar'
 import { useAuth } from '../context/AuthContext'
 
 const INPUT_CLASS = `
@@ -57,7 +58,7 @@ function membershipLabel(user) {
 }
 
 export default function SettingsPage() {
-  const { user, logout, updateSettings, changePassword, deleteAccount } = useAuth()
+  const { user, updateSettings, changePassword, deleteAccount } = useAuth()
   const navigate = useNavigate()
 
   // ── Profile form ──────────────────────────────────────────────
@@ -155,10 +156,6 @@ export default function SettingsPage() {
     }
   }
 
-  function handleLogout() {
-    logout()
-    navigate('/', { replace: true })
-  }
 
   async function handleDeleteAccount(password) {
     setDeleting(true)
@@ -174,29 +171,7 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-codex-bg">
       <Helmet><title>Settings — CampaignCodex</title></Helmet>
-      {/* Header */}
-      <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <BookOpen size={17} className="text-codex-gold" />
-            <span className="font-display text-sm text-codex-gold tracking-wide">CampaignCodex</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              to="/dashboard"
-              className="flex items-center gap-1.5 text-xs text-codex-subtext hover:text-codex-text transition-colors"
-            >
-              <ArrowLeft size={13} /> Dashboard
-            </Link>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-1.5 text-xs text-codex-subtext hover:text-codex-text transition-colors"
-            >
-              <LogOut size={13} /> Sign out
-            </button>
-          </div>
-        </div>
-      </header>
+      <TopBar />
 
       <main className="max-w-2xl mx-auto px-4 py-8 space-y-6">
 

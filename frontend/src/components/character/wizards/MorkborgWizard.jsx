@@ -1036,12 +1036,27 @@ function validateStep(step, data, rollMode, abilitiesRolled) {
 
 // ─── Main Wizard ──────────────────────────────────────────────────────────────
 
-export default function MorkborgWizard({ onComplete, onCancel }) {
+export default function MorkborgWizard({ onComplete, onCancel, initialData, isEditMode = false }) {
   const [step, setStep] = useState(1)
   const [abilityMode, setAbilityMode] = useState('roll')
-  const [abilitiesRolled, setAbilitiesRolled] = useState(false)
+  const [abilitiesRolled, setAbilitiesRolled] = useState(!!initialData)
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(() => initialData ? {
+    name:        initialData.name        ?? '',
+    nickname:    initialData.nickname    ?? '',
+    description: initialData.description ?? '',
+    class_name:  initialData.class_name  ?? 'Classless',
+    abilities:   initialData.abilities   ?? { strength: 0, agility: 0, presence: 0, toughness: 0 },
+    hp_max:      initialData.hp_max      ?? null,
+    hp_current:  initialData.hp_current  ?? null,
+    omens:       initialData.omens       ?? null,
+    silver:      initialData.silver      ?? null,
+    weapons:     initialData.weapons     ?? [],
+    armor_tier:  initialData.armor_tier  ?? 0,
+    armor_name:  initialData.armor_name  ?? '',
+    equipment:   initialData.equipment   ?? [],
+    vibe:        initialData.vibe        ?? '',
+  } : {
     name: '',
     nickname: '',
     description: '',
@@ -1151,7 +1166,7 @@ export default function MorkborgWizard({ onComplete, onCancel }) {
               Mörk Borg
             </p>
             <h1 className="text-3xl font-black uppercase tracking-widest text-yellow-300 font-mono leading-none">
-              CHARACTER CREATION
+              {isEditMode ? 'EDIT CHARACTER' : 'CHARACTER CREATION'}
             </h1>
           </div>
           <button
@@ -1233,7 +1248,7 @@ export default function MorkborgWizard({ onComplete, onCancel }) {
                 variant="primary"
                 className="px-6"
               >
-                BEGIN YOUR DOOM
+                {isEditMode ? 'SAVE CHANGES' : 'BEGIN YOUR DOOM'}
               </GrimButton>
             )}
           </div>

@@ -1615,11 +1615,39 @@ function SummaryBanner({ data }) {
 
 // ─── Main Wizard ──────────────────────────────────────────────────────────────
 
-export default function NimbleWizard({ onComplete, onCancel }) {
+export default function NimbleWizard({ onComplete, onCancel, initialData, isEditMode = false }) {
   const [step, setStep] = useState(1)
   const totalSteps = 9
 
-  const [data, setData] = useState({
+  const [data, setData] = useState(() => initialData ? {
+    name:         initialData.name        ?? '',
+    nickname:     initialData.nickname    ?? '',
+    ancestry:     initialData.ancestry    ?? '',
+    class_name:   initialData.class_name  ?? '',
+    hit_dice:     initialData.hit_dice    ?? 'd8',
+    _arrayId:     'custom',
+    _assignments: { str: null, dex: null, int: null, wil: null },
+    _customRaw:   initialData.stats       ?? { str: 0, dex: 0, int: 0, wil: 0 },
+    _humanBonus:  null,
+    stats:        initialData.stats       ?? { str: 0, dex: 0, int: 0, wil: 0 },
+    _skillBonuses: {},
+    _spellSchool2: '',
+    gearMode:  'class_gear',
+    weapons:   initialData.weapons   ?? [],
+    armor:     initialData.armor     ?? null,
+    shield:    initialData.shield    ?? null,
+    equipment: initialData.equipment ?? [],
+    saves:     initialData.saves     ?? { str: 'none', dex: 'none', int: 'none', wil: 'none' },
+    languages: initialData.languages ?? ['Common'],
+    hp_max:    initialData.hp_max    ?? 0,
+    hp_current: initialData.hp_current ?? 0,
+    speed:  initialData.speed  ?? 6,
+    size:   initialData.size   ?? 'Medium',
+    gold:   initialData.gold   ?? 0,
+    silver: initialData.silver ?? 0,
+    copper: initialData.copper ?? 0,
+    vibe:   initialData.vibe   ?? '',
+  } : {
     name: '', nickname: '',
     ancestry: '',
     class_name: '', hit_dice: 'd8',
@@ -1785,7 +1813,9 @@ export default function NimbleWizard({ onComplete, onCancel }) {
         <div className="h-px w-full bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-60" />
         <div className="flex items-center justify-between px-6 pt-5 pb-2">
           <div>
-            <h1 className="text-lg font-display text-codex-text">Nimble RPG — Character Creation</h1>
+            <h1 className="text-lg font-display text-codex-text">
+              Nimble RPG — {isEditMode ? 'Edit Character' : 'Character Creation'}
+            </h1>
             <p className="text-xs text-codex-subtext mt-0.5">Step {step} of {totalSteps}</p>
           </div>
           <button onClick={onCancel}
@@ -1813,7 +1843,7 @@ export default function NimbleWizard({ onComplete, onCancel }) {
               isFinal ? 'bg-codex-gold hover:bg-codex-goldHover text-codex-bg shadow-glow'
                       : 'bg-emerald-600 hover:bg-emerald-500 text-white'
             }`}>
-            {isFinal ? 'Forge Your Legend' : 'Next'}
+            {isFinal ? (isEditMode ? 'Save Changes' : 'Forge Your Legend') : 'Next'}
           </button>
         </div>
       </div>

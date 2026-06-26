@@ -62,6 +62,7 @@ const helmet     = require('helmet')
 const cors       = require('cors')
 const { apiLimiter }       = require('./middleware/rateLimiter')
 const { createSocketServer } = require('./socket')
+const { createVTTNamespace } = require('./socket-vtt')
 
 const authRoutes       = require('./routes/auth')
 const campaignRoutes   = require('./routes/campaigns')
@@ -76,6 +77,8 @@ const bestiaryRoutes       = require('./routes/bestiary')
 const bestiarySharesRoutes = require('./routes/bestiaryShares')
 const encounterRoutes      = require('./routes/encounters')
 const dmsRoutes            = require('./routes/dms')
+const uploadRoutes         = require('./routes/upload')
+const vttRoutes            = require('./routes/vtt')
 
 const app        = express()
 const httpServer = http.createServer(app)
@@ -134,6 +137,15 @@ app.use('/api/bestiary/shares',  bestiarySharesRoutes)
 app.use('/api/bestiary',         bestiaryRoutes)
 app.use('/api/encounters',       encounterRoutes)
 app.use('/api/dms',              dmsRoutes)
+app.use('/api/upload',           uploadRoutes)
+app.use('/api/vtt',              vttRoutes)
+
+// ─── Serve uploaded files ──────────────────────────────────────────────────────
+// Files land in /app/uploads/{userId}/{uuid}.ext inside the container (Docker volume).
+// In dev, fall back to a local ./uploads directory if UPLOAD_DIR is not set.
+const UPLOAD_DIR = process.env.UPLOAD_DIR || require('path').join(__dirname, '../../uploads')
+require('fs').mkdirSync(UPLOAD_DIR, { recursive: true })
+app.use('/uploads', require('express').static(UPLOAD_DIR))
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
@@ -153,7 +165,8 @@ app.use((err, req, res, next) => {
 
 // ─── Socket.io (attached to the same HTTP server) ────────────────────────────
 // Must be attached AFTER Express middleware but BEFORE server.listen()
-createSocketServer(httpServer)
+const io = createSocketServer(httpServer)
+createVTTNamespace(io)
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 httpServer.listen(PORT, () => {

@@ -9,7 +9,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link }                              from 'react-router-dom'
 import { Helmet }                            from 'react-helmet-async'
-import { ArrowLeft, BookOpen, Check, X, ChevronDown, ChevronUp, Share2 } from 'lucide-react'
+import { ArrowLeft, Check, X, ChevronDown, ChevronUp, Share2 } from 'lucide-react'
+import TopBar from '../components/layout/TopBar'
 import { api }                               from '../utils/api'
 
 // ─── Custom thematic icons ────────────────────────────────────────────────────
@@ -209,18 +210,7 @@ export default function BestiarySharesPage() {
     <div className="min-h-screen bg-codex-bg">
       <Helmet><title>Shared Bestiaries — CampaignCodex</title></Helmet>
       {/* ── Nav ── */}
-      <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-3">
-          <Link to="/dashboard" className="flex items-center gap-2 text-codex-gold">
-            <BookOpen size={16} />
-            <span className="font-display text-sm tracking-wide">CampaignCodex</span>
-          </Link>
-          <span className="text-codex-border">/</span>
-          <span className="text-sm text-codex-subtext">Bestiary</span>
-          <span className="text-codex-border">/</span>
-          <span className="text-sm font-medium text-codex-gold">Shared with You</span>
-        </div>
-      </header>
+      <TopBar />
 
       <main className="max-w-5xl mx-auto px-4 py-8">
         <Link

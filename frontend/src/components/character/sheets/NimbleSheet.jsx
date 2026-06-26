@@ -414,7 +414,8 @@ function EquipmentQuickAdd({ onAdd }) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function NimbleSheet({ character, onSave, readOnly = false }) {
+export default function NimbleSheet({ character, onSave, readOnly = false, onEdit }) {
+  const statsLocked = !!onEdit
   const [sheet, setSheet] = useState(() => buildDefaults(character?.sheet_data));
   const [saveStatus, setSaveStatus] = useState('idle'); // 'idle' | 'saving' | 'saved'
   const [levelUpRoll, setLevelUpRoll] = useState(null); // { roll1, roll2, hpGain, newMana }
@@ -628,6 +629,15 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
         <span className="font-display text-ni-gold text-sm tracking-widest uppercase">
           Nimble Character Sheet
         </span>
+        {onEdit && (
+          <button
+            onClick={onEdit}
+            className="absolute left-6 flex items-center gap-1.5 px-3 py-1 rounded border border-ni-gold/40
+              text-ni-gold text-xs font-medium hover:bg-ni-gold/10 transition-colors"
+          >
+            ✏ Edit
+          </button>
+        )}
         {!readOnly && (
           <span className={`absolute right-6 text-xs font-medium transition-opacity duration-300 ${
             saveStatus === 'idle' ? 'opacity-0' : 'opacity-100'
@@ -653,7 +663,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
                 onChange={v => update(['name'], v)}
                 placeholder="Enter name…"
                 className="mt-1"
-                readOnly={readOnly}
+                readOnly={readOnly || statsLocked}
               />
             </div>
             <div>
@@ -663,7 +673,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
                 onChange={v => update(['ancestry'], v)}
                 placeholder="Human, Elf…"
                 className="mt-1"
-                readOnly={readOnly}
+                readOnly={readOnly || statsLocked}
               />
             </div>
             <div>
@@ -673,7 +683,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
                 onChange={v => update(['class_name'], v)}
                 placeholder="Fighter, Wizard…"
                 className="mt-1"
-                readOnly={readOnly}
+                readOnly={readOnly || statsLocked}
               />
             </div>
             <div>
@@ -683,7 +693,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
                 onChange={v => update(['level'], clamp(v, 1, 20))}
                 min={1} max={20}
                 className="mt-1 w-full"
-                readOnly={readOnly}
+                readOnly={readOnly || statsLocked}
               />
             </div>
             <div>
@@ -693,7 +703,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
                 onChange={v => update(['size'], v)}
                 options={SIZE_OPTIONS}
                 className="mt-1 w-full"
-                readOnly={readOnly}
+                readOnly={readOnly || statsLocked}
               />
             </div>
             <div>
@@ -746,7 +756,7 @@ export default function NimbleSheet({ character, onSave, readOnly = false }) {
                   value={sheet.stats[key]}
                   onChange={e => update(['stats', key], clamp(e.target.value, -2, 5))}
                   min={-2} max={5}
-                  disabled={readOnly}
+                  disabled={readOnly || statsLocked}
                   className="w-12 bg-transparent border-b border-codex-border text-center text-codex-subtext text-xs
                     focus:outline-none focus:border-ni-gold/60 disabled:opacity-60 disabled:cursor-not-allowed"
                   aria-label={`${STAT_LABELS[key]} modifier`}

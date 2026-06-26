@@ -300,7 +300,8 @@ function EquipmentQuickAdd({ onAdd }) {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export default function MorkborgSheet({ character, onSave, readOnly = false }) {
+export default function MorkborgSheet({ character, onSave, readOnly = false, onEdit }) {
+  const statsLocked = !!onEdit
   const [data, setData]             = useState(() => buildDefaults(character.sheet_data || {}))
   const [saveStatus, setSaveStatus] = useState('idle')
   const debounceTimer               = useRef(null)
@@ -414,15 +415,23 @@ export default function MorkborgSheet({ character, onSave, readOnly = false }) {
       <div className="max-w-2xl mx-auto p-4 space-y-5">
 
         {/* Sheet Title */}
-        <div className="text-center pt-3 pb-1 border-b border-yellow-300/10">
-          <h1 className="text-3xl font-black uppercase tracking-[0.15em] text-yellow-300">
-            MÖRK BORG
-          </h1>
-          <p className="text-yellow-300/40 text-[10px] tracking-[0.3em] uppercase mt-1">Character Sheet</p>
-          {readOnly && (
-            <span className="inline-block mt-2 text-[10px] uppercase tracking-widest text-yellow-300/30 border border-yellow-300/20 rounded px-2 py-0.5">
-              View Only
-            </span>
+        <div className="flex items-center justify-between pt-3 pb-1 border-b border-yellow-300/10">
+          <div>
+            <h1 className="text-3xl font-black uppercase tracking-[0.15em] text-yellow-300">MÖRK BORG</h1>
+            <p className="text-yellow-300/40 text-[10px] tracking-[0.3em] uppercase mt-1">Character Sheet</p>
+            {readOnly && (
+              <span className="inline-block mt-2 text-[10px] uppercase tracking-widest text-yellow-300/30 border border-yellow-300/20 rounded px-2 py-0.5">
+                View Only
+              </span>
+            )}
+          </div>
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              className="text-yellow-300/60 border border-yellow-300/30 rounded px-3 py-1.5 text-xs font-black uppercase tracking-widest hover:text-yellow-300 hover:border-yellow-300/60 transition-colors"
+            >
+              ✏ Edit
+            </button>
           )}
         </div>
 
@@ -437,7 +446,7 @@ export default function MorkborgSheet({ character, onSave, readOnly = false }) {
                   value={data.name}
                   onChange={e => set('name', e.target.value)}
                   placeholder="Your doomed name"
-                  disabled={readOnly}
+                  disabled={readOnly || statsLocked}
                   className="w-full"
                 />
               </div>
@@ -447,7 +456,7 @@ export default function MorkborgSheet({ character, onSave, readOnly = false }) {
                   value={data.class_name}
                   onChange={e => set('class_name', e.target.value)}
                   placeholder="Classless / ..."
-                  disabled={readOnly}
+                  disabled={readOnly || statsLocked}
                   className="w-full"
                 />
               </div>
@@ -458,7 +467,7 @@ export default function MorkborgSheet({ character, onSave, readOnly = false }) {
                 value={data.description}
                 onChange={e => set('description', e.target.value)}
                 placeholder="Gaunt. Hollow-eyed. Reeks of failure."
-                disabled={readOnly}
+                disabled={readOnly || statsLocked}
                 rows={2}
               />
             </div>
@@ -480,7 +489,7 @@ export default function MorkborgSheet({ character, onSave, readOnly = false }) {
                 label={label}
                 value={data.abilities[key]}
                 onChange={e => setAbility(key, e.target.value)}
-                disabled={readOnly}
+                disabled={readOnly || statsLocked}
               />
             ))}
           </div>
@@ -512,7 +521,7 @@ export default function MorkborgSheet({ character, onSave, readOnly = false }) {
                 type="number"
                 value={data.hp_max}
                 onChange={e => set('hp_max', Number(e.target.value))}
-                disabled={readOnly}
+                disabled={readOnly || statsLocked}
                 className="
                   w-16 text-center text-3xl font-black text-yellow-100/60 bg-transparent
                   border-b border-yellow-300/20

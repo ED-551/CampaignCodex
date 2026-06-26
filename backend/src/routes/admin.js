@@ -498,4 +498,37 @@ router.delete('/users/:id', requireAdmin, async (req, res) => {
   }
 })
 
+// ─── GET /api/admin/settings ─────────────────────────────────────────────────
+router.get('/settings', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT key, value FROM app_settings ORDER BY key')
+    res.json({ settings: Object.fromEntries(rows.map(r => [r.key, r.value])) })
+  } catch (err) {
+    console.error('[admin/settings GET]', err)
+    res.status(500).json({ error: 'Failed to load settings.' })
+  }
+})
+
+// ─── PATCH /api/admin/settings ────────────────────────────────────────────────
+const ALLOWED_SETTINGS = new Set(['uploads_enabled'])
+
+router.patch('/settings', requireAdmin, async (req, res) => {
+  const updates = Object.entries(req.body ?? {}).filter(([k]) => ALLOWED_SETTINGS.has(k))
+  if (updates.length === 0) return res.status(400).json({ error: 'No valid settings provided.' })
+  try {
+    for (const [key, value] of updates) {
+      await db.query(
+        `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        [key, String(value)]
+      )
+    }
+    const { rows } = await db.query('SELECT key, value FROM app_settings ORDER BY key')
+    res.json({ settings: Object.fromEntries(rows.map(r => [r.key, r.value])) })
+  } catch (err) {
+    console.error('[admin/settings PATCH]', err)
+    res.status(500).json({ error: 'Failed to update settings.' })
+  }
+})
+
 module.exports = router

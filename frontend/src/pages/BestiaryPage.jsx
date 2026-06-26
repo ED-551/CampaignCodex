@@ -18,7 +18,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link }      from 'react-router-dom'
-import { ArrowLeft, BookOpen, Plus, Trash2, X, Pencil, Share2, Send, Check, Square, CheckSquare, Search, Inbox } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, X, Pencil, Share2, Send, Check, Square, CheckSquare, Search, Inbox } from 'lucide-react'
+import TopBar from '../components/layout/TopBar'
 import { Helmet }                            from 'react-helmet-async'
 import { api }                               from '../utils/api'
 import ShadowdarkMonsterForm                 from '../components/bestiary/ShadowdarkMonsterForm'
@@ -293,19 +294,7 @@ export default function BestiaryPage() {
     <div className="min-h-screen bg-codex-bg">
       <Helmet><title>{meta?.label ? `${meta.label} Bestiary` : 'Bestiary'} — CampaignCodex</title></Helmet>
 
-      {/* ── Nav ── */}
-      <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-3">
-          <Link to="/dashboard" className="flex items-center gap-2 text-codex-gold">
-            <BookOpen size={16} />
-            <span className="font-display text-sm tracking-wide">CampaignCodex</span>
-          </Link>
-          <span className="text-codex-border">/</span>
-          <span className="text-sm text-codex-subtext">Bestiary</span>
-          <span className="text-codex-border">/</span>
-          <span className={`text-sm font-medium ${meta.color}`}>{meta.label}</span>
-        </div>
-      </header>
+      <TopBar />
 
       <main className="max-w-5xl mx-auto px-4 py-8">
 

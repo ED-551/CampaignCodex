@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Copy, Check, Sword, Plus, BookOpen, X, MessageSquare, Send, Eye, EyeOff, Users, Crown, UserPlus, Settings, Flame } from 'lucide-react'
+import { ArrowLeft, Copy, Check, Sword, Plus, BookOpen, X, MessageSquare, Send, Eye, EyeOff, Users, Crown, UserPlus, Settings, Flame, Map } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { Helmet } from 'react-helmet-async'
 import { useSocket } from '../context/SocketContext'
@@ -264,6 +264,14 @@ export default function CampaignDetail() {
                 >
                   <Sword size={14} /> {combatActive ? 'Combat Live ⚔' : 'Start Combat'}
                 </button>
+              )}
+              {import.meta.env.VITE_VTT_ENABLED === 'true' && (
+                <Link
+                  to={`/vtt/${id}`}
+                  className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg bg-codex-surface border border-codex-border text-codex-subtext hover:border-codex-gold/50 hover:text-codex-text transition-all"
+                >
+                  <Map size={14} /> Launch VTT
+                </Link>
               )}
               {!isGM && !myMember?.character_id && (
                 <button

@@ -12,10 +12,10 @@
  *   ChatPane header ··· → "Block [username]" → confirm overlay → blocked.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { MessageCircle, X, ChevronLeft, Send, Search, UserPlus,
+import { MessageCircle, Minus, X, ChevronLeft, Send, Search, UserPlus,
          Users, Bell, MoreHorizontal, UserCheck, UserX, Clock, ExternalLink,
          Trash2 } from 'lucide-react'
 import { useDM }     from '../../context/DMContext'
@@ -31,6 +31,17 @@ const TAB_MESSAGES  = 'messages'
 const TAB_FRIENDS   = 'friends'
 const TAB_REQUESTS  = 'requests'
 
+const PANEL_W = 320
+const PANEL_H = 480
+const MINI_W  = 48
+
+function defaultPos() {
+  return {
+    x: Math.max(0, window.innerWidth  - PANEL_W - 20),
+    y: Math.max(0, window.innerHeight - PANEL_H - 80),
+  }
+}
+
 export default function DMWidget() {
   const { user }       = useAuth()
   const { connected }  = useSocket()
@@ -40,63 +51,108 @@ export default function DMWidget() {
   } = useDM()
   const { totalIncoming, newFriendIds, newRequestIds } = useSocial()
 
-  if (!user) return null
+  const [minimized, setMinimized] = useState(false)
+  const [pos, setPos]             = useState(null)   // null = lazy default on first open
+  const dragRef = useRef({ dragging: false, startX: 0, startY: 0, origX: 0, origY: 0 })
 
-  return (
-    <>
-      {/* ── Floating toggle button ── */}
+  // Reset minimize when widget is closed from TopBar
+  useEffect(() => { if (!widgetOpen) setMinimized(false) }, [widgetOpen])
+
+  if (!user || !widgetOpen) return null
+
+  const curPos = pos ?? defaultPos()
+  const hasBadge = totalUnread > 0 || totalIncoming > 0 || (newFriendIds?.size ?? 0) > 0 || (newRequestIds?.size ?? 0) > 0
+
+  function onPointerDown(e) {
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    const p = pos ?? defaultPos()
+    dragRef.current = { dragging: true, startX: e.clientX, startY: e.clientY, origX: p.x, origY: p.y }
+  }
+
+  function onPointerMove(e) {
+    if (!dragRef.current.dragging) return
+    const dx = e.clientX - dragRef.current.startX
+    const dy = e.clientY - dragRef.current.startY
+    const h  = minimized ? MINI_W : PANEL_H
+    setPos({
+      x: Math.max(0, Math.min(window.innerWidth  - (minimized ? MINI_W : PANEL_W), dragRef.current.origX + dx)),
+      y: Math.max(0, Math.min(window.innerHeight - h, dragRef.current.origY + dy)),
+    })
+  }
+
+  function onPointerUp() {
+    dragRef.current.dragging = false
+  }
+
+  const dragHandlers = { onPointerDown, onPointerMove, onPointerUp }
+
+  // ── Minimized pill ──────────────────────────────────────────────────────────
+  if (minimized) {
+    return (
       <button
-        data-tour="dm-bubble"
-        onClick={toggleWidget}
-        className={`fixed bottom-5 right-5 z-50 w-12 h-12 rounded-full shadow-lg
-          flex items-center justify-center transition-all duration-200
-          ${widgetOpen
-            ? 'bg-codex-surface border border-codex-border text-codex-muted hover:text-codex-text'
-            : 'bg-codex-gold text-codex-bg hover:bg-codex-goldHover'
-          }`}
-        title={widgetOpen ? 'Close messages' : 'Direct messages'}
+        style={{ position: 'fixed', left: curPos.x, top: curPos.y, zIndex: 50, touchAction: 'none' }}
+        onClick={() => setMinimized(false)}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        className="w-12 h-12 rounded-full bg-codex-gold text-codex-bg shadow-lg
+          flex items-center justify-center relative cursor-grab active:cursor-grabbing"
+        title="Restore messages"
       >
-        {widgetOpen ? <X size={18} /> : <MessageCircle size={18} />}
-        {!widgetOpen && (totalUnread > 0 || totalIncoming > 0 || newFriendIds.size > 0 || newRequestIds.size > 0) && (
-          <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-codex-gold
-            border-2 border-codex-bg" />
+        <MessageCircle size={20} />
+        {hasBadge && (
+          <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-codex-bg" />
         )}
       </button>
+    )
+  }
 
-      {/* ── Main panel ── */}
-      {widgetOpen && (
-        <div data-tour="dm-panel" className="fixed bottom-20 right-5 z-50 w-80 h-[480px]
-          bg-codex-surface border border-codex-border rounded-2xl shadow-2xl
-          flex flex-col overflow-hidden">
-
-          {activeUserId
-            ? <ChatPane
-                targetUserId={activeUserId}
-                targetUsername={openConvos.find(c => c.userId === activeUserId)?.username ?? '…'}
-                msgs={messages[activeUserId]}
-                connected={connected}
-                user={user}
-                onBack={() => switchTo(null)}
-                onClose={() => { closeDM(activeUserId); toggleWidget() }}
-                sendDM={sendDM}
-              />
-            : <ConvoPanel
-                openConvos={openConvos}
-                unread={unread}
-                onSelect={(userId) => switchTo(userId)}
-                onClose={toggleWidget}
-                onNewDM={openDM}
-                closeDM={closeDM}
-              />
-          }
-        </div>
-      )}
-    </>
+  // ── Full panel ──────────────────────────────────────────────────────────────
+  return (
+    <div
+      data-tour="dm-panel"
+      style={{
+        position: 'fixed',
+        left:     curPos.x,
+        top:      curPos.y,
+        width:    PANEL_W,
+        height:   PANEL_H,
+        zIndex:   50,
+        touchAction: 'none',
+      }}
+      className="bg-codex-surface border border-codex-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+    >
+      {activeUserId
+        ? <ChatPane
+            targetUserId={activeUserId}
+            targetUsername={openConvos.find(c => c.userId === activeUserId)?.username ?? '…'}
+            msgs={messages[activeUserId]}
+            connected={connected}
+            user={user}
+            onBack={() => switchTo(null)}
+            onClose={toggleWidget}
+            onMinimize={() => setMinimized(true)}
+            sendDM={sendDM}
+            dragHandlers={dragHandlers}
+          />
+        : <ConvoPanel
+            openConvos={openConvos}
+            unread={unread}
+            onSelect={(userId) => switchTo(userId)}
+            onClose={toggleWidget}
+            onMinimize={() => setMinimized(true)}
+            onNewDM={openDM}
+            closeDM={closeDM}
+            dragHandlers={dragHandlers}
+          />
+      }
+    </div>
   )
 }
 
 // ─── Tabbed ConvoPanel ────────────────────────────────────────────────────────
-function ConvoPanel({ openConvos, unread, onSelect, onClose, onNewDM, closeDM }) {
+function ConvoPanel({ openConvos, unread, onSelect, onClose, onMinimize, onNewDM, closeDM, dragHandlers }) {
   const [tab, setTab] = useState(TAB_MESSAGES)
   const { friends, incomingRequests, totalIncoming,
           newRequestIds, newFriendIds, clearNewRequests, clearNewFriends,
@@ -111,16 +167,29 @@ function ConvoPanel({ openConvos, unread, onSelect, onClose, onNewDM, closeDM })
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-codex-border">
+      {/* Header — drag handle */}
+      <div
+        {...dragHandlers}
+        className="flex items-center justify-between px-4 py-3 border-b border-codex-border
+          cursor-grab active:cursor-grabbing select-none"
+      >
         <span className="text-sm font-semibold text-codex-text">Messages</span>
-        <button
-          data-tour="dm-close"
-          onClick={onClose}
-          className="p-1.5 text-codex-muted hover:text-codex-text hover:bg-codex-bg rounded-lg transition-colors"
-        >
-          <X size={14} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onMinimize}
+            className="p-1.5 text-codex-muted hover:text-codex-text hover:bg-codex-bg rounded-lg transition-colors"
+            title="Minimize"
+          >
+            <Minus size={14} />
+          </button>
+          <button
+            data-tour="dm-close"
+            onClick={onClose}
+            className="p-1.5 text-codex-muted hover:text-codex-text hover:bg-codex-bg rounded-lg transition-colors"
+          >
+            <X size={14} />
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -622,7 +691,7 @@ function RequestsTab({ requests, newRequestIds, onRespond }) {
 }
 
 // ─── Chat pane ────────────────────────────────────────────────────────────────
-function ChatPane({ targetUserId, targetUsername, msgs, connected, user, onBack, onClose, sendDM }) {
+function ChatPane({ targetUserId, targetUsername, msgs, connected, user, onBack, onClose, onMinimize, sendDM, dragHandlers }) {
   const { socket } = useSocket()
   const { getFriendStatus, sendFriendRequest, unfriend, blockUser, outgoingSet } = useSocial()
   const { closeDM } = useDM()
@@ -742,10 +811,15 @@ function ChatPane({ targetUserId, targetUsername, msgs, connected, user, onBack,
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-3 border-b border-codex-border">
+      {/* Header — drag handle */}
+      <div
+        {...dragHandlers}
+        className="flex items-center gap-2 px-3 py-3 border-b border-codex-border
+          cursor-grab active:cursor-grabbing select-none"
+      >
         <button
           onClick={onBack}
+          onPointerDown={e => e.stopPropagation()}
           className="p-1.5 text-codex-muted hover:text-codex-text hover:bg-codex-bg rounded-lg transition-colors"
           title="Back"
         >
@@ -760,7 +834,7 @@ function ChatPane({ targetUserId, targetUsername, msgs, connected, user, onBack,
         </span>
 
         {/* ··· overflow menu */}
-        <div className="relative" ref={menuRef}>
+        <div className="relative" ref={menuRef} onPointerDown={e => e.stopPropagation()}>
           <button
             onClick={() => { setMenuOpen(o => !o); setConfirmBlock(false) }}
             className="p-1.5 text-codex-muted hover:text-codex-text hover:bg-codex-bg rounded-lg transition-colors"
@@ -809,7 +883,16 @@ function ChatPane({ targetUserId, targetUsername, msgs, connected, user, onBack,
         </div>
 
         <button
+          onClick={onMinimize}
+          onPointerDown={e => e.stopPropagation()}
+          className="p-1.5 text-codex-muted hover:text-codex-text hover:bg-codex-bg rounded-lg transition-colors"
+          title="Minimize"
+        >
+          <Minus size={14} />
+        </button>
+        <button
           onClick={onClose}
+          onPointerDown={e => e.stopPropagation()}
           className="p-1.5 text-codex-muted hover:text-codex-text hover:bg-codex-bg rounded-lg transition-colors"
         >
           <X size={14} />

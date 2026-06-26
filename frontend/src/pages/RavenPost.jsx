@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import {
-  BookOpen, ArrowLeft, Send, Trash2, Reply,
-  Feather, Inbox, Mail, Settings, LogOut, Shield, ChevronLeft,
+  ArrowLeft, Send, Trash2, Reply,
+  Feather, Inbox, Mail, ChevronLeft,
   ChevronDown, ChevronUp, Scroll,
 } from 'lucide-react'
+import TopBar from '../components/layout/TopBar'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../utils/api'
 import TierBadge from '../components/ui/TierBadge'
@@ -558,7 +559,7 @@ function NoSelection() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function RavenPost() {
-  const { user, logout }            = useAuth()
+  const { user }                    = useAuth()
   const navigate                    = useNavigate()
   const location                    = useLocation()
 
@@ -636,7 +637,6 @@ export default function RavenPost() {
     if (tab === 'sent') { loadMessages('sent', 1); setPage(1) }
   }
 
-  function handleLogout() { logout(); navigate('/', { replace: true }) }
 
   const hasMore = messages.length < total
 
@@ -644,39 +644,7 @@ export default function RavenPost() {
     <div className="min-h-screen bg-codex-bg flex flex-col">
       <Helmet><title>The Raven Post — CampaignCodex</title></Helmet>
 
-      {/* Top nav */}
-      <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link to="/dashboard"
-              className="flex items-center gap-1.5 text-xs text-codex-muted hover:text-codex-gold transition-colors">
-              <ArrowLeft size={13} /> Dashboard
-            </Link>
-            <div className="flex items-center gap-2 text-codex-gold">
-              <Feather size={16} />
-              <span className="font-display text-sm tracking-wide">The Raven Post</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link to="/settings"
-              className="flex items-center gap-1.5 text-sm text-codex-subtext hover:text-codex-gold transition-colors group">
-              <span className="hidden sm:block text-xs">{user?.username}</span>
-              <Settings size={14} className="text-codex-muted group-hover:text-codex-gold transition-colors" />
-            </Link>
-            {user?.isAdmin && (
-              <button onClick={() => navigate('/admin')}
-                className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300
-                  transition-colors border border-purple-400/30 rounded-full px-2.5 py-0.5">
-                <Shield size={11} /> Admin
-              </button>
-            )}
-            <button onClick={handleLogout}
-              className="flex items-center gap-1.5 text-xs text-codex-subtext hover:text-codex-text transition-colors">
-              <LogOut size={14} /> Sign out
-            </button>
-          </div>
-        </div>
-      </header>
+      <TopBar />
 
       <div className="flex-1 flex max-w-6xl w-full mx-auto">
 

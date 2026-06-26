@@ -32,6 +32,12 @@ export default defineConfig({
         // Separating vendors means a new app deploy only invalidates the app chunks,
         // not the unchanged React / socket / icon bundles users already have cached.
         manualChunks(id) {
+          if (id.includes('node_modules/pixi.js') || id.includes('node_modules/@pixi/') || id.includes('node_modules/earcut')) {
+            return 'vendor-pixi'
+          }
+          if (id.includes('node_modules/zustand') || id.includes('node_modules/immer') || id.includes('node_modules/idb')) {
+            return 'vendor-vtt-state'
+          }
           if (id.includes('node_modules/socket.io-client') || id.includes('node_modules/engine.io-client')) {
             return 'vendor-socket'
           }

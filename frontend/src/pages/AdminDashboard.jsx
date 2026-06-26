@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { BookOpen, Users, Scroll, Trophy, Swords, ArrowLeft, Shield, Trash2, X, Mail, Send, ShieldOff } from 'lucide-react'
+import { Users, Scroll, Trophy, Swords, ArrowLeft, Shield, Trash2, X, Mail, Send, ShieldOff } from 'lucide-react'
+import TopBar from '../components/layout/TopBar'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../utils/api'
 import TierBadge from '../components/ui/TierBadge'
@@ -21,7 +22,7 @@ const GAME_COLORS = {
 }
 
 export default function AdminDashboard() {
-  const { logout, user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   // isPrimaryAdmin is now computed server-side in sanitizeUser() and returned
   // via /auth/me — the privileged username no longer ships in the JS bundle.
   const isPrimaryAdmin          = user?.isPrimaryAdmin === true
@@ -68,6 +69,11 @@ export default function AdminDashboard() {
   const [rError, setRError]       = useState('')
   const ravenTimer                = useRef(null)
 
+  // ── App settings state ────────────────────────────────────────────────────
+  const [settings, setSettings]         = useState(null)   // { uploads_enabled: 'true'|'false', … }
+  const [settingsLoading, setSettingsLoading] = useState(false)
+  const [settingsSaving, setSettingsSaving]   = useState(false)
+
   // Belt-and-suspenders guard — ProtectedRoute adminOnly is the primary gate.
   // Uses authLoading so the redirect fires as soon as auth resolves, before the
   // admin API calls complete, preventing a data flash for non-admins.
@@ -85,6 +91,29 @@ export default function AdminDashboard() {
       })
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (tab !== 'settings') return
+    if (settings !== null) return  // already loaded
+    setSettingsLoading(true)
+    api.get('/admin/settings')
+      .then(res => setSettings(res.settings))
+      .catch(err => { if (import.meta.env.DEV) console.error('[AdminDashboard] settings load failed', err) })
+      .finally(() => setSettingsLoading(false))
+  }, [tab, settings])
+
+  async function toggleSetting(key, currentValue) {
+    const newValue = currentValue === 'true' ? 'false' : 'true'
+    setSettingsSaving(true)
+    try {
+      const res = await api.patch('/admin/settings', { [key]: newValue })
+      setSettings(res.settings)
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      setSettingsSaving(false)
+    }
+  }
 
   async function updateTier(userId, tier) {
     try {
@@ -186,7 +215,6 @@ export default function AdminDashboard() {
     }
   }
 
-  function handleLogout() { logout(); navigate('/', { replace: true }) }
 
   // ── Broadcast helpers ──────────────────────────────────────────────────────
   function handleBroadcastFirstClick() {
@@ -264,27 +292,7 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-codex-bg">
       <Helmet><title>Admin — CampaignCodex</title></Helmet>
-      {/* Nav */}
-      <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <BookOpen size={16} className="text-codex-gold" />
-            <span className="font-display text-sm text-codex-gold tracking-wide">CampaignCodex</span>
-            <span className="text-codex-border">·</span>
-            <span className="flex items-center gap-1 text-xs text-purple-400">
-              <Shield size={11} /> Admin Console
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link to="/dashboard" className="text-xs text-codex-subtext hover:text-codex-text transition-colors flex items-center gap-1">
-              <ArrowLeft size={12} /> User Dashboard
-            </Link>
-            <button onClick={handleLogout} className="text-xs text-codex-subtext hover:text-codex-text transition-colors">
-              Sign out
-            </button>
-          </div>
-        </div>
-      </header>
+      <TopBar />
 
       <main className="max-w-6xl mx-auto px-4 py-8">
         <div className="mb-8">
@@ -311,6 +319,7 @@ export default function AdminDashboard() {
                 { id: 'users',      label: 'Users'     },
                 { id: 'broadcast',  label: '📧 Broadcast' },
                 { id: 'raven',      label: '🪶 Raven Broadcast' },
+                { id: 'settings',   label: '⚙️ Settings' },
               ].map(t => (
                 <button key={t.id} onClick={() => setTab(t.id)}
                   className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
@@ -440,6 +449,35 @@ export default function AdminDashboard() {
                 onCancel={() => { clearTimeout(ravenTimer.current); setRStep('idle'); setRError('') }}
                 onReset={handleRavenReset}
               />
+            )}
+
+            {tab === 'settings' && (
+              <div className="max-w-lg space-y-4">
+                <h2 className="text-sm font-semibold text-codex-subtext uppercase tracking-wider">Feature Flags</h2>
+                {settingsLoading && <p className="text-codex-muted text-sm">Loading…</p>}
+                {settings && (
+                  <div className="bg-codex-surface border border-codex-border rounded-xl p-5 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-codex-text">Image Uploads</p>
+                      <p className="text-xs text-codex-subtext mt-0.5">Allow users to upload portraits and images (1 GB quota per user).</p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={settingsSaving}
+                      onClick={() => toggleSetting('uploads_enabled', settings.uploads_enabled)}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent
+                        transition-colors duration-200 focus:outline-none disabled:opacity-50
+                        ${settings.uploads_enabled === 'true' ? 'bg-codex-gold' : 'bg-codex-border'}`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow
+                          transform transition-transform duration-200
+                          ${settings.uploads_enabled === 'true' ? 'translate-x-5' : 'translate-x-0'}`}
+                      />
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
 
             {tab === 'users' && (

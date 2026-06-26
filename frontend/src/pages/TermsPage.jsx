@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { useAuth } from '../context/AuthContext'
 import { BookOpen, ExternalLink, Shield, Heart, Users, AlertTriangle } from 'lucide-react'
@@ -62,9 +62,8 @@ const GAMES = [
 
 export default function TermsPage() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const homeLink = user ? '/dashboard' : '/'
-  const backLink = user ? '/dashboard' : '/signup'
-  const backLabel = user ? '← Back to Dashboard' : '← Back to sign up'
 
   return (
     <div className="min-h-screen bg-codex-bg">
@@ -78,9 +77,9 @@ export default function TermsPage() {
               CampaignCodex
             </span>
           </Link>
-          <Link to={backLink} className="text-xs text-codex-subtext hover:text-codex-text transition-colors">
-            {backLabel}
-          </Link>
+          <button onClick={() => navigate(-1)} className="text-xs text-codex-subtext hover:text-codex-text transition-colors">
+            ← Back
+          </button>
         </div>
       </header>
 

@@ -1893,10 +1893,37 @@ function createInitialState() {
   }
 }
 
-export default function ShadowdarkWizard({ onComplete, onCancel }) {
+export default function ShadowdarkWizard({ onComplete, onCancel, initialData, isEditMode = false }) {
   const [step, setStep] = useState(1)
-  // Lazy init: function is called once on mount, giving unique values each time
-  const [data, setData] = useState(createInitialState)
+  const [data, setData] = useState(() =>
+    initialData
+      ? {
+          ...createInitialState(),
+          name:       initialData.name        ?? '',
+          nickname:   initialData.nickname    ?? '',
+          title:      initialData.title       ?? '',
+          ancestry:   initialData.ancestry    ?? '',
+          class_name: initialData.class_name  ?? '',
+          hit_die:    initialData.hit_die     ?? '',
+          stats:      initialData.stats       ?? createInitialState().stats,
+          background: initialData.background  ?? '',
+          alignment:  initialData.alignment   ?? 'Neutral',
+          deity:      initialData.deity       ?? '',
+          languages:  Array.isArray(initialData.languages)
+                        ? initialData.languages.join(', ')
+                        : (initialData.languages ?? ''),
+          hp_max:     initialData.hp_max      ?? 4,
+          hp_current: initialData.hp_current  ?? 4,
+          ac:         initialData.ac          ?? 10,
+          gold:       initialData.gold        ?? 0,
+          arrows:     initialData.arrows      ?? 0,
+          bolts:      initialData.bolts       ?? 0,
+          talent_rolls:    (initialData.talents ?? []).map(t => ({ roll: 0, effect: t.description ?? t.name ?? '' })),
+          starting_spells: (initialData.spells ?? []).map(s => s.name).filter(Boolean),
+          vibe:       initialData.vibe        ?? '',
+        }
+      : createInitialState()
+  )
   const TOTAL_STEPS = 7
 
   function update(patch) {
@@ -2012,9 +2039,11 @@ export default function ShadowdarkWizard({ onComplete, onCancel }) {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-display text-codex-text">New Character</h1>
+            <h1 className="text-2xl font-display text-codex-text">
+              {isEditMode ? 'Edit Character' : 'New Character'}
+            </h1>
             <p className="text-xs text-codex-muted mt-1 uppercase tracking-wider">
-              Shadowdark &bull; Character Creation
+              Shadowdark &bull; {isEditMode ? 'Character Edit' : 'Character Creation'}
             </p>
           </div>
           <button
@@ -2055,7 +2084,7 @@ export default function ShadowdarkWizard({ onComplete, onCancel }) {
               className="px-6 py-2.5 rounded-xl bg-codex-gold hover:bg-codex-goldHover text-codex-bg font-semibold text-sm
                 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {step === TOTAL_STEPS ? 'Create Character' : 'Next'}
+              {step === TOTAL_STEPS ? (isEditMode ? 'Save Changes' : 'Create Character') : 'Next'}
             </button>
           </div>
         </div>

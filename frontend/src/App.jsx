@@ -40,6 +40,7 @@ const SecretReviewPage   = lazy(() => import('./pages/SecretReviewPage'))
 const DonatePage         = lazy(() => import('./pages/DonatePage'))
 const ProfilePage        = lazy(() => import('./pages/ProfilePage'))
 const ProfileEditPage    = lazy(() => import('./pages/ProfileEditPage'))
+const VTTPage            = lazy(() => import('./pages/VTTPage'))
 
 // Shown only while a route's JS chunk is downloading on first visit.
 // Dark background + gold spinner matches the app theme — no jarring flash.
@@ -130,6 +131,9 @@ export default function App() {
               } />
               <Route path="/characters/:id" element={
                 <ProtectedRoute><CharacterPage /></ProtectedRoute>
+              } />
+              <Route path="/vtt/:campaignId" element={
+                <ProtectedRoute><VTTPage /></ProtectedRoute>
               } />
 
               {/* ── Profile pages — /edit must precede /:username to avoid param collision ── */}

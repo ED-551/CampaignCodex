@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { Shield, ArrowLeft, BookOpen, Search, Users, UserX, CheckCircle, X } from 'lucide-react'
+import { Shield, ArrowLeft, Search, Users, UserX, CheckCircle, X } from 'lucide-react'
+import TopBar from '../components/layout/TopBar'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../utils/api'
 import TierBadge from '../components/ui/TierBadge'
@@ -10,7 +11,7 @@ import { usePresence } from '../hooks/usePresence'
 const PAGE_SIZE = 25
 
 export default function ModeratorDashboard() {
-  const { logout, user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const navigate                        = useNavigate()
   const [users, setUsers]               = useState([])
   const [loading, setLoading]           = useState(true)
@@ -117,31 +118,13 @@ export default function ModeratorDashboard() {
     setBanError('')
   }
 
-  function handleLogout() { logout(); navigate('/', { replace: true }) }
 
   return (
     <div className="min-h-screen bg-codex-bg">
       <Helmet><title>Moderator — CampaignCodex</title></Helmet>
 
       {/* ── Nav ── */}
-      <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link to="/dashboard" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-            <BookOpen size={16} className="text-codex-gold" />
-            <span className="font-display text-sm text-codex-gold tracking-wide">CampaignCodex</span>
-          </Link>
-          <div className="flex items-center gap-4">
-            <Link to="/dashboard"
-              className="text-xs text-codex-subtext hover:text-codex-text transition-colors flex items-center gap-1">
-              <ArrowLeft size={12} /> Dashboard
-            </Link>
-            <button onClick={handleLogout}
-              className="text-xs text-codex-subtext hover:text-codex-text transition-colors">
-              Sign out
-            </button>
-          </div>
-        </div>
-      </header>
+      <TopBar />
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
 

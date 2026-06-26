@@ -10,8 +10,9 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate }   from 'react-router-dom'
 import { Helmet }              from 'react-helmet-async'
 import {
-  BookOpen, ArrowLeft, Eye, EyeOff, Check, Swords, Shield, Users, Scroll,
+  ArrowLeft, Eye, EyeOff, Check, Swords, Shield, Users, Scroll,
 } from 'lucide-react'
+import TopBar from '../components/layout/TopBar'
 import { api } from '../utils/api'
 
 // ── Identical to ProfilePage's THEMES map ──────────────────────────────────
@@ -510,27 +511,9 @@ function FormSection({ label, hint, children }) {
 }
 
 function Shell({ children }) {
-  const navigate = useNavigate()
   return (
     <div className="min-h-screen bg-codex-bg flex flex-col">
-      <header className="border-b border-codex-border bg-codex-surface/60 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-3">
-          <Link to="/dashboard" className="flex items-center gap-2 text-codex-gold">
-            <BookOpen size={16} />
-            <span className="font-display text-sm tracking-wide">CampaignCodex</span>
-          </Link>
-          <span className="text-codex-border">/</span>
-          <button
-            data-tour="profile-back"
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-1 text-xs text-codex-subtext hover:text-codex-text transition-colors"
-          >
-            <ArrowLeft size={12} /> Back
-          </button>
-          <span className="text-codex-border">/</span>
-          <span className="text-xs text-codex-subtext">Edit Profile</span>
-        </div>
-      </header>
+      <TopBar />
       {children}
     </div>
   )

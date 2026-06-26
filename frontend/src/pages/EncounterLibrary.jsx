@@ -68,12 +68,6 @@ export default function EncounterLibrary() {
     }
   }
 
-  // Back destination
-  const backHref = campaignIdParam
-    ? `/campaigns/${campaignIdParam}/settings`
-    : '/dashboard'
-  const backLabel = campaignIdParam ? '← Back to Campaign Settings' : '← Dashboard'
-
   // Filter locally by search query
   const visible = encounters.filter(e =>
     !searchQuery ||
@@ -89,12 +83,12 @@ export default function EncounterLibrary() {
       <div className="max-w-5xl mx-auto px-4 pt-8 pb-16">
 
         {/* Back link */}
-        <Link
-          to={backHref}
+        <button
+          onClick={() => navigate(-1)}
           className="inline-flex items-center gap-1.5 text-sm text-codex-subtext hover:text-codex-text transition-colors mb-6"
         >
-          <ArrowLeft size={14} /> {backLabel}
-        </Link>
+          <ArrowLeft size={14} /> ← Back
+        </button>
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
