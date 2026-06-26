@@ -12,4 +12,5 @@ RUN mkdir -p uploads/portraits
 
 EXPOSE 3001
 
-CMD ["node", "src/index.js"]
+# Run migrations (idempotent — safe to re-run on each deploy) then start the server
+CMD ["sh", "-c", "node scripts/migrate.js && node src/index.js"]

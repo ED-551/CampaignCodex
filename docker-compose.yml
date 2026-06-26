@@ -47,6 +47,7 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_FROM:     ${EMAIL_FROM:-noreply@campaigncodex.com}
+      UPLOAD_DIR:     /app/uploads
     ports:
       - "3001:3001"
     volumes:

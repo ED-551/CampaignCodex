@@ -544,3 +544,41 @@ CREATE INDEX IF NOT EXISTS idx_evt_user ON email_verification_tokens(user_id);
 
 -- 2026-06-22: Add shared_from_username to monsters for bestiary share attribution
 ALTER TABLE monsters ADD COLUMN IF NOT EXISTS shared_from_username VARCHAR(50);
+
+-- ─── APP SETTINGS ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS app_settings (
+  key        VARCHAR(100) PRIMARY KEY,
+  value      TEXT         NOT NULL,
+  updated_at TIMESTAMP    NOT NULL DEFAULT NOW()
+);
+INSERT INTO app_settings (key, value)
+VALUES ('uploads_enabled', 'false')
+ON CONFLICT (key) DO NOTHING;
+
+-- ─── USER UPLOADS ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS user_uploads (
+  id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id       UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  filename      VARCHAR(255) NOT NULL,
+  original_name VARCHAR(255) NOT NULL,
+  mime_type     VARCHAR(100) NOT NULL,
+  size_bytes    BIGINT       NOT NULL,
+  purpose       VARCHAR(50)  NOT NULL DEFAULT 'general',
+  url_path      VARCHAR(500) NOT NULL,
+  created_at    TIMESTAMP    NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS user_uploads_user_id_idx ON user_uploads(user_id);
+CREATE INDEX IF NOT EXISTS user_uploads_purpose_idx  ON user_uploads(purpose);
+
+-- ─── VTT SCENES ───────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS vtt_scenes (
+  id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id  UUID        NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  name         TEXT        NOT NULL DEFAULT 'Untitled Scene',
+  is_active    BOOLEAN     NOT NULL DEFAULT false,
+  scene_data   JSONB       NOT NULL DEFAULT '{}',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_vtt_scenes_campaign ON vtt_scenes(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_vtt_scenes_active ON vtt_scenes(campaign_id) WHERE is_active = true;
