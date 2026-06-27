@@ -71,6 +71,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_VTT_ENABLED: ${VTT_ENABLED:-false}
     image: ${FRONTEND_IMAGE:-ghcr.io/ed-551/campaigncodex-frontend:latest}
     container_name: campaigncodex-web
     restart: unless-stopped

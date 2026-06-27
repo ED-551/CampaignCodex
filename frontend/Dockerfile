@@ -1,5 +1,8 @@
 FROM docker.io/library/node:20-alpine AS builder
 
+ARG VITE_VTT_ENABLED=false
+ENV VITE_VTT_ENABLED=$VITE_VTT_ENABLED
+
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci

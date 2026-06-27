@@ -131,7 +131,7 @@ export default function TopBar() {
             {/* VTT icon — shown when VTT_ENABLED */}
             {import.meta.env.VITE_VTT_ENABLED === 'true' && (
               <Link
-                to="/dashboard"
+                to="/vtt"
                 data-tour="nav-vtt"
                 className={NAV_LINK}
                 title="Virtual Tabletop"
