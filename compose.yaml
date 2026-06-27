@@ -33,10 +33,7 @@ services:
 
   # ── Backend API (Node 20 / Express 5) ────────────────────────────────────────
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    image: campaigncodex-backend:latest
+    image: ${BACKEND_IMAGE:-ghcr.io/ed-551/campaigncodex-backend:latest}
     container_name: campaigncodex-api
     restart: unless-stopped
     depends_on:
@@ -68,10 +65,7 @@ services:
 
   # ── Frontend (Vite build served by nginx) ────────────────────────────────────
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    image: campaigncodex-frontend:latest
+    image: ${FRONTEND_IMAGE:-ghcr.io/ed-551/campaigncodex-frontend:latest}
     container_name: campaigncodex-web
     restart: unless-stopped
     depends_on:
