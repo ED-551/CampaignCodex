@@ -128,18 +128,7 @@ export default function TopBar() {
               )}
             </Link>
 
-            {/* VTT icon — shown when VTT_ENABLED */}
-            {import.meta.env.VITE_VTT_ENABLED === 'true' && (
-              <Link
-                to="/vtt"
-                data-tour="nav-vtt"
-                className={NAV_LINK}
-                title="Virtual Tabletop"
-              >
-                <Map size={16} />
-                <span className="text-xs">VTT</span>
-              </Link>
-            )}
+            {/* VTT — accessible via Launch VTT on each campaign page */}
 
             {/* DM button */}
             <button
