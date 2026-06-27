@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { Plus, Scroll, Users, Skull } from 'lucide-react'
+import { Plus, Scroll, Users, Skull, Shield } from 'lucide-react'
 import { useAuth }   from '../context/AuthContext'
 import { useTour }   from '../context/TourContext'
 import { api } from '../utils/api'
