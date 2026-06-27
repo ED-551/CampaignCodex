@@ -90,6 +90,15 @@ class VTTSocketClient {
         }
 
         this.setupOutgoing()
+
+        // Hydrate initial session active state
+        fetch(`/api/vtt/${campaignId}/session`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('cc_token')}` }
+        })
+          .then(r => r.json())
+          .then(({ active }) => useVTTStore.getState().setSessionActive(active ?? false))
+          .catch(() => {})
+
         resolve({
           isGM:         res.isGM ?? false,
           campaignName: res.campaignName ?? '',
@@ -169,6 +178,9 @@ class VTTSocketClient {
     s.on('ping_marker', (d: { x: number; y: number }) => {
       window.dispatchEvent(new CustomEvent('vtt:ping', { detail: d }))
     })
+
+    s.on('vtt:session_started', () => useVTTStore.getState().setSessionActive(true))
+    s.on('vtt:session_ended',   () => useVTTStore.getState().setSessionActive(false))
 
     s.on('connect',    () => useVTTStore.getState().setNetworkInfo({ connected: true }))
     s.on('disconnect', () => useVTTStore.getState().setNetworkInfo({ connected: false }))

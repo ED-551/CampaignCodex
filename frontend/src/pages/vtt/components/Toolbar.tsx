@@ -39,35 +39,42 @@ interface Props {
 }
 
 export function Toolbar({ onOpenAssets, assetPanelOpen, onOpenCombat, combatPanelOpen, onOpenScenes, scenePanelOpen, onOpenSettings, settingsPanelOpen }: Props) {
-  const activeTool  = useVTTStore(s => s.activeTool)
-  const setTool     = useVTTStore(s => s.setTool)
-  const gridVisible = useVTTStore(s => s.grid.visible)
-  const setGrid     = useVTTStore(s => s.setGrid)
-  const canUndo     = useVTTStore(s => s.canUndo)
-  const canRedo     = useVTTStore(s => s.canRedo)
-  const undo        = useVTTStore(s => s.undo)
-  const redo        = useVTTStore(s => s.redo)
+  const activeTool       = useVTTStore(s => s.activeTool)
+  const setTool          = useVTTStore(s => s.setTool)
+  const gridVisible      = useVTTStore(s => s.grid.visible)
+  const setGrid          = useVTTStore(s => s.setGrid)
+  const canUndo          = useVTTStore(s => s.canUndo)
+  const canRedo          = useVTTStore(s => s.canRedo)
+  const undo             = useVTTStore(s => s.undo)
+  const redo             = useVTTStore(s => s.redo)
+  const playerPreviewMode = useVTTStore(s => s.playerPreviewMode)
+
+  // In player preview mode all GM tools are locked — only select/measure/ping allowed
+  const previewAllowed = new Set(['select', 'measure', 'ping'])
 
   return (
     <aside className="toolbar">
       {/* Tool buttons */}
       <div className="toolbar-group">
-        {TOOLS.map(({ tool, label, key, icon, ready }) => (
+        {TOOLS.map(({ tool, label, key, icon, ready }) => {
+          const lockedByPreview = playerPreviewMode && !previewAllowed.has(tool)
+          return (
           <button
             key={tool}
             className={[
               'tool-btn',
               activeTool === tool ? 'active' : '',
-              !ready ? 'disabled' : '',
+              (!ready || lockedByPreview) ? 'disabled' : '',
             ].join(' ').trim()}
-            onClick={() => ready && setTool(tool)}
-            title={`${label}  [${key}]${!ready ? '  (coming soon)' : ''}`}
-            disabled={!ready}
+            onClick={() => ready && !lockedByPreview && setTool(tool)}
+            title={`${label}  [${key}]${!ready ? '  (coming soon)' : lockedByPreview ? '  (locked in player view)' : ''}`}
+            disabled={!ready || lockedByPreview}
           >
             <span className="tool-icon">{icon}</span>
             <span className="tool-key">{key}</span>
           </button>
-        ))}
+          )
+        })}
       </div>
 
       <div className="toolbar-divider" />
@@ -75,9 +82,10 @@ export function Toolbar({ onOpenAssets, assetPanelOpen, onOpenCombat, combatPane
       {/* Asset library + combat tracker toggles */}
       <div className="toolbar-group">
         <button
-          className={`tool-btn ${assetPanelOpen ? 'active' : ''}`}
-          onClick={onOpenAssets}
-          title="Asset Library  [A]"
+          className={`tool-btn ${assetPanelOpen ? 'active' : ''} ${playerPreviewMode ? 'disabled' : ''}`}
+          onClick={playerPreviewMode ? undefined : onOpenAssets}
+          disabled={playerPreviewMode}
+          title={playerPreviewMode ? 'Asset Library (locked in player view)' : 'Asset Library  [A]'}
         >
           <span className="tool-icon">🖼</span>
           <span className="tool-key">A</span>
@@ -91,9 +99,10 @@ export function Toolbar({ onOpenAssets, assetPanelOpen, onOpenCombat, combatPane
           <span className="tool-key">I</span>
         </button>
         <button
-          className={`tool-btn ${scenePanelOpen ? 'active' : ''}`}
-          onClick={onOpenScenes}
-          title="Scene Manager  [S]"
+          className={`tool-btn ${scenePanelOpen ? 'active' : ''} ${playerPreviewMode ? 'disabled' : ''}`}
+          onClick={playerPreviewMode ? undefined : onOpenScenes}
+          disabled={playerPreviewMode}
+          title={playerPreviewMode ? 'Scene Manager (locked in player view)' : 'Scene Manager  [S]'}
         >
           <span className="tool-icon">⛺</span>
           <span className="tool-key">S</span>
@@ -128,7 +137,7 @@ export function Toolbar({ onOpenAssets, assetPanelOpen, onOpenCombat, combatPane
         <button
           className="tool-btn"
           onClick={undo}
-          disabled={!canUndo}
+          disabled={!canUndo || playerPreviewMode}
           title="Undo  [Ctrl+Z]"
         >
           <span className="tool-icon">↩</span>
@@ -136,7 +145,7 @@ export function Toolbar({ onOpenAssets, assetPanelOpen, onOpenCombat, combatPane
         <button
           className="tool-btn"
           onClick={redo}
-          disabled={!canRedo}
+          disabled={!canRedo || playerPreviewMode}
           title="Redo  [Ctrl+Y]"
         >
           <span className="tool-icon">↪</span>

@@ -54,6 +54,11 @@ export default function CampaignDetail() {
   const [startError,    setStartError]    = useState('')
   const combatTrackerRef = useRef(null)
 
+  // VTT session state
+  const [vttSessionActive, setVttSessionActive] = useState(false)
+
+  const { socket, connected } = useSocket()
+
   useEffect(() => {
     // cancelled flag prevents stale fetch results from writing to state after
     // the component unmounts or the campaign `id` changes (e.g. browser back/forward).
@@ -98,6 +103,32 @@ export default function CampaignDetail() {
 
     return () => { cancelled = true }
   }, [id])
+
+  // ── VTT session state: initial poll + socket listener ────────────────────────
+  useEffect(() => {
+    if (import.meta.env.VITE_VTT_ENABLED !== 'true') return
+    let cancelled = false
+    api.get(`/vtt/${id}/session`)
+      .then(({ active }) => { if (!cancelled) setVttSessionActive(active) })
+      .catch(() => {}) // non-critical — fail silently
+    return () => { cancelled = true }
+  }, [id])
+
+  useEffect(() => {
+    if (!socket || !connected) return
+    function handleSessionStarted({ campaignId }) {
+      if (campaignId === id) setVttSessionActive(true)
+    }
+    function handleSessionEnded({ campaignId }) {
+      if (campaignId === id) setVttSessionActive(false)
+    }
+    socket.on('vtt:session_started', handleSessionStarted)
+    socket.on('vtt:session_ended',   handleSessionEnded)
+    return () => {
+      socket.off('vtt:session_started', handleSessionStarted)
+      socket.off('vtt:session_ended',   handleSessionEnded)
+    }
+  }, [socket, connected, id])
 
   function copyCode() {
     navigator.clipboard.writeText(campaign.join_code)
@@ -268,6 +299,8 @@ export default function CampaignDetail() {
               {import.meta.env.VITE_VTT_ENABLED === 'true' && (
                 <Link
                   to={`/vtt/${id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg bg-codex-surface border border-codex-border text-codex-subtext hover:border-codex-gold/50 hover:text-codex-text transition-all"
                 >
                   <Map size={14} /> Launch VTT
@@ -295,6 +328,34 @@ export default function CampaignDetail() {
       </div>
 
       <div className="h-px bg-codex-border" />
+
+      {/* VTT Session Live Banner */}
+      {import.meta.env.VITE_VTT_ENABLED === 'true' && vttSessionActive && (
+        <div className="max-w-5xl mx-auto px-4 pt-4">
+          {!isGM ? (
+            <a
+              href={`/vtt/${id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 w-fit px-5 py-2.5 rounded-xl bg-emerald-900/40 border border-emerald-500/50 text-emerald-300 hover:bg-emerald-900/60 hover:border-emerald-400/70 transition-all text-sm font-semibold shadow-lg shadow-emerald-900/20"
+            >
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+              </span>
+              VTT Session Live — Join
+            </a>
+          ) : (
+            <div className="flex items-center gap-2 text-xs text-emerald-400/80">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              </span>
+              VTT session is live
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Player Roster */}
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">

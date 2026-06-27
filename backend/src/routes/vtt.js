@@ -1,6 +1,8 @@
 const express       = require('express')
 const { requireAuth } = require('../middleware/auth')
 const db            = require('../db')
+const { getVTTNamespace } = require('../socket-vtt')
+const { getIO }           = require('../socket')
 
 const router = express.Router()
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -107,6 +109,58 @@ router.delete('/:campaignId/scenes/:sceneId', requireAuth, requireVTT, requireCa
       [sceneId, req.params.campaignId]
     )
     if (!row) return res.status(404).json({ error: 'Scene not found.' })
+    res.json({ ok: true })
+  } catch (err) { next(err) }
+})
+
+// ── GET /api/vtt/:campaignId/session ──────────────────────────────────────────
+// Returns whether a VTT session is currently active for the campaign.
+router.get('/:campaignId/session', requireAuth, requireVTT, requireCampaignAccess, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT session_active FROM vtt_scenes
+       WHERE campaign_id = $1 AND is_active = true LIMIT 1`,
+      [req.params.campaignId]
+    )
+    res.json({ active: rows[0]?.session_active ?? false })
+  } catch (err) { next(err) }
+})
+
+// ── POST /api/vtt/:campaignId/session/start ───────────────────────────────────
+// GM sets the active scene's session_active = true and broadcasts to the room.
+router.post('/:campaignId/session/start', requireAuth, requireVTT, requireCampaignAccess, async (req, res, next) => {
+  if (!req.campaign.isGM) return res.status(403).json({ error: 'Only the GM can start a session.' })
+  try {
+    const { rows } = await db.query(
+      `UPDATE vtt_scenes SET session_active = true
+       WHERE campaign_id = $1 AND is_active = true
+       RETURNING id`,
+      [req.params.campaignId]
+    )
+    if (!rows[0]) return res.status(404).json({ error: 'No active scene found.' })
+    const vtt = getVTTNamespace()
+    if (vtt) vtt.to(`campaign:${req.params.campaignId}`).emit('vtt:session_started', { campaignId: req.params.campaignId })
+    // Also emit on main namespace so campaign page members receive the notification
+    const io = getIO()
+    if (io) io.to(`campaign:${req.params.campaignId}`).emit('vtt:session_started', { campaignId: req.params.campaignId })
+    res.json({ ok: true })
+  } catch (err) { next(err) }
+})
+
+// ── POST /api/vtt/:campaignId/session/end ────────────────────────────────────
+// GM sets the active scene's session_active = false and broadcasts to the room.
+router.post('/:campaignId/session/end', requireAuth, requireVTT, requireCampaignAccess, async (req, res, next) => {
+  if (!req.campaign.isGM) return res.status(403).json({ error: 'Only the GM can end a session.' })
+  try {
+    await db.query(
+      `UPDATE vtt_scenes SET session_active = false WHERE campaign_id = $1`,
+      [req.params.campaignId]
+    )
+    const vtt = getVTTNamespace()
+    if (vtt) vtt.to(`campaign:${req.params.campaignId}`).emit('vtt:session_ended', { campaignId: req.params.campaignId })
+    // Also emit on main namespace so campaign page members receive the notification
+    const io = getIO()
+    if (io) io.to(`campaign:${req.params.campaignId}`).emit('vtt:session_ended', { campaignId: req.params.campaignId })
     res.json({ ok: true })
   } catch (err) { next(err) }
 })

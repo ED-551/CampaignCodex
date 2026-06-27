@@ -42,12 +42,17 @@ function scheduleSceneSave(campaignId, sceneId, sceneData) {
   saveTimers.set(campaignId, { timer, sceneId, data: sceneData })
 }
 
+// ─── VTT namespace instance (set on init, used by REST routes to emit) ───────
+let _vtt = null
+function getVTTNamespace() { return _vtt }
+
 // ─── Register the /vtt namespace ─────────────────────────────────────────────
 
 function createVTTNamespace(io) {
   if (process.env.VTT_ENABLED !== 'true') return  // no-op when disabled
 
   const vtt = io.of('/vtt')
+  _vtt = vtt
 
   // ── JWT handshake auth ─────────────────────────────────────────────────────
   vtt.use((socket, next) => {
@@ -217,4 +222,4 @@ function createVTTNamespace(io) {
   return vtt
 }
 
-module.exports = { createVTTNamespace }
+module.exports = { createVTTNamespace, getVTTNamespace }

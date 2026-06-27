@@ -37,6 +37,8 @@ import { createAssetSlice }    from './assetSlice'
 import type { AssetSlice }     from './assetSlice'
 import { createCombatSlice }   from './combatSlice'
 import type { CombatSlice }    from './combatSlice'
+import { createSessionSlice }  from './sessionSlice'
+import type { SessionSlice }   from './sessionSlice'
 
 export type VTTStore =
   ViewportSlice &
@@ -51,7 +53,8 @@ export type VTTStore =
   DrawingSlice  &
   NetworkSlice  &
   AssetSlice    &
-  CombatSlice
+  CombatSlice   &
+  SessionSlice
 
 export const useVTTStore = create<VTTStore>()(
   subscribeWithSelector(
@@ -69,6 +72,7 @@ export const useVTTStore = create<VTTStore>()(
       ...createNetworkSlice(...args),
       ...createAssetSlice(...args),
       ...createCombatSlice(...args),
+      ...createSessionSlice(...args),
     }))
   )
 )
