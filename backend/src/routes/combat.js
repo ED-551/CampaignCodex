@@ -6,6 +6,8 @@ const { requireAuth } = require('../middleware/auth')
 
 const router = express.Router()
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 function validationErrors(req, res) {
   const errors = validationResult(req)
   if (!errors.isEmpty()) {

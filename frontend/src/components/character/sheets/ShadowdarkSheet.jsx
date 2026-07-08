@@ -1253,7 +1253,7 @@ export default function ShadowdarkSheet({ character, onSave, readOnly = false, o
                     <select
                       id="spell-picker-select"
                       defaultValue=""
-                      className="flex-1 bg-sd-surface border border-sd-border rounded px-2 py-1.5 text-sm text-sd-text focus:outline-none focus:border-sd-gold"
+                      className="flex-1 min-w-0 bg-sd-surface border border-sd-border rounded px-2 py-1.5 text-sm text-sd-text focus:outline-none focus:border-sd-gold"
                     >
                       <option value="" disabled>— pick a spell to add —</option>
                       {pickerSpells.map(name => (

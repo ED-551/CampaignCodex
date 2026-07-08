@@ -60,7 +60,10 @@ function createVTTNamespace(io) {
                   ?? socket.handshake.headers?.authorization?.replace('Bearer ', '')
     if (!token) return next(new Error('No token'))
     try {
-      socket.user = verifyToken(token)
+      const payload = verifyToken(token)
+      // JWT stores the user id in the `sub` claim — expose it as `id` for the
+      // membership checks below.
+      socket.user = { ...payload, id: payload.sub }
       next()
     } catch {
       next(new Error('Invalid token'))

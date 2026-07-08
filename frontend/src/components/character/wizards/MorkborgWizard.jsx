@@ -868,7 +868,7 @@ function StepEquipment({ data, onChange }) {
             <select
               value={weaponPick}
               onChange={e => setWeaponPick(e.target.value)}
-              className="flex-1 bg-black border border-yellow-300/20 rounded px-2 py-1.5 text-xs text-yellow-100 font-mono focus:outline-none focus:border-yellow-300/40"
+              className="flex-1 min-w-0 bg-black border border-yellow-300/20 rounded px-2 py-1.5 text-xs text-yellow-100 font-mono focus:outline-none focus:border-yellow-300/40"
             >
               <option value="">— choose weapon —</option>
               {MB_WEAPONS.map(w => (

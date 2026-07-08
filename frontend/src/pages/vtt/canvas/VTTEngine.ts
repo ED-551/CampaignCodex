@@ -131,6 +131,16 @@ export class VTTEngine {
     this.pingManager = new PingManager(this.layers.ui)
     this.pingTool    = new PingTool(this.interaction, this.pingManager)
 
+    // ── GM layer visibility ──────────────────────────────────────────────────────
+    // Walls and other GM-only objects live on layers.gm. Hide the layer for
+    // players and for the GM while previewing the player perspective.
+    const unsubGmLayer = useVTTStore.subscribe(
+      s => s.network.isGM && !s.playerPreviewMode,
+      gmView => { this.layers.gm.visible = gmView },
+      { fireImmediately: true },
+    )
+    this.unsubscribers.push(unsubGmLayer)
+
     // ── Window resize ────────────────────────────────────────────────────────────
     this.handleResize = this.handleResize.bind(this)
     window.addEventListener('resize', this.handleResize)

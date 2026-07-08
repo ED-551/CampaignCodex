@@ -83,6 +83,13 @@ export class LightingEngine {
         s => s.getActiveScene().ambientLight,
         markDirty,
       ),
+      // GM sees a faint hint overlay; players (and GM in player-preview mode)
+      // get the real masked lighting.
+      useVTTStore.subscribe(
+        s => s.network.isGM && !s.playerPreviewMode,
+        gmView => this.setIsGM(gmView),
+        { fireImmediately: true },
+      ),
     )
 
     app.ticker.add(this.update, this)
@@ -109,26 +116,26 @@ export class LightingEngine {
     const vp           = state.viewport
     const { width, height } = this.app.renderer
 
-    // ── GM view: just a hint overlay, no masking ──────────────────────────────
-    if (this.isGM) {
-      this.darkOverlay.clear()
-      if (ambientLight < 1) {
-        this.drawDarknessRect(width, height, 0.08)
-      }
-      return
-    }
+    // GM sees the same light shapes as players, but only as a faint reference
+    // overlay so the map stays fully readable while prepping.
+    const darknessAlpha = this.isGM
+      ? (1 - ambientLight) * 0.25
+      : (1 - ambientLight)
 
     // ── Resize render texture if needed ───────────────────────────────────────
     if (this.renderTexture.width !== width || this.renderTexture.height !== height) {
       this.renderTexture.resize(width, height)
     }
 
-    // ── Build the light mask ──────────────────────────────────────────────────
-    // Black background = everything occluded.
-    // White polygons = bright areas (fully visible).
-    // Mid-grey polygons = dim areas (half-visible, drawn after bright).
+    // ── Build the darkness mask ───────────────────────────────────────────────
+    // The mask sprite clips the darkness overlay: darkness renders where the
+    // mask is WHITE and is hidden where the mask is BLACK. So:
+    //   White background     = darkness everywhere by default.
+    //   Mid-grey polygons    = dim areas (darkness at ~50%).
+    //   Black polygons       = bright/lit areas (no darkness at all).
+    // Dim zones are drawn first so bright zones always win in overlaps.
     this.lightMask.clear()
-    this.lightMask.rect(0, 0, width, height).fill({ color: 0x000000, alpha: 1 })
+    this.lightMask.rect(0, 0, width, height).fill({ color: 0xffffff, alpha: 1 })
 
     // Helper: convert world point to screen point
     const toScreen = (p: Point): Point => ({
@@ -136,7 +143,30 @@ export class LightingEngine {
       y: p.y * vp.scale + vp.y,
     })
 
-    // ── Pass 1: token sight ───────────────────────────────────────────────────
+    // ── Pass 1: light source dim zones (half darkness) ────────────────────────
+    for (const light of lights) {
+      if (light.dimRadiusFt <= light.brightRadiusFt) continue
+
+      const origin   = resolveOrigin(light, state.tokens)
+      const radiusPx = feetToPx(light.dimRadiusFt, cellSize, cellFeet)
+      const screenOrigin = toScreen(origin)
+      const culled   = light.castsShadows
+        ? cullWalls(walls, origin, radiusPx)
+        : []
+      const screenWalls = toScreenWalls(culled, vp.scale, vp.x, vp.y)
+
+      const dimPoly = computeVisibility({
+        origin: screenOrigin,
+        walls:  screenWalls,
+        radius: radiusPx * vp.scale,
+      })
+
+      if (dimPoly.length >= 3) {
+        fillPolygon(this.lightMask, dimPoly, 0x888888, 1)
+      }
+    }
+
+    // ── Pass 2: token sight (fully lit) ───────────────────────────────────────
     for (const token of tokens) {
       if (!token.visible || token.sightRadius <= 0) continue
 
@@ -153,11 +183,11 @@ export class LightingEngine {
       })
 
       if (poly.length >= 3) {
-        fillPolygon(this.lightMask, poly, 0xffffff, 1)
+        fillPolygon(this.lightMask, poly, 0x000000, 1)
       }
     }
 
-    // ── Pass 2: light source bright zones ────────────────────────────────────
+    // ── Pass 3: light source bright zones (fully lit) ─────────────────────────
     for (const light of lights) {
       if (light.brightRadiusFt <= 0) continue
 
@@ -176,48 +206,7 @@ export class LightingEngine {
       })
 
       if (poly.length >= 3) {
-        // Tint the mask — pure white for now; coloured light is a Phase 2 polish
-        fillPolygon(this.lightMask, poly, 0xffffff, 1)
-      }
-    }
-
-    // ── Pass 3: light source dim zones (drawn after bright so they don't overwrite) ──
-    for (const light of lights) {
-      if (light.dimRadiusFt <= light.brightRadiusFt) continue
-
-      const origin   = resolveOrigin(light, state.tokens)
-      const radiusPx = feetToPx(light.dimRadiusFt, cellSize, cellFeet)
-      const screenOrigin = toScreen(origin)
-      const culled   = light.castsShadows
-        ? cullWalls(walls, origin, radiusPx)
-        : []
-      const screenWalls = toScreenWalls(culled, vp.scale, vp.x, vp.y)
-
-      const dimPoly = computeVisibility({
-        origin: screenOrigin,
-        walls:  screenWalls,
-        radius: radiusPx * vp.scale,
-      })
-
-      // The bright zone is already white; only fill the outer dim ring
-      // We draw the full dim polygon at 50% grey, then the bright zone overwrites it
-      if (dimPoly.length >= 3) {
-        fillPolygon(this.lightMask, dimPoly, 0x888888, 1)
-      }
-
-      // Re-draw bright on top (to ensure the bright area isn't dimmed)
-      if (light.brightRadiusFt > 0) {
-        const brightPx   = feetToPx(light.brightRadiusFt, cellSize, cellFeet)
-        const brightCull = light.castsShadows ? cullWalls(walls, origin, brightPx) : []
-        const brightWalls = toScreenWalls(brightCull, vp.scale, vp.x, vp.y)
-        const brightPoly  = computeVisibility({
-          origin: screenOrigin,
-          walls:  brightWalls,
-          radius: brightPx * vp.scale,
-        })
-        if (brightPoly.length >= 3) {
-          fillPolygon(this.lightMask, brightPoly, 0xffffff, 1)
-        }
+        fillPolygon(this.lightMask, poly, 0x000000, 1)
       }
     }
 
@@ -230,7 +219,7 @@ export class LightingEngine {
 
     // Draw the darkness overlay (clipped by the mask texture)
     this.darkOverlay.clear()
-    this.drawDarknessRect(width, height, 1 - ambientLight)
+    this.drawDarknessRect(width, height, darknessAlpha)
   }
 
   private drawDarknessRect(w: number, h: number, alpha: number): void {

@@ -1163,7 +1163,7 @@ function WeaponPicker({ onAdd }) {
   return (
     <div className="flex gap-2">
       <select value={value} onChange={e => setValue(e.target.value)}
-        className="flex-1 bg-codex-surface border border-codex-border rounded-xl px-3 py-2 text-codex-text text-sm focus:outline-none focus:border-emerald-500 transition-colors">
+        className="flex-1 min-w-0 bg-codex-surface border border-codex-border rounded-xl px-3 py-2 text-codex-text text-sm focus:outline-none focus:border-emerald-500 transition-colors">
         <option value="">— Add a weapon —</option>
         <optgroup label="⚔ Melee">
           {NIMBLE_WEAPONS.filter(w => w.category === 'Melee').map(w => (
@@ -1198,7 +1198,7 @@ function ItemPicker({ onAdd }) {
   return (
     <div className="flex gap-2">
       <select value={value} onChange={e => setValue(e.target.value)}
-        className="flex-1 bg-codex-surface border border-codex-border rounded-xl px-3 py-2 text-codex-text text-sm focus:outline-none focus:border-emerald-500 transition-colors">
+        className="flex-1 min-w-0 bg-codex-surface border border-codex-border rounded-xl px-3 py-2 text-codex-text text-sm focus:outline-none focus:border-emerald-500 transition-colors">
         <option value="">— Add common item —</option>
         {NIMBLE_ITEMS.map(i => <option key={i.item} value={i.item}>{i.item}</option>)}
       </select>

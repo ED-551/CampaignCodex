@@ -44,7 +44,6 @@ export class WallTool {
     interaction.registerToolHandler('wall', {
       onPointerDown: this.onPointerDown.bind(this),
       onPointerMove: this.onPointerMove.bind(this),
-      onPointerUp:   (_w, e) => { if (e.detail === 2) this.finish() },  // double-click
     })
 
     window.addEventListener('keydown', this.onKeyDown.bind(this))
@@ -52,12 +51,26 @@ export class WallTool {
 
   private onPointerDown(world: Point, e: PointerEvent): void {
     if (e.button !== 0) return
+
+    // Double-click finishes the wall. The point for this spot was already
+    // added by the first click of the pair, so don't add another.
+    if (e.detail >= 2) {
+      this.finish()
+      return
+    }
+
     const snapped = this.snapPoint(world)
 
     if (this.points.length === 0) {
       // Start new wall
       this.points.push(snapped)
     } else {
+      // Clicking the last placed point again also finishes the wall
+      const last = this.points[this.points.length - 1]
+      if (snapped.x === last.x && snapped.y === last.y) {
+        this.finish()
+        return
+      }
       // Add next point
       this.points.push(snapped)
       this.drawPreview(snapped)

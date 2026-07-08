@@ -153,7 +153,7 @@ export default function App({ campaignId }: AppProps) {
 
       {/* GM-only: Go Live / End Session + Player Preview controls */}
       {isGM && (
-        <div className="fixed top-3 right-3 z-[100] flex items-center gap-2 pointer-events-auto">
+        <div className="fixed top-14 right-3 z-[100] flex items-center gap-2 pointer-events-auto">
           {/* Player Preview toggle */}
           <button
             onClick={() => setPlayerPreviewMode(!playerPreviewMode)}

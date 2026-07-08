@@ -24,10 +24,10 @@ async function requireCampaignAccess(req, res, next) {
      LEFT JOIN campaign_members cm
        ON cm.campaign_id = c.id AND cm.user_id = $2 AND cm.left_at IS NULL
      WHERE c.id = $1`,
-    [campaignId, req.user.id]
+    [campaignId, req.user.sub]
   )
   if (!rows[0]) return res.status(404).json({ error: 'Campaign not found.' })
-  const isGM     = rows[0].gm_user_id === req.user.id
+  const isGM     = rows[0].gm_user_id === req.user.sub
   const isMember = rows[0].is_member
   if (!isGM && !isMember) return res.status(403).json({ error: 'Not a campaign member.' })
   req.campaign = { id: campaignId, isGM, gmUserId: rows[0].gm_user_id }

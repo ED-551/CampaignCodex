@@ -102,17 +102,20 @@ export function LightPanel() {
   const lights      = useVTTStore(s => s.lights)
   const deleteLight = useVTTStore(s => s.deleteLight)
   const clearLights = useVTTStore(s => s.clearLights)
-  const getScene    = useVTTStore(s => s.getActiveScene)
   const updateScene = useVTTStore(s => s.updateActiveScene)
 
   const selectedTokenIds = useVTTStore(s => s.selectedTokenIds)
   const hasOneSelected   = selectedTokenIds.size === 1
 
+  // Subscribe to the active scene's ambientLight so the slider re-renders
+  // when it changes (getScene() alone doesn't trigger re-renders).
+  const ambientLight = useVTTStore(
+    s => s.scenes.find(sc => sc.id === s.activeSceneId)?.ambientLight ?? 1
+  )
+
   const [activeIdx, setActiveIdx] = useState(0)
 
   if (activeTool !== 'light') return null
-
-  const ambientLight = getScene().ambientLight
 
   function selectPreset(idx: number) {
     setActiveIdx(idx)

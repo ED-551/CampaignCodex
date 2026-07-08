@@ -11,6 +11,10 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+// The site CSP forbids unsafe-eval; this module swaps Pixi's eval-based
+// internals for CSP-safe equivalents. Must be imported before any renderer
+// is created.
+import 'pixi.js/unsafe-eval'
 import { Application }        from 'pixi.js'
 import { VTTEngine }          from './VTTEngine'
 import { fileToDataURL }      from './background'

@@ -16,7 +16,7 @@ const ALLOWED_TYPES  = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/
 // ─── Multer storage ───────────────────────────────────────────────────────────
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const userDir = path.join(UPLOAD_DIR, req.user.id)
+    const userDir = path.join(UPLOAD_DIR, req.user.sub)
     fs.mkdirSync(userDir, { recursive: true })
     cb(null, userDir)
   },
@@ -57,7 +57,7 @@ router.post('/', requireAuth, async (req, res, next) => {
     if (!await uploadsEnabled()) {
       return res.status(403).json({ error: 'Uploads are currently disabled by the administrator.' })
     }
-    const used = await getUserUsed(req.user.id)
+    const used = await getUserUsed(req.user.sub)
     if (used >= QUOTA_BYTES) {
       return res.status(413).json({ error: 'Upload quota exceeded (1 GB limit per user).' })
     }
@@ -74,7 +74,7 @@ router.post('/', requireAuth, async (req, res, next) => {
     if (!req.file) return res.status(400).json({ error: 'No file provided.' })
 
     const purpose  = (req.body.purpose || 'general').slice(0, 50)
-    const urlPath  = `/uploads/${req.user.id}/${req.file.filename}`
+    const urlPath  = `/uploads/${req.user.sub}/${req.file.filename}`
 
     try {
       const { rows: [row] } = await db.query(
@@ -82,7 +82,7 @@ router.post('/', requireAuth, async (req, res, next) => {
            (user_id, filename, original_name, mime_type, size_bytes, purpose, url_path)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id, url_path, size_bytes`,
-        [req.user.id, req.file.filename, req.file.originalname,
+        [req.user.sub, req.file.filename, req.file.originalname,
          req.file.mimetype, req.file.size, purpose, urlPath]
       )
       return res.status(201).json({ id: row.id, url: row.url_path, size: row.size_bytes })
@@ -96,7 +96,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 // ─── GET /api/upload/quota ────────────────────────────────────────────────────
 router.get('/quota', requireAuth, async (req, res, next) => {
   try {
-    const used      = await getUserUsed(req.user.id)
+    const used      = await getUserUsed(req.user.sub)
     const remaining = Math.max(0, QUOTA_BYTES - used)
     res.json({
       used,
@@ -113,7 +113,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
     const { rows: [row] } = await db.query(
       `DELETE FROM user_uploads WHERE id = $1 AND user_id = $2
        RETURNING filename, user_id`,
-      [req.params.id, req.user.id]
+      [req.params.id, req.user.sub]
     )
     if (!row) return res.status(404).json({ error: 'Upload not found.' })
     fs.unlink(path.join(UPLOAD_DIR, row.user_id, row.filename), () => {})

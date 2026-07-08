@@ -248,7 +248,7 @@ function WeaponQuickPick({ onAdd }) {
       <select
         value={pick}
         onChange={e => setPick(e.target.value)}
-        className="flex-1 bg-black border border-yellow-300/20 rounded px-2 py-1 text-xs text-yellow-100 font-mono focus:outline-none focus:border-yellow-300/40"
+        className="flex-1 min-w-0 bg-black border border-yellow-300/20 rounded px-2 py-1 text-xs text-yellow-100 font-mono focus:outline-none focus:border-yellow-300/40"
       >
         <option value="">— quick-add weapon —</option>
         {MB_WEAPONS.map(w => (
@@ -280,7 +280,7 @@ function EquipmentQuickAdd({ onAdd }) {
       <select
         value={pick}
         onChange={e => setPick(e.target.value)}
-        className="flex-1 bg-black border border-yellow-300/20 rounded px-2 py-1 text-xs text-yellow-100 font-mono focus:outline-none focus:border-yellow-300/40"
+        className="flex-1 min-w-0 bg-black border border-yellow-300/20 rounded px-2 py-1 text-xs text-yellow-100 font-mono focus:outline-none focus:border-yellow-300/40"
       >
         <option value="">— quick-add item —</option>
         {MB_QUICK_ITEMS.map(item => (

@@ -76,3 +76,8 @@ export const useVTTStore = create<VTTStore>()(
     }))
   )
 )
+
+// Dev-only: expose the store for debugging in the browser console.
+if (import.meta.env.DEV) {
+  ;(window as unknown as Record<string, unknown>).__VTT_STORE__ = useVTTStore
+}

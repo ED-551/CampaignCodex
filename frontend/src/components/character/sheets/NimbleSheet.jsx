@@ -349,7 +349,7 @@ function WeaponQuickPick({ onAdd }) {
       <select
         value={value}
         onChange={e => setValue(e.target.value)}
-        className="flex-1 bg-codex-surface border border-codex-border rounded px-2 py-1.5 text-codex-text text-sm
+        className="flex-1 min-w-0 bg-codex-surface border border-codex-border rounded px-2 py-1.5 text-codex-text text-sm
           focus:outline-none focus:border-ni-gold/60 transition-colors"
       >
         <option value="">— Quick-add weapon —</option>
@@ -394,7 +394,7 @@ function EquipmentQuickAdd({ onAdd }) {
       <select
         value={value}
         onChange={e => setValue(e.target.value)}
-        className="flex-1 bg-codex-surface border border-codex-border rounded px-2 py-1.5 text-codex-text text-sm
+        className="flex-1 min-w-0 bg-codex-surface border border-codex-border rounded px-2 py-1.5 text-codex-text text-sm
           focus:outline-none focus:border-ni-gold/60 transition-colors"
       >
         <option value="">— Quick-add common item —</option>

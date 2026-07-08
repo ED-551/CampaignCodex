@@ -78,7 +78,7 @@ class VTTSocketClient {
 
         useVTTStore.getState().setNetworkInfo({
           connected:  true,
-          roomCode:   campaignId,
+          roomCode:   res.campaignName || campaignId,
           isGM:       res.isGM ?? false,
           gmToken:    null,
           serverUrl:  '',

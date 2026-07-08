@@ -123,6 +123,13 @@ export class FogManager {
       useVTTStore.subscribe(s => s.fog,           markDirty),
       useVTTStore.subscribe(s => s.viewport,      markDirty),
       useVTTStore.subscribe(s => s.grid.cellSize, markDirty),
+      // GM sees fog as a translucent reference; players (and GM in
+      // player-preview mode) get fully opaque fog.
+      useVTTStore.subscribe(
+        s => s.network.isGM && !s.playerPreviewMode,
+        gmView => this.setIsGM(gmView),
+        { fireImmediately: true },
+      ),
     )
 
     // ── Explorer auto-reveal ─────────────────────────────────────────────────
@@ -197,15 +204,17 @@ export class FogManager {
     }
 
     // ── Build mask ───────────────────────────────────────────────────────────
+    // The mask clips the fog overlay: fog renders where the mask is WHITE and
+    // is hidden where the mask is BLACK.
     this.maskGraphics.clear()
-    // Start fully black (everything fogged)
-    this.maskGraphics.rect(0, 0, width, height).fill({ color: 0x000000, alpha: 1 })
+    // Start fully white (everything fogged)
+    this.maskGraphics.rect(0, 0, width, height).fill({ color: 0xffffff, alpha: 1 })
 
     if (fog.revealAll) {
-      // Short-circuit: everything cleared
-      this.maskGraphics.rect(0, 0, width, height).fill({ color: 0xffffff, alpha: 1 })
+      // Short-circuit: everything cleared — no fog anywhere
+      this.maskGraphics.rect(0, 0, width, height).fill({ color: 0x000000, alpha: 1 })
     } else {
-      // Draw white rectangles for each cleared cell
+      // Punch black holes for each cleared cell (fog hidden there)
       const cellKeys = Object.keys(fog.clearedCells)
       for (const key of cellKeys) {
         const [col, row] = key.split(',').map(Number)
@@ -220,7 +229,7 @@ export class FogManager {
         // Only draw cells that overlap the viewport (culling)
         if (sx + sw < 0 || sy + sw < 0 || sx > width || sy > height) continue
 
-        this.maskGraphics.rect(sx, sy, sw, sw).fill({ color: 0xffffff, alpha: 1 })
+        this.maskGraphics.rect(sx, sy, sw, sw).fill({ color: 0x000000, alpha: 1 })
       }
     }
 

@@ -186,6 +186,7 @@ export class TokenManager {
   private container: Container
   private sprites:   Map<string, TokenSprite> = new Map()
   private unsub:     (() => void)[] = []
+  private gmView   = true   // GM sees hidden tokens ghosted; players don't see them at all
 
   constructor(container: Container) {
     this.container = container
@@ -199,7 +200,18 @@ export class TokenManager {
       ({ tokens, selected, cellSize }) => this.sync(tokens, selected, cellSize),
     )
 
-    this.unsub.push(unsubTokens)
+    // GM/player view — re-sync so hidden-token visibility updates
+    const unsubGmView = useVTTStore.subscribe(
+      s => s.network.isGM && !s.playerPreviewMode,
+      (gmView) => {
+        this.gmView = gmView
+        const s = useVTTStore.getState()
+        this.sync(s.tokens, s.selectedTokenIds, s.grid.cellSize)
+      },
+      { fireImmediately: true },
+    )
+
+    this.unsub.push(unsubTokens, unsubGmView)
   }
 
   private sync(
@@ -223,8 +235,9 @@ export class TokenManager {
       const isSelected = selected.has(token.id)
       const existing   = this.sprites.get(token.id)
 
-      if (!existing) {
-        const sprite = new TokenSprite(token, cellSize)
+      let sprite = existing
+      if (!sprite) {
+        sprite = new TokenSprite(token, cellSize)
         this.sprites.set(token.id, sprite)
         this.container.addChild(sprite.root)
 
@@ -233,8 +246,12 @@ export class TokenManager {
           sprite.loadImage(token.image)
         }
       } else {
-        existing.draw(token, cellSize, isSelected)
+        sprite.draw(token, cellSize, isSelected)
       }
+
+      // GM sees hidden tokens ghosted (alpha 0.4 from draw); players and
+      // GM-in-player-preview must not see them at all.
+      sprite.root.visible = token.visible || this.gmView
     }
   }
 

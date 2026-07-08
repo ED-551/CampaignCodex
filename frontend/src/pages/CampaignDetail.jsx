@@ -267,9 +267,9 @@ export default function CampaignDetail() {
             )}
           </div>
 
-          <div className="flex flex-col gap-2 items-end shrink-0">
+          <div className="flex flex-col gap-2 items-stretch sm:items-end shrink-0 w-full sm:w-auto">
             {isGM && (
-              <div className="flex items-center gap-2 bg-codex-surface border border-codex-border rounded-lg px-3 py-2">
+              <div className="flex items-center justify-between sm:justify-start gap-2 bg-codex-surface border border-codex-border rounded-lg px-3 py-2">
                 <span className="text-xs text-codex-subtext">Join code</span>
                 <span className="font-mono font-semibold text-codex-text tracking-widest text-sm">
                   {campaign.join_code}
@@ -279,7 +279,7 @@ export default function CampaignDetail() {
                 </button>
               </div>
             )}
-            <div className="flex gap-2 flex-wrap justify-end">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
               {isGM && (
                 <button
                   onClick={() => navigate(`/encounters/new?system=${campaign.game_system}&campaignId=${id}&from=campaign`)}
