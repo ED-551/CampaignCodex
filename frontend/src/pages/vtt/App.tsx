@@ -19,6 +19,7 @@ import { TokenPanel }          from './components/TokenPanel'
 import { TokenProperties }     from './components/TokenProperties'
 import { TokenContextMenu }    from './components/TokenContextMenu'
 import { PropPanel }          from './components/PropPanel'
+import { MapAlignPanel }      from './components/MapAlignPanel'
 import { PlayersPanel }        from './components/PlayersPanel'
 import { WallPanel }           from './components/WallPanel'
 import { LightPanel }          from './components/LightPanel'
@@ -62,6 +63,7 @@ export default function App({ campaignId }: AppProps) {
   const [combatOpen,   setCombatOpen]   = useState(false)
   const [sceneOpen,    setSceneOpen]    = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [alignOpen,    setAlignOpen]    = useState(false)
   const [connectError, setConnectError] = useState<string | null>(null)
   const [sessionLoading, setSessionLoading] = useState(false)
 
@@ -83,9 +85,10 @@ export default function App({ campaignId }: AppProps) {
       if (e.key === 'i' || e.key === 'I') { setCombatOpen(prev => !prev); return }
       if (e.key === 's' || e.key === 'S') { setSceneOpen(prev => !prev); return }
       if (e.key === ',') { setSettingsOpen(prev => !prev); return }
+      if (e.key === 'k' || e.key === 'K') { setAlignOpen(prev => !prev); return }
       if (e.key === 'Escape') {
         setSceneOpen(false); setAssetOpen(false)
-        setCombatOpen(false); setSettingsOpen(false)
+        setCombatOpen(false); setSettingsOpen(false); setAlignOpen(false)
         return
       }
       const tool = TOOL_KEYS[e.key]
@@ -153,6 +156,7 @@ export default function App({ campaignId }: AppProps) {
       <InitiativeTracker open={combatOpen} onClose={() => setCombatOpen(false)} />
       <SceneManager open={sceneOpen} onClose={() => setSceneOpen(false)} />
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <MapAlignPanel open={alignOpen} onClose={() => setAlignOpen(false)} />
 
       {/* Network status badge (read-only in integrated mode — shows connected/role) */}
       <RoomBadge onOpenModal={() => {}} />

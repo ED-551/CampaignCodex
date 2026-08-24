@@ -1860,3 +1860,29 @@
   transition:    background 0.15s;
 }
 .settings-danger-btn:hover { background: rgba(239,68,68,0.22); }
+
+/* ── Map alignment nudge pad ─────────────────────────────────────────────── */
+.align-pad {
+  display:        flex;
+  flex-direction: column;
+  align-items:    center;
+  gap:            4px;
+  padding-top:    4px;
+}
+.align-pad-row { display: flex; gap: 28px; }
+.align-pad button {
+  width:         32px;
+  height:        28px;
+  border-radius: 6px;
+  border:        1px solid rgba(255,255,255,0.10);
+  background:    rgba(255,255,255,0.04);
+  color:         rgba(255,255,255,0.75);
+  cursor:        pointer;
+  font-size:     13px;
+  transition:    background 0.12s, border-color 0.12s;
+}
+.align-pad button:hover {
+  background:   rgba(255,255,255,0.10);
+  border-color: rgba(255,255,255,0.20);
+  color:        #fff;
+}
