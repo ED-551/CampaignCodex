@@ -10,6 +10,12 @@
 import { create }                from 'zustand'
 import { immer }                 from 'zustand/middleware/immer'
 import { subscribeWithSelector } from 'zustand/middleware'
+import { enableMapSet }          from 'immer'
+
+// selectedTokenIds is a Set, and Immer only proxies Set/Map once this plugin
+// is enabled. Without it any mutating call — deleting a token, shift-clicking
+// to extend a selection — throws instead of updating state.
+enableMapSet()
 
 import { createViewportSlice } from './viewportSlice'
 import type { ViewportSlice }  from './viewportSlice'
