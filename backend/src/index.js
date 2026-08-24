@@ -141,9 +141,9 @@ app.use('/api/upload',           uploadRoutes)
 app.use('/api/vtt',              vttRoutes)
 
 // ─── Serve uploaded files ──────────────────────────────────────────────────────
-// Files land in /app/uploads/{userId}/{uuid}.ext inside the container (Docker volume).
-// In dev, fall back to a local ./uploads directory if UPLOAD_DIR is not set.
-const UPLOAD_DIR = process.env.UPLOAD_DIR || require('path').join(__dirname, '../uploads')
+// Files land in {UPLOAD_DIR}/{userId}/{uuid}.ext. The path is resolved in
+// src/config/uploads.js so the write side and this read side cannot drift.
+const { UPLOAD_DIR } = require('./config/uploads')
 require('fs').mkdirSync(UPLOAD_DIR, { recursive: true })
 app.use('/uploads', require('express').static(UPLOAD_DIR))
 

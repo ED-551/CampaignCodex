@@ -17,6 +17,13 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
+      // Uploaded images (maps, tokens, portraits) are served by the API.
+      // In production nginx serves this path; dev needs the same route or
+      // every uploaded image 404s against the Vite server.
+      '/uploads': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
     },
   },
 

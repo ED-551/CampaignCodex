@@ -25,6 +25,7 @@ import {
 } from '../assets/assetDb'
 import { nanoid } from '../utils/nanoid'
 import type { AssetMeta } from '../store/assetSlice'
+import { uploadImage }    from '../assets/uploadImage'
 
 interface Props {
   open:    boolean
@@ -43,6 +44,7 @@ export function AssetPanel({ open, onClose }: Props) {
   const [tab,      setTab]      = useState<Tab>('tokens')
   const [loading,  setLoading]  = useState(false)
   const [search,   setSearch]   = useState('')
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // ── Load user assets from IndexedDB on first open ─────────────────────────
@@ -62,16 +64,27 @@ export function AssetPanel({ open, onClose }: Props) {
   const handleUpload = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return
     setLoading(true)
+    setUploadError(null)
     try {
       for (const file of Array.from(files)) {
         if (!file.type.startsWith('image/')) continue
-        const dataUrl          = await fileToDataUrl(file)
+
+        // Send the image to the server and keep the URL. Anything placed on
+        // the map has to be fetchable by every player, which a data URL held
+        // in this browser's IndexedDB never is.
+        const isBackground = tab === 'backgrounds'
+        const { url } = await uploadImage(file, isBackground ? 'vtt_map' : 'vtt_token')
+
+        // The thumbnail stays local — it is only ever shown in this panel,
+        // so there is no reason to make the table download it.
+        const dataUrl         = await fileToDataUrl(file)
         const { thumb, w, h } = await makeThumbnail(dataUrl)
+
         const record: AssetRecord = {
           id:        nanoid(),
           name:      file.name.replace(/\.[^.]+$/, ''),
-          type:      tab === 'backgrounds' ? 'background' : 'token',
-          dataUrl,
+          type:      isBackground ? 'background' : 'token',
+          dataUrl:   url,
           thumbnail: thumb,
           width:     w,
           height:    h,
@@ -85,7 +98,7 @@ export function AssetPanel({ open, onClose }: Props) {
         })
       }
     } catch (err) {
-      console.error('Asset upload failed:', err)
+      setUploadError(err instanceof Error ? err.message : 'Upload failed.')
     } finally {
       setLoading(false)
     }
@@ -170,6 +183,13 @@ export function AssetPanel({ open, onClose }: Props) {
             onChange={e => handleUpload(e.target.files)}
           />
         </div>
+
+        {uploadError && (
+          <div className="mx-3 mb-2 flex items-start gap-2 rounded border border-red-500/40 bg-red-950/60 px-2.5 py-1.5 text-[11px] text-red-200">
+            <span className="flex-1">{uploadError}</span>
+            <button onClick={() => setUploadError(null)} className="text-red-300/70 hover:text-red-100">✕</button>
+          </div>
+        )}
 
         {/* ── Grid ────────────────────────────────────────────────────── */}
         <div className="asset-grid">

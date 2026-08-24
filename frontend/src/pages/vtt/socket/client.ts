@@ -12,7 +12,7 @@
 import { io, Socket }   from 'socket.io-client'
 import { useVTTStore }  from '../store'
 import type { VTTMember } from '../store/networkSlice'
-import type { FogState }  from '../types'
+import type { FogState, GridConfig, Scene } from '../types'
 
 // ─── Suppress-emit guard ──────────────────────────────────────────────────────
 
@@ -229,17 +229,27 @@ class VTTSocketClient {
       useVTTStore.subscribe(s => s.lights,   scheduleSync),
       useVTTStore.subscribe(s => s.drawings, scheduleSync),
       useVTTStore.subscribe(s => s.fog,      scheduleSync),
+      useVTTStore.subscribe(s => s.grid,     scheduleSync),
+      useVTTStore.subscribe(s => s.getActiveScene().background,   scheduleSync),
+      useVTTStore.subscribe(s => s.getActiveScene().ambientLight, scheduleSync),
     )
   }
 
   sendSceneSyncNow(): void {
-    const s = useVTTStore.getState()
+    const s     = useVTTStore.getState()
+    const scene = s.getActiveScene()
     this.emit('scene_sync', {
       tokens:   s.tokens,
       walls:    s.walls,
       lights:   s.lights,
       drawings: s.drawings,
       fog:      s.fog,
+      // Scene-level visuals. Without these the map and the lighting level stay
+      // on the GM's machine: players see an empty grid in full daylight, and
+      // the GM loses both on reload.
+      grid:         s.grid,
+      background:   scene.background,
+      ambientLight: scene.ambientLight,
     })
   }
 }
@@ -291,4 +301,16 @@ function applySceneSync(data: unknown): void {
     if (fog.clearedCells) store.fogRevealCells(Object.keys(fog.clearedCells))
     if (fog.revealAll)    store.fogRevealAll()
   }
+
+  if (d.grid && typeof d.grid === 'object') {
+    store.setGrid(d.grid as Partial<GridConfig>)
+  }
+
+  // background and ambientLight live on the scene, not the top-level store.
+  // `background` is deliberately applied even when null so clearing the map
+  // propagates; `in` distinguishes "not sent" from "sent as null".
+  const sceneChanges: Partial<Scene> = {}
+  if ('background' in d)   sceneChanges.background   = d.background as Scene['background']
+  if (typeof d.ambientLight === 'number') sceneChanges.ambientLight = d.ambientLight
+  if (Object.keys(sceneChanges).length > 0) store.updateActiveScene(sceneChanges)
 }

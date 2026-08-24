@@ -17,7 +17,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import 'pixi.js/unsafe-eval'
 import { Application }        from 'pixi.js'
 import { VTTEngine }          from './VTTEngine'
-import { fileToDataURL }      from './background'
+import { uploadImage }        from '../assets/uploadImage'
 import { pixelToFeet }        from './grid'
 import { nanoid }             from '../utils/nanoid'
 import { useVTTStore }        from '../store'
@@ -32,6 +32,8 @@ export function VTTCanvas() {
 
   const [cursorFeet, setCursorFeet] = useState<{ x: number; y: number } | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
+  const [uploading,  setUploading]  = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   const scale = useVTTStore(s => s.viewport.scale)
 
@@ -172,17 +174,30 @@ export function VTTCanvas() {
       return
     }
 
-    // ── Path 2: OS filesystem image drag → set as background ───────────────
+    // ── Path 2: OS filesystem image drag → set as the scene map ────────────
     const file = [...e.dataTransfer.files].find(f => f.type.startsWith('image/'))
     if (!file) return
 
-    const imageUrl = await fileToDataURL(file)
-    const store    = useVTTStore.getState()
-    const scene    = store.getActiveScene()
-    store.loadScene({
-      ...scene,
-      background: { imageUrl, offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, locked: false },
-    })
+    const store = useVTTStore.getState()
+    if (!store.network.isGM) {
+      setUploadError('Only the GM can set the map.')
+      return
+    }
+
+    setUploading(true)
+    setUploadError(null)
+    try {
+      // Upload rather than embed: a data URL here would never reach the
+      // players and would be re-sent in full on every later scene change.
+      const { url } = await uploadImage(file, 'vtt_map')
+      store.updateActiveScene({
+        background: { imageUrl: url, offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, locked: false },
+      })
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed.')
+    } finally {
+      setUploading(false)
+    }
   }, [])
 
   return (
@@ -200,6 +215,24 @@ export function VTTCanvas() {
       {isDragOver && (
         <div className="drop-overlay">
           <div className="drop-label">Drop map image here</div>
+        </div>
+      )}
+
+      {uploading && (
+        <div className="fixed left-1/2 top-4 z-[300] -translate-x-1/2 rounded-lg border border-white/10 bg-black/80 px-3 py-1.5 text-xs text-white/80 backdrop-blur-sm">
+          Uploading map…
+        </div>
+      )}
+
+      {uploadError && (
+        <div className="fixed left-1/2 top-4 z-[300] flex -translate-x-1/2 items-center gap-3 rounded-lg border border-red-500/40 bg-red-950/85 px-3 py-1.5 text-xs text-red-200 backdrop-blur-sm">
+          <span>{uploadError}</span>
+          <button
+            onClick={() => setUploadError(null)}
+            className="text-red-300/70 hover:text-red-100"
+          >
+            ✕
+          </button>
         </div>
       )}
 

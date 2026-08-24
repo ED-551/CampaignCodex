@@ -8,7 +8,7 @@ const { requireAuth } = require('../middleware/auth')
 
 const router = express.Router()
 
-const UPLOAD_DIR    = process.env.UPLOAD_DIR || '/app/uploads'
+const { UPLOAD_DIR } = require('../config/uploads')
 const MAX_FILE_BYTES = 10 * 1024 * 1024   // 10 MB per file
 const QUOTA_BYTES    = 1024 * 1024 * 1024 // 1 GB per user
 const ALLOWED_TYPES  = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
