@@ -207,29 +207,39 @@ export class FogManager {
     // The mask clips the fog overlay: fog renders where the mask is WHITE and
     // is hidden where the mask is BLACK.
     this.maskGraphics.clear()
-    // Start fully white (everything fogged)
-    this.maskGraphics.rect(0, 0, width, height).fill({ color: 0xffffff, alpha: 1 })
 
     if (fog.revealAll) {
-      // Short-circuit: everything cleared — no fog anywhere
+      // Short-circuit: nothing is fogged.
       this.maskGraphics.rect(0, 0, width, height).fill({ color: 0x000000, alpha: 1 })
-    } else {
-      // Punch black holes for each cleared cell (fog hidden there)
-      const cellKeys = Object.keys(fog.clearedCells)
-      for (const key of cellKeys) {
+    } else if (fog.mode === 'explorer') {
+      // Explorer: everything starts fogged and tokens carve out cells as they
+      // move. Cleared cells are permanent.
+      this.maskGraphics.rect(0, 0, width, height).fill({ color: 0xffffff, alpha: 1 })
+      for (const key of Object.keys(fog.clearedCells)) {
         const [col, row] = key.split(',').map(Number)
-        // World-space top-left of cell
-        const wx = col * cs
-        const wy = row * cs
-        // Screen-space position and size
-        const sx = wx * vp.scale + vp.x
-        const sy = wy * vp.scale + vp.y
+        const sx = (col * cs) * vp.scale + vp.x
+        const sy = (row * cs) * vp.scale + vp.y
         const sw = cs * vp.scale
-
-        // Only draw cells that overlap the viewport (culling)
+        // Skip cells outside the viewport
         if (sx + sw < 0 || sy + sw < 0 || sx > width || sy > height) continue
-
         this.maskGraphics.rect(sx, sy, sw, sw).fill({ color: 0x000000, alpha: 1 })
+      }
+    } else {
+      // Manual: nothing is fogged until the GM says so. Adds are painted
+      // first, then cuts on top, so a cut always wins no matter when it was
+      // drawn.
+      this.maskGraphics.rect(0, 0, width, height).fill({ color: 0x000000, alpha: 1 })
+
+      if (fog.fillAll) {
+        this.maskGraphics.rect(0, 0, width, height).fill({ color: 0xffffff, alpha: 1 })
+      }
+      for (const shape of fog.shapes) {
+        if (shape.cut) continue
+        this.fillShape(shape.points, 0xffffff, vp)
+      }
+      for (const shape of fog.shapes) {
+        if (!shape.cut) continue
+        this.fillShape(shape.points, 0x000000, vp)
       }
     }
 
@@ -243,16 +253,32 @@ export class FogManager {
     this.darkOverlay.clear()
 
     if (this.isGM) {
-      // GM sees a faint ghost of the fog for reference
+      // The GM sees through the fog but still needs to know where it is, so
+      // use a light blue wash rather than more darkness — it stays legible
+      // over both dark dungeon maps and bright outdoor ones.
       this.darkOverlay
         .rect(0, 0, width, height)
-        .fill({ color: 0x111133, alpha: 0.15 })
+        .fill({ color: 0x6f8cd0, alpha: 0.38 })
     } else {
       // Player sees full fog at configured opacity
       this.darkOverlay
         .rect(0, 0, width, height)
         .fill({ color: parseInt(fog.color.slice(1), 16), alpha: fog.opacity })
     }
+  }
+
+  /** Fill a world-space polygon into the mask, converted to screen space. */
+  private fillShape(
+    points: number[],
+    color:  number,
+    vp:     { x: number; y: number; scale: number },
+  ): void {
+    if (points.length < 6) return   // need at least three points
+    const screen: number[] = []
+    for (let i = 0; i < points.length; i += 2) {
+      screen.push(points[i] * vp.scale + vp.x, points[i + 1] * vp.scale + vp.y)
+    }
+    this.maskGraphics.poly(screen).fill({ color, alpha: 1 })
   }
 
   resize(width: number, height: number): void {

@@ -170,6 +170,25 @@ export interface LightSource {
 
 export type FogMode = 'manual' | 'explorer'
 
+/** Shape tools available while painting fog by hand. */
+export type FogShapeType = 'rect' | 'polygon' | 'freehand'
+
+/**
+ * One piece of hand-placed fog geometry.
+ *
+ * Shapes either add fog or cut it away. Cuts always win regardless of the
+ * order they were drawn, so a GM can lay a blanket of fog and then carve out
+ * rooms as the party discovers them — and re-fog by deleting the cut.
+ */
+export interface FogShape {
+  id:     string
+  type:   FogShapeType
+  /** Closed polygon in world space, flat [x0,y0,x1,y1,…]. */
+  points: number[]
+  /** true = removes fog; false = adds fog. */
+  cut:    boolean
+}
+
 export interface FogState {
   mode:    FogMode
   /** Opacity of the fog overlay, 0–1. Typically 0.9. */
@@ -186,11 +205,18 @@ export interface FogState {
    * The set of grid cells where fog has been lifted.
    * Keys are "col,row" strings (integer grid coords in world space).
    *
-   * Manual mode: GM brush adds / removes cells from here.
    * Explorer mode: accumulated automatically as tokens move; cells are only
    * ever added, never removed (unless GM resets exploration).
    */
   clearedCells: Record<string, true>
+  /** Hand-placed fog geometry. Manual mode only. */
+  shapes: FogShape[]
+  /**
+   * Blanket of fog over the whole canvas, which cut shapes carve into.
+   * Stored as a flag rather than a giant rectangle so it stays correct at any
+   * pan or zoom — a player can never scroll far enough to find its edge.
+   */
+  fillAll: boolean
 }
 
 // ─── Drawing ──────────────────────────────────────────────────────────────────

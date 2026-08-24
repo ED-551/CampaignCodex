@@ -4,17 +4,24 @@
  * Appears when activeTool === 'fog'.
  *
  * Module-level exports (read by FogTool synchronously):
- *   fogBrushMode   — 'reveal' | 'hide'   (eraser vs painter)
- *   fogBrushRadius — number               (radius in grid cells)
+ *   fogShapeMode — which shape the next drag draws
+ *   fogCutMode   — whether that shape reveals (true) or covers (false)
  */
 
 import { useState }    from 'react'
 import { useVTTStore } from '../store'
+import type { FogShapeType } from '../types'
 
 // ── Module-level state read by FogTool ────────────────────────────────────────
 
-export let fogBrushMode:   'reveal' | 'hide' = 'reveal'
-export let fogBrushRadius: number             = 2
+export let fogShapeMode: FogShapeType = 'rect'
+export let fogCutMode:   boolean      = true
+
+const SHAPES: { value: FogShapeType; label: string; icon: string; hint: string }[] = [
+  { value: 'rect',     label: 'Rect',    icon: '▭', hint: 'Drag a rectangle' },
+  { value: 'polygon',  label: 'Poly',    icon: '⬠', hint: 'Click points, double-click to close' },
+  { value: 'freehand', label: 'Lasso',   icon: '✎', hint: 'Drag a freehand area' },
+]
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -28,21 +35,23 @@ export function FogPanel() {
   const fogRevealAll     = useVTTStore(s => s.fogRevealAll)
   const fogHideAll       = useVTTStore(s => s.fogHideAll)
   const fogResetExplored = useVTTStore(s => s.fogResetExplored)
+  const clearFogShapes   = useVTTStore(s => s.clearFogShapes)
+  const setFogFillAll    = useVTTStore(s => s.setFogFillAll)
   const clearedCount     = Object.keys(fog.clearedCells).length
 
-  const [localBrushMode,   setLocalBrushMode]   = useState<'reveal' | 'hide'>('reveal')
-  const [localBrushRadius, setLocalBrushRadius] = useState<number>(2)
+  const [localShape, setLocalShape] = useState<FogShapeType>(fogShapeMode)
+  const [localCut,   setLocalCut]   = useState<boolean>(fogCutMode)
 
   if (activeTool !== 'fog') return null
 
-  function selectBrushMode(mode: 'reveal' | 'hide') {
-    setLocalBrushMode(mode)
-    fogBrushMode = mode
+  function selectShape(shape: FogShapeType) {
+    setLocalShape(shape)
+    fogShapeMode = shape
   }
 
-  function selectBrushRadius(r: number) {
-    setLocalBrushRadius(r)
-    fogBrushRadius = r
+  function selectCut(cut: boolean) {
+    setLocalCut(cut)
+    fogCutMode = cut
   }
 
   return (
@@ -90,42 +99,52 @@ export function FogPanel() {
         </div>
       </div>
 
-      {/* Brush controls — only in manual mode */}
+      {/* Shape tools — only in manual mode */}
       {fog.mode === 'manual' && (
-        <div className="panel-section">
-          <div className="prop-section-label">Brush</div>
-          <div className="fog-brush-row">
-            <button
-              className={`fog-brush-btn ${localBrushMode === 'reveal' ? 'active reveal' : ''}`}
-              onClick={() => selectBrushMode('reveal')}
-              title="Erase fog (reveal area)"
-            >
-              ◌ Reveal
-            </button>
-            <button
-              className={`fog-brush-btn ${localBrushMode === 'hide' ? 'active hide' : ''}`}
-              onClick={() => selectBrushMode('hide')}
-              title="Paint fog (hide area)"
-            >
-              ● Hide
-            </button>
+        <>
+          <div className="panel-section">
+            <div className="prop-section-label">Shape</div>
+            <div className="fog-brush-row">
+              {SHAPES.map(s => (
+                <button
+                  key={s.value}
+                  className={`fog-brush-btn ${localShape === s.value ? 'active reveal' : ''}`}
+                  onClick={() => selectShape(s.value)}
+                  title={s.hint}
+                >
+                  {s.icon} {s.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="prop-row" style={{ gap: 8, paddingTop: 6 }}>
-            <span className="prop-label" style={{ width: 50, fontSize: 10 }}>
-              Size {localBrushRadius}
-            </span>
-            <input
-              type="range"
-              min={0.5}
-              max={6}
-              step={0.5}
-              value={localBrushRadius}
-              className="ambient-slider"
-              onChange={e => selectBrushRadius(parseFloat(e.target.value))}
-            />
+          <div className="panel-section">
+            <div className="prop-section-label">Drawing will</div>
+            <div className="fog-brush-row">
+              <button
+                className={`fog-brush-btn ${localCut ? 'active reveal' : ''}`}
+                onClick={() => selectCut(true)}
+                title="Carve a hole in the fog so players can see this area"
+              >
+                ◌ Reveal
+              </button>
+              <button
+                className={`fog-brush-btn ${!localCut ? 'active hide' : ''}`}
+                onClick={() => selectCut(false)}
+                title="Cover this area with fog"
+              >
+                ● Add fog
+              </button>
+            </div>
+            <p className="panel-hint" style={{ paddingTop: 6 }}>
+              {localShape === 'polygon'
+                ? 'Click to add points · click the first point, double-click, or press Enter to close · Esc cancels'
+                : localShape === 'rect'
+                  ? 'Drag a rectangle'
+                  : 'Drag to lasso an area'}
+            </p>
           </div>
-        </div>
+        </>
       )}
 
       {/* Opacity */}
@@ -158,13 +177,32 @@ export function FogPanel() {
           >
             ☀ Reveal All
           </button>
-          <button
-            className="fog-action-btn hide"
-            onClick={fogHideAll}
-            title="Cover everything with fog"
-          >
-            🌑 Hide All
-          </button>
+          {fog.mode === 'manual' ? (
+            <>
+              <button
+                className="fog-action-btn hide"
+                onClick={() => { setFogFillAll(true); setFogEnabled(true) }}
+                title="Blanket the whole canvas in fog, then carve out rooms with Reveal"
+              >
+                🌑 Fill Fog
+              </button>
+              <button
+                className="fog-action-btn reset"
+                onClick={clearFogShapes}
+                title="Delete every fog shape and lift the blanket"
+              >
+                ↺ Clear Fog
+              </button>
+            </>
+          ) : (
+            <button
+              className="fog-action-btn hide"
+              onClick={fogHideAll}
+              title="Cover everything with fog"
+            >
+              🌑 Hide All
+            </button>
+          )}
           {fog.mode === 'explorer' && (
             <button
               className="fog-action-btn reset"
@@ -181,8 +219,10 @@ export function FogPanel() {
       <div className="panel-section fog-stats">
         <span>
           {fog.revealAll
-            ? 'All cells revealed'
-            : `${clearedCount.toLocaleString()} cells cleared`}
+            ? 'All fog revealed'
+            : fog.mode === 'manual'
+              ? `${fog.shapes.length} shape${fog.shapes.length === 1 ? '' : 's'}${fog.fillAll ? ' · filled' : ''}`
+              : `${clearedCount.toLocaleString()} cells explored`}
         </span>
       </div>
     </div>

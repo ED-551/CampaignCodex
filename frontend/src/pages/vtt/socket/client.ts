@@ -12,6 +12,7 @@
 import { io, Socket }   from 'socket.io-client'
 import { useVTTStore }  from '../store'
 import type { VTTMember } from '../store/networkSlice'
+import type { FogState }  from '../types'
 
 // ─── Suppress-emit guard ──────────────────────────────────────────────────────
 
@@ -275,7 +276,18 @@ function applySceneSync(data: unknown): void {
     for (const dr of Object.values(received)) store.addDrawing(dr)
   }
   if (d.fog && typeof d.fog === 'object') {
-    const fog = d.fog as { clearedCells?: Record<string, true>; revealAll?: boolean }
+    const fog = d.fog as Partial<FogState>
+    // Replace the shape set outright rather than merging: deleting a reveal
+    // has to put the fog back on every client, which an additive apply
+    // would never do.
+    store.clearFogShapes()
+    for (const shape of fog.shapes ?? []) store.addFogShape(shape)
+    store.setFogFillAll(fog.fillAll ?? false)
+
+    if (fog.mode)                       store.setFogMode(fog.mode)
+    if (typeof fog.enabled === 'boolean') store.setFogEnabled(fog.enabled)
+    if (typeof fog.opacity === 'number')  store.setFogOpacity(fog.opacity)
+
     if (fog.clearedCells) store.fogRevealCells(Object.keys(fog.clearedCells))
     if (fog.revealAll)    store.fogRevealAll()
   }

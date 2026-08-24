@@ -14,9 +14,10 @@
  *
  * Manual mode
  * ───────────
- * All cells start invisible (fog covers everything). The GM uses the fog brush
- * to erase fog (reveal) or repaint fog (hide) over individual cells. Revealed
- * cells are stored in clearedCells.
+ * Fog is drawn as geometry, not cells. The GM lays down shapes (rectangle,
+ * polygon, freehand) that either add fog or cut it away, plus an optional
+ * `fillAll` blanket over the whole canvas. Cuts always win over adds, so the
+ * usual workflow is fill everything and carve out rooms as they are explored.
  *
  * Explorer mode
  * ─────────────
@@ -27,7 +28,7 @@
 
 import type { StateCreator } from 'zustand'
 import type { VTTStore }    from './index'
-import type { FogState, FogMode } from '../types'
+import type { FogState, FogMode, FogShape } from '../types'
 
 export const DEFAULT_FOG: FogState = {
   mode:         'manual',
@@ -36,6 +37,8 @@ export const DEFAULT_FOG: FogState = {
   color:        '#000000',
   revealAll:    false,
   clearedCells: {},
+  shapes:       [],
+  fillAll:      false,
 }
 
 export interface FogSlice {
@@ -57,6 +60,16 @@ export interface FogSlice {
   fogHideAll:     () => void
   /** Clear only explorer accumulation (same as fogHideAll for explorer mode). */
   fogResetExplored: () => void
+
+  // ── Manual-mode shapes ──────────────────────────────────────────────────────
+  addFogShape:    (shape: FogShape) => void
+  deleteFogShape: (id: string) => void
+  /** Flip a shape between adding and cutting fog. */
+  toggleFogShapeCut: (id: string) => void
+  /** Remove every hand-placed shape and lift the blanket. */
+  clearFogShapes: () => void
+  /** Cover the whole canvas in fog for cut shapes to carve into. */
+  setFogFillAll:  (fill: boolean) => void
 }
 
 export const createFogSlice: StateCreator<
@@ -103,5 +116,27 @@ export const createFogSlice: StateCreator<
   fogResetExplored: () => set(state => {
     state.fog.revealAll    = false
     state.fog.clearedCells = {}
+  }),
+
+  addFogShape: (shape) => set(state => {
+    state.fog.shapes.push(shape)
+  }),
+
+  deleteFogShape: (id) => set(state => {
+    state.fog.shapes = state.fog.shapes.filter(s => s.id !== id)
+  }),
+
+  toggleFogShapeCut: (id) => set(state => {
+    const shape = state.fog.shapes.find(s => s.id === id)
+    if (shape) shape.cut = !shape.cut
+  }),
+
+  clearFogShapes: () => set(state => {
+    state.fog.shapes  = []
+    state.fog.fillAll = false
+  }),
+
+  setFogFillAll: (fill) => set(state => {
+    state.fog.fillAll = fill
   }),
 })
