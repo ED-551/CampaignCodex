@@ -37,6 +37,7 @@ import { Container, Graphics, Text, TextStyle } from 'pixi.js'
 import { InteractionManager }                    from './interactionManager'
 import { useVTTStore }                           from '../store'
 import { nanoid }                                from '../utils/nanoid'
+import { measurePath, formatDistance }           from './measure'
 import {
   drawSubTool, drawColor, drawWidth, drawOpacity, drawFill, drawFontSize,
 } from '../components/DrawingPanel'
@@ -114,17 +115,6 @@ function pointInConvexPoly(pt: Point, poly: Point[]): boolean {
   return inside
 }
 
-
-/** 5e Chebyshev (diagonal = 5ft same as cardinal). */
-function chebyshevFt(pts: Point[], cellSize: number, cellFeet: number): number {
-  let dist = 0
-  for (let i = 1; i < pts.length; i++) {
-    const dc = Math.abs(pts[i].x - pts[i-1].x) / cellSize
-    const dr = Math.abs(pts[i].y - pts[i-1].y) / cellSize
-    dist += Math.max(dc, dr) * cellFeet
-  }
-  return dist
-}
 
 // ─── Preview drawing helpers (screen space via viewport transform) ─────────────
 
@@ -341,10 +331,10 @@ export class DrawingTool {
       this.previewG.circle(sp.x, sp.y, 4).fill({ color: 0xfbbf24, alpha: 0.9 })
     }
 
-    // Distance label near endpoint
-    const totalFt = chebyshevFt(pts, grid.cellSize, grid.cellFeet)
+    // Distance label near endpoint — uses the scene's measurement rule
+    const totalFt = measurePath(pts, grid.cellSize, grid.cellFeet, grid.measurement)
     const last    = toScreen(pts[pts.length - 1])
-    this.labelT.text    = `${Math.round(totalFt)}ft`
+    this.labelT.text    = formatDistance(totalFt)
     this.labelT.x       = last.x + 8
     this.labelT.y       = last.y - 16
     this.labelT.visible = true

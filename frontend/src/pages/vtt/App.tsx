@@ -17,6 +17,8 @@ import { VTTCanvas }           from './canvas/VTTCanvas'
 import { Toolbar }             from './components/Toolbar'
 import { TokenPanel }          from './components/TokenPanel'
 import { TokenProperties }     from './components/TokenProperties'
+import { TokenContextMenu }    from './components/TokenContextMenu'
+import { PlayersPanel }        from './components/PlayersPanel'
 import { WallPanel }           from './components/WallPanel'
 import { LightPanel }          from './components/LightPanel'
 import { FogPanel }            from './components/FogPanel'
@@ -143,6 +145,7 @@ export default function App({ campaignId }: AppProps) {
       <FogPanel />
       <DrawingPanel />
       <TokenProperties />
+      <TokenContextMenu />
       <AssetPanel open={assetOpen} onClose={() => setAssetOpen(false)} />
       <InitiativeTracker open={combatOpen} onClose={() => setCombatOpen(false)} />
       <SceneManager open={sceneOpen} onClose={() => setSceneOpen(false)} />
@@ -150,6 +153,7 @@ export default function App({ campaignId }: AppProps) {
 
       {/* Network status badge (read-only in integrated mode — shows connected/role) */}
       <RoomBadge onOpenModal={() => {}} />
+      <PlayersPanel />
 
       {/* GM-only: Go Live / End Session + Player Preview controls */}
       {isGM && (

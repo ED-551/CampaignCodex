@@ -23,6 +23,9 @@ export interface Viewport {
 
 export type GridType = 'square' | 'hex-flat' | 'hex-pointy' | 'gridless'
 
+/** How distances are counted on the grid. See canvas/measure.ts. */
+export type MeasurementType = 'chessboard' | 'alternating' | 'euclidean' | 'manhattan'
+
 export interface GridConfig {
   type:       GridType
   cellSize:   number   // pixels per cell at scale 1.0
@@ -31,6 +34,8 @@ export interface GridConfig {
   opacity:    number   // 0–1
   visible:    boolean
   snapToGrid: boolean
+  /** Distance-counting rule for the measure tool and movement readouts. */
+  measurement: MeasurementType
 }
 
 // ─── Background ───────────────────────────────────────────────────────────────

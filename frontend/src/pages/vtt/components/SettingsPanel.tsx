@@ -6,7 +6,8 @@
 
 import { useState }    from 'react'
 import { useVTTStore } from '../store'
-import type { GridType, FogMode } from '../types'
+import type { GridType, FogMode, MeasurementType } from '../types'
+import { MEASUREMENT_LABELS } from '../canvas/measure'
 
 interface Props {
   open:    boolean
@@ -97,6 +98,19 @@ export function SettingsPanel({ open, onClose }: Props) {
                 onChange={e => setGrid({ cellFeet: +e.target.value })}
                 className="settings-number"
               />
+            </div>
+
+            <div className="settings-row">
+              <label className="settings-label">Measure distance by</label>
+              <select
+                value={grid.measurement}
+                onChange={e => setGrid({ measurement: e.target.value as MeasurementType })}
+                className="settings-select"
+              >
+                {(Object.keys(MEASUREMENT_LABELS) as MeasurementType[]).map(m => (
+                  <option key={m} value={m}>{MEASUREMENT_LABELS[m]}</option>
+                ))}
+              </select>
             </div>
 
             <div className="settings-row">

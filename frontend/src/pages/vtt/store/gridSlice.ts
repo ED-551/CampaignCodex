@@ -25,6 +25,7 @@ export const DEFAULT_GRID: GridConfig = {
   opacity:    0.5,
   visible:    true,
   snapToGrid: true,
+  measurement: 'chessboard',   // D&D 5e default
 }
 
 export const createGridSlice: StateCreator<

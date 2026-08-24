@@ -11,6 +11,7 @@
 
 import { io, Socket }   from 'socket.io-client'
 import { useVTTStore }  from '../store'
+import type { VTTMember } from '../store/networkSlice'
 
 // ─── Suppress-emit guard ──────────────────────────────────────────────────────
 
@@ -69,6 +70,7 @@ class VTTSocketClient {
         isGM?: boolean
         campaignName?: string
         scene?: { id: string; name: string; sceneData: Record<string, unknown> }
+        members?: VTTMember[]
         error?: string
       }) => {
         if (!res.ok) {
@@ -83,6 +85,7 @@ class VTTSocketClient {
           gmToken:    null,
           serverUrl:  '',
         })
+        useVTTStore.getState().setMembers(res.members ?? [])
 
         // Apply initial scene state if provided
         if (res.scene?.sceneData && Object.keys(res.scene.sceneData).length > 0) {
@@ -181,6 +184,13 @@ class VTTSocketClient {
 
     s.on('vtt:session_started', () => useVTTStore.getState().setSessionActive(true))
     s.on('vtt:session_ended',   () => useVTTStore.getState().setSessionActive(false))
+
+    s.on('vtt:member_joined', (d: { userId: string; username: string; isGM: boolean }) => {
+      useVTTStore.getState().addMember({ id: d.userId, username: d.username, isGM: d.isGM })
+    })
+    s.on('vtt:member_left', (d: { userId: string }) => {
+      useVTTStore.getState().removeMember(d.userId)
+    })
 
     s.on('connect',    () => useVTTStore.getState().setNetworkInfo({ connected: true }))
     s.on('disconnect', () => useVTTStore.getState().setNetworkInfo({ connected: false }))

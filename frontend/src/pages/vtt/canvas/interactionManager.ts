@@ -13,10 +13,11 @@
  * It does NOT import React — it is purely imperative.
  */
 
-import { Graphics, Container }   from 'pixi.js'
+import { Graphics, Container, Text } from 'pixi.js'
 import { useVTTStore }            from '../store'
 import { snapToCellCenter }       from './grid'
 import { nanoid }                 from '../utils/nanoid'
+import { measureBetween, formatDistance } from './measure'
 import type { Token, Point }      from '../types'
 
 interface ToolHandler {
@@ -28,6 +29,8 @@ interface ToolHandler {
 export class InteractionManager {
   private canvas:     HTMLCanvasElement
   private boxRect:    Graphics           // box-select rectangle drawn in UI layer
+  private moveRuler:  Graphics           // movement ruler shown while dragging a token
+  private moveLabel:  Text               // distance readout for the movement ruler
 
   // Drag state
   private isDragging      = false
@@ -45,24 +48,55 @@ export class InteractionManager {
     pointermove: (e: PointerEvent) => void
     pointerup:   (e: PointerEvent) => void
     keydown:     (e: KeyboardEvent) => void
+    contextmenu: (e: MouseEvent) => void
   }
 
   constructor(canvas: HTMLCanvasElement, uiLayer: Container) {
     this.canvas  = canvas
     this.boxRect = new Graphics()
-    uiLayer.addChild(this.boxRect)
+    this.moveRuler = new Graphics()
+    this.moveLabel = new Text({
+      text: '',
+      style: {
+        fontSize: 13,
+        fill: 0xfbbf24,
+        fontWeight: 'bold',
+        dropShadow: { distance: 1, blur: 3, alpha: 0.9, color: 0x000000 },
+      },
+    })
+    this.moveLabel.visible = false
+    uiLayer.addChild(this.boxRect, this.moveRuler, this.moveLabel)
 
     this.handlers = {
       pointerdown: this.onPointerDown.bind(this),
       pointermove: this.onPointerMove.bind(this),
       pointerup:   this.onPointerUp.bind(this),
       keydown:     this.onKeyDown.bind(this),
+      contextmenu: this.onContextMenu.bind(this),
     }
 
     canvas.addEventListener('pointerdown', this.handlers.pointerdown)
+    canvas.addEventListener('contextmenu', this.handlers.contextmenu)
     window.addEventListener('pointermove', this.handlers.pointermove)
     window.addEventListener('pointerup',   this.handlers.pointerup)
     window.addEventListener('keydown',     this.handlers.keydown)
+  }
+
+  /**
+   * Right-click a token to select it, which reveals its context menu.
+   * Suppresses the browser menu over the canvas either way.
+   */
+  private onContextMenu(e: MouseEvent): void {
+    e.preventDefault()
+    const world = this.screenToWorld(e.clientX, e.clientY)
+    const hit   = this.hitTestToken(world.x, world.y)
+    const store = useVTTStore.getState()
+    if (hit) {
+      store.setTool('select')
+      store.selectToken(hit.id)
+    } else {
+      store.clearSelection()
+    }
   }
 
   /** Let tool-specific classes register their own pointer handlers. */
@@ -89,13 +123,17 @@ export class InteractionManager {
 
   /** Returns the topmost token at world point, or null. */
   private hitTestToken(wx: number, wy: number): Token | null {
-    const { tokens, grid } = useVTTStore.getState()
+    const state = useVTTStore.getState()
+    const { tokens, grid } = state
     const cs               = grid.cellSize
+    // The GM must be able to grab hidden tokens — otherwise hiding one would
+    // make it unreachable. Players can only hit tokens they can actually see.
+    const gmView = state.network.isGM && !state.playerPreviewMode
 
     // Iterate in reverse so topmost (last added) wins
     const all = Object.values(tokens).reverse()
     for (const token of all) {
-      if (!token.visible) continue
+      if (!token.visible && !gmView) continue
       const half = (token.widthCells * cs) / 2
       if (
         wx >= token.x - half && wx <= token.x + half &&
@@ -297,6 +335,46 @@ export class InteractionManager {
       // moveToken is intentionally not wrapped in history (too many events during drag)
       useVTTStore.getState().moveToken(id, nx, ny)
     }
+
+    this.drawMovementRuler()
+  }
+
+  /**
+   * Draw a ruler from where the dragged token started to where it is now,
+   * labelled with the distance under the scene's measurement rule. This is
+   * the readout players reach for constantly ("can I get there this turn?").
+   */
+  private drawMovementRuler(): void {
+    const state = useVTTStore.getState()
+    const lead  = this.dragTokenIds[0]
+    const from  = lead ? this.dragStartTokenPositions.get(lead) : undefined
+    const token = lead ? state.tokens[lead] : undefined
+
+    this.moveRuler.clear()
+    if (!from || !token) { this.moveLabel.visible = false; return }
+
+    const { cellSize, cellFeet, measurement } = state.grid
+    const feet = measureBetween(from, token, cellSize, cellFeet, measurement)
+    if (feet <= 0) { this.moveLabel.visible = false; return }
+
+    const vp = state.viewport
+    const a  = { x: from.x  * vp.scale + vp.x, y: from.y  * vp.scale + vp.y }
+    const b  = { x: token.x * vp.scale + vp.x, y: token.y * vp.scale + vp.y }
+
+    this.moveRuler
+      .moveTo(a.x, a.y).lineTo(b.x, b.y)
+      .stroke({ color: 0xfbbf24, width: 2, alpha: 0.85 })
+    this.moveRuler.circle(a.x, a.y, 4).fill({ color: 0xfbbf24, alpha: 0.9 })
+
+    this.moveLabel.text    = formatDistance(feet)
+    this.moveLabel.x       = b.x + 10
+    this.moveLabel.y       = b.y - 20
+    this.moveLabel.visible = true
+  }
+
+  private clearMovementRuler(): void {
+    this.moveRuler.clear()
+    this.moveLabel.visible = false
   }
 
   private finishDrag(): void {
@@ -329,6 +407,7 @@ export class InteractionManager {
     this.isDragging   = false
     this.dragTokenIds = []
     this.dragStartTokenPositions.clear()
+    this.clearMovementRuler()
   }
 
   // ─── Box select helpers ────────────────────────────────────────────────────────
@@ -400,9 +479,12 @@ export class InteractionManager {
 
   destroy(): void {
     this.canvas.removeEventListener('pointerdown', this.handlers.pointerdown)
+    this.canvas.removeEventListener('contextmenu', this.handlers.contextmenu)
     window.removeEventListener('pointermove',  this.handlers.pointermove)
     window.removeEventListener('pointerup',    this.handlers.pointerup)
     window.removeEventListener('keydown',      this.handlers.keydown)
     this.boxRect.destroy()
+    this.moveRuler.destroy()
+    this.moveLabel.destroy()
   }
 }

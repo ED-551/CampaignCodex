@@ -105,6 +105,9 @@ function createVTTNamespace(io) {
         socket.join(roomName)
         socket.campaignId = campaignId
         socket.isGM       = isGM
+        // socket.data is the only field visible through fetchSockets(), which
+        // is how the roster below is assembled.
+        socket.data.user  = { id: socket.user.id, username: socket.user.username, isGM }
 
         // Fetch (or create) the active scene
         let scene = null
@@ -126,6 +129,17 @@ function createVTTNamespace(io) {
           scene = { id: newScene.id, name: newScene.name, sceneData: {} }
         }
 
+        // Roster of everyone already connected, so a client joining late sees
+        // the full table rather than only the joins that happen after it.
+        // One entry per user — the same person on two devices counts once.
+        const peers   = await vtt.in(roomName).fetchSockets()
+        const byUser  = new Map()
+        for (const peer of peers) {
+          if (!peer.data?.user) continue
+          byUser.set(peer.data.user.id, peer.data.user)
+        }
+        const members = [...byUser.values()]
+
         // Broadcast to existing room members that someone joined
         socket.to(roomName).emit('vtt:member_joined', {
           userId:   socket.user.id,
@@ -138,6 +152,7 @@ function createVTTNamespace(io) {
           isGM,
           scene,
           campaignName: rows[0].campaign_name,
+          members,
         })
       } catch (err) {
         console.error('[vtt] join_campaign error:', err.message)
