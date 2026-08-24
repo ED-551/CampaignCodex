@@ -24,6 +24,8 @@ export interface Layers {
   world:      Container
   background: Container
   grid:       Container
+  /** Scenery images placed over the map — buildings, furniture, overlays. */
+  props:      Container
   terrain:    Container
   tokens:     Container
   gm:         Container
@@ -42,6 +44,9 @@ export function createLayers(app: Application): Layers {
   // Layer order within world (bottom → top)
   const background = new Container()
   const grid        = new Container()
+  // Props sit above the grid so a building covers the map's own gridlines,
+  // but below tokens so creatures always stand on top of the scenery.
+  const props       = new Container()
   const terrain     = new Container()
   const tokens      = new Container()
   const gm          = new Container()
@@ -49,11 +54,11 @@ export function createLayers(app: Application): Layers {
   const lighting    = new Container()
   const fog         = new Container()
 
-  world.addChild(background, grid, terrain, tokens, gm, drawings, lighting, fog)
+  world.addChild(background, grid, props, terrain, tokens, gm, drawings, lighting, fog)
 
   // UI lives on stage directly — not transformed by the viewport
   const ui = new Container()
   app.stage.addChild(ui)
 
-  return { world, background, grid, terrain, tokens, gm, drawings, lighting, fog, ui }
+  return { world, background, grid, props, terrain, tokens, gm, drawings, lighting, fog, ui }
 }

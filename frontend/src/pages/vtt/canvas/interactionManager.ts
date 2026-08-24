@@ -42,6 +42,11 @@ export class InteractionManager {
 
   // External tool handlers (registered by wall tool, fog tool, etc.)
   private toolHandlers: Map<string, ToolHandler> = new Map()
+  private propManager: {
+    handlePointerDown: (x: number, y: number) => boolean
+    hitTestProp: (wx: number, wy: number) => { id: string } | null
+    beginMove: (id: string, wx: number, wy: number) => void
+  } | null = null
 
   private handlers: {
     pointerdown: (e: PointerEvent) => void
@@ -104,6 +109,15 @@ export class InteractionManager {
     this.toolHandlers.set(tool, handler)
   }
 
+  /**
+   * Props own their resize and rotate handles. Those handles float outside the
+   * prop's own bounds, so they cannot be hit-tested as sprites — the manager
+   * gets asked first and reports whether it claimed the press.
+   */
+  setPropManager(manager: NonNullable<InteractionManager['propManager']>): void {
+    this.propManager = manager
+  }
+
   unregisterToolHandler(tool: string): void {
     this.toolHandlers.delete(tool)
   }
@@ -155,6 +169,11 @@ export class InteractionManager {
 
     const world = this.screenToWorld(e.clientX, e.clientY)
     const { activeTool, grid } = useVTTStore.getState()
+
+    // A selected prop's resize/rotate handles win over everything beneath them.
+    if (activeTool === 'select' && this.propManager?.handlePointerDown(e.clientX, e.clientY)) {
+      return
+    }
 
     // Delegate to registered tool handler if one exists for this tool
     const handler = this.toolHandlers.get(activeTool)
@@ -294,6 +313,19 @@ export class InteractionManager {
     const hit   = this.hitTestToken(world.x, world.y)
     const store = useVTTStore.getState()
 
+    // Tokens are checked first because they render above scenery — clicking a
+    // creature standing on a rug should grab the creature. Only when no token
+    // is under the cursor does the scenery beneath it become the target.
+    if (!hit && this.propManager) {
+      const prop = this.propManager.hitTestProp(world.x, world.y)
+      if (prop) {
+        store.clearSelection()
+        store.selectProp(prop.id)
+        this.propManager.beginMove(prop.id, world.x, world.y)
+        return
+      }
+    }
+
     if (hit) {
       // Token clicked: select it (additive with Shift), then prepare for drag
       if (!store.selectedTokenIds.has(hit.id)) {
@@ -310,8 +342,9 @@ export class InteractionManager {
         if (t) this.dragStartTokenPositions.set(id, { x: t.x, y: t.y })
       }
     } else {
-      // Empty space: deselect (unless shift) + start box select
-      if (!e.shiftKey) store.clearSelection()
+      // Empty space: deselect (unless shift) + start box select.
+      // Clicking away also drops any prop selection so its handles disappear.
+      if (!e.shiftKey) { store.clearSelection(); store.selectProp(null) }
       this.isBoxSelecting = true
       this.boxStart       = { ...world }
     }

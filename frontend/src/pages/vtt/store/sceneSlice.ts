@@ -23,7 +23,7 @@
 import type { StateCreator } from 'zustand'
 import { nanoid }            from '../utils/nanoid'
 import type { VTTStore }     from './index'
-import type { Scene, Token, Wall, LightSource, Drawing } from '../types'
+import type { Scene, Token, Wall, LightSource, Drawing, Prop } from '../types'
 import { DEFAULT_GRID }      from './gridSlice'
 import { DEFAULT_FOG }       from './fogSlice'
 
@@ -33,6 +33,7 @@ export function makeBlankScene(name = 'New Scene'): Scene {
     name,
     grid:         { ...DEFAULT_GRID },
     background:   null,
+    props:        [],
     tokens:       [],
     walls:        [],
     lights:       [],
@@ -54,12 +55,14 @@ function toRecord<T extends { id: string }>(arr: T[]): Record<string, T> {
 /** Copy current live top-level state into scenes[activeSceneId]. */
 function snapshotActiveTo(state: {
   scenes: Scene[];        activeSceneId: string
+  props:  Record<string, Prop>
   tokens: Record<string, Token>;   walls:    Record<string, Wall>
   lights: Record<string, LightSource>; drawings: Record<string, Drawing>
   fog: Scene['fog'];      grid: Scene['grid']
 }): void {
   const idx = state.scenes.findIndex(s => s.id === state.activeSceneId)
   if (idx < 0) return
+  state.scenes[idx].props    = Object.values(state.props)
   state.scenes[idx].tokens   = Object.values(state.tokens)
   state.scenes[idx].walls    = Object.values(state.walls)
   state.scenes[idx].lights   = Object.values(state.lights)
@@ -70,10 +73,13 @@ function snapshotActiveTo(state: {
 
 /** Populate live top-level slices from a scene's array data. */
 function populateLive(state: {
+  props:  Record<string, Prop>
   tokens: Record<string, Token>;   walls:    Record<string, Wall>
   lights: Record<string, LightSource>; drawings: Record<string, Drawing>
   fog: Scene['fog'];      grid: Scene['grid']
 }, scene: Scene): void {
+  // Scenes saved before props existed have no array; treat that as empty.
+  state.props    = toRecord(scene.props ?? [])   as Record<string, Prop>
   state.tokens   = toRecord(scene.tokens)   as Record<string, Token>
   state.walls    = toRecord(scene.walls)    as Record<string, Wall>
   state.lights   = toRecord(scene.lights)   as Record<string, LightSource>

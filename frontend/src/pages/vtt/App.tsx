@@ -18,6 +18,7 @@ import { Toolbar }             from './components/Toolbar'
 import { TokenPanel }          from './components/TokenPanel'
 import { TokenProperties }     from './components/TokenProperties'
 import { TokenContextMenu }    from './components/TokenContextMenu'
+import { PropPanel }          from './components/PropPanel'
 import { PlayersPanel }        from './components/PlayersPanel'
 import { WallPanel }           from './components/WallPanel'
 import { LightPanel }          from './components/LightPanel'
@@ -36,6 +37,7 @@ import type { Tool }           from './types'
 const TOOL_KEYS: Record<string, Tool> = {
   v: 'select',  V: 'select',
   t: 'token',   T: 'token',
+  g: 'prop',    G: 'prop',
   w: 'wall',    W: 'wall',
   l: 'light',   L: 'light',
   f: 'fog',     F: 'fog',
@@ -140,6 +142,7 @@ export default function App({ campaignId }: AppProps) {
         settingsPanelOpen={settingsOpen}
       />
       <TokenPanel />
+      <PropPanel />
       <WallPanel />
       <LightPanel />
       <FogPanel />

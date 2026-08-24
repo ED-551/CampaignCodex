@@ -19,6 +19,7 @@ import { drawSquareGrid }       from './grid'
 import { BackgroundManager }    from './background'
 import { TokenManager }         from './tokenManager'
 import { InteractionManager }   from './interactionManager'
+import { PropManager }          from './propManager'
 import { WallManager }          from './wallManager'
 import { WallTool }             from './wallTool'
 import { LightTool }            from './lightTool'
@@ -38,6 +39,7 @@ export class VTTEngine {
   private viewportCtrl:   ReturnType<typeof setupViewport>
   private bgManager:      BackgroundManager
   private tokenManager:   TokenManager
+  private propManager:    PropManager
   private wallManager:    WallManager
   private wallTool:       WallTool
   private lightTool:      LightTool
@@ -96,6 +98,12 @@ export class VTTEngine {
       app.canvas as HTMLCanvasElement,
       this.layers.ui,
     )
+
+    // ── Props ────────────────────────────────────────────────────────────────────
+    // Created before the token manager so its resize/rotate handles get first
+    // refusal on a click — otherwise a token underneath would steal the drag.
+    this.propManager = new PropManager(this.layers.props)
+    this.interaction.setPropManager(this.propManager)
 
     // ── Tokens ───────────────────────────────────────────────────────────────────
     this.tokenManager = new TokenManager(this.layers.tokens)
@@ -169,6 +177,7 @@ export class VTTEngine {
     this.viewportCtrl.destroy()
     this.bgManager.destroy()
     this.tokenManager.destroy()
+    this.propManager.destroy()
     this.wallManager.destroy()
     this.wallTool.destroy()
     this.lightTool.destroy()

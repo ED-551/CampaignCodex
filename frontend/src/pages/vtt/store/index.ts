@@ -25,6 +25,8 @@ import { createToolSlice }     from './toolSlice'
 import type { ToolSlice }      from './toolSlice'
 import { createSceneSlice }    from './sceneSlice'
 import type { SceneSlice }     from './sceneSlice'
+import { createPropSlice }     from './propSlice'
+import type { PropSlice }      from './propSlice'
 import { createTokenSlice }    from './tokenSlice'
 import type { TokenSlice }     from './tokenSlice'
 import { createHistorySlice }  from './historySlice'
@@ -51,6 +53,7 @@ export type VTTStore =
   GridSlice     &
   ToolSlice     &
   SceneSlice    &
+  PropSlice     &
   TokenSlice    &
   HistorySlice  &
   WallSlice     &
@@ -69,6 +72,7 @@ export const useVTTStore = create<VTTStore>()(
       ...createGridSlice(...args),
       ...createToolSlice(...args),
       ...createSceneSlice(...args),
+      ...createPropSlice(...args),
       ...createTokenSlice(...args),
       ...createHistorySlice(...args),
       ...createWallSlice(...args),

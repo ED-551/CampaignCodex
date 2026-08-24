@@ -224,6 +224,7 @@ class VTTSocketClient {
     const scheduleSync = () => { if (!suppressEmit) this.sendSceneSync?.() }
 
     this.unsubs.push(
+      useVTTStore.subscribe(s => s.props,    scheduleSync),
       useVTTStore.subscribe(s => s.tokens,   scheduleSync),
       useVTTStore.subscribe(s => s.walls,    scheduleSync),
       useVTTStore.subscribe(s => s.lights,   scheduleSync),
@@ -239,6 +240,7 @@ class VTTSocketClient {
     const s     = useVTTStore.getState()
     const scene = s.getActiveScene()
     this.emit('scene_sync', {
+      props:    s.props,
       tokens:   s.tokens,
       walls:    s.walls,
       lights:   s.lights,
@@ -265,6 +267,11 @@ function applySceneSync(data: unknown): void {
   const d = data as Record<string, unknown>
   const store = useVTTStore.getState()
 
+  if (d.props && typeof d.props === 'object') {
+    const received = d.props as Record<string, Parameters<typeof store.addProp>[0]>
+    store.clearProps()
+    for (const p of Object.values(received)) store.addProp(p)
+  }
   if (d.tokens && typeof d.tokens === 'object') {
     const received = d.tokens as Record<string, Parameters<typeof store.addToken>[0]>
     for (const id of Object.keys(store.tokens)) store.deleteToken(id)

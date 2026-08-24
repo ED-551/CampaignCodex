@@ -51,6 +51,41 @@ export interface Background {
   locked:    boolean
 }
 
+// ─── Prop ─────────────────────────────────────────────────────────────────────
+
+/**
+ * A freely placed image on the map: a building laid over a world map, a rug,
+ * a piece of furniture, a spell-effect overlay.
+ *
+ * Distinct from a Token because it is scenery, not a creature — it has no HP,
+ * conditions or initiative, it does not snap to a cell by default, and it can
+ * be rotated and stretched to any size.
+ *
+ * Distinct from the scene background because there can be many of them and
+ * each one moves independently.
+ */
+export interface Prop {
+  id:     string
+  /** Server URL of the image. */
+  imageUrl: string
+  label:  string
+  /** World-space position of the prop's centre. */
+  x:      number
+  y:      number
+  /** Rendered size in world pixels. */
+  width:  number
+  height: number
+  /** Clockwise rotation in radians. */
+  rotation: number
+  opacity:  number
+  /** Draw order within the prop layer; higher sits on top. */
+  z:        number
+  /** false = GM-only; players never receive it in their view. */
+  visible:  boolean
+  /** Prevents accidental dragging while working on top of it. */
+  locked:   boolean
+}
+
 // ─── Conditions ───────────────────────────────────────────────────────────────
 
 export type Condition =
@@ -244,6 +279,7 @@ export interface Scene {
   name:       string
   grid:       GridConfig
   background: Background | null
+  props:      Prop[]
   tokens:     Token[]
   walls:      Wall[]
   lights:     LightSource[]
@@ -258,6 +294,7 @@ export interface Scene {
 export type Tool =
   | 'select'
   | 'token'
+  | 'prop'
   | 'wall'
   | 'draw'
   | 'fog'

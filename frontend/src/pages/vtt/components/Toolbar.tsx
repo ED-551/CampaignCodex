@@ -19,6 +19,7 @@ interface ToolDef {
 const TOOLS: ToolDef[] = [
   { tool: 'select',  label: 'Select',   key: 'V', icon: '↖', ready: true  },
   { tool: 'token',   label: 'Token',    key: 'T', icon: '◉', ready: true  },
+  { tool: 'prop',    label: 'Scenery',  key: 'G', icon: '🏠', ready: true  },
   { tool: 'wall',    label: 'Wall',     key: 'W', icon: '▌', ready: true  },
   { tool: 'light',   label: 'Light',    key: 'L', icon: '💡', ready: true  },
   { tool: 'fog',     label: 'Fog',      key: 'F', icon: '☁', ready: true  },
