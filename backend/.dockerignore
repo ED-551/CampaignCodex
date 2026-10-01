@@ -1,0 +1,10 @@
+# Keep local secrets, dependencies and user data out of the image.
+node_modules
+npm-debug.log*
+*.log
+.env
+.env.*
+uploads
+src/db/seed-*.js
+Dockerfile
+.dockerignore

@@ -86,7 +86,10 @@ const PORT       = process.env.PORT || 3001
 
 // Trust nginx reverse proxy (which is behind Cloudflare) — needed for
 // express-rate-limit to read the correct client IP from X-Forwarded-For.
-app.set('trust proxy', 1)
+// TRUST_PROXY is the number of proxies in front of the API. Self-hosters who
+// put another proxy (Caddy, Traefik, Cloudflare Tunnel) in front of the
+// frontend container set it to 2, or every user shares one rate-limit bucket.
+app.set('trust proxy', parseInt(process.env.TRUST_PROXY || '1', 10))
 
 // ─── Security Headers ─────────────────────────────────────────────────────────
 // contentSecurityPolicy blocks inline script injection (XSS mitigation).

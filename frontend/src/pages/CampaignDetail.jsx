@@ -12,6 +12,7 @@ import EncounterPickerModal from '../components/combat/EncounterPickerModal'
 import DiceRollBubble from '../components/chat/DiceRollBubble'
 import TierBadge from '../components/ui/TierBadge'
 import { parseDiceCommand, rollDice, buildDiceMetadata, formatDiceBody } from '../utils/dice'
+import { VTT_ENABLED } from '../utils/runtimeConfig'
 
 function formatLightTimer(secs) {
   const m = Math.floor(secs / 60).toString().padStart(2, '0')
@@ -106,7 +107,7 @@ export default function CampaignDetail() {
 
   // ── VTT session state: initial poll + socket listener ────────────────────────
   useEffect(() => {
-    if (import.meta.env.VITE_VTT_ENABLED !== 'true') return
+    if (!VTT_ENABLED) return
     let cancelled = false
     api.get(`/vtt/${id}/session`)
       .then(({ active }) => { if (!cancelled) setVttSessionActive(active) })
@@ -296,7 +297,7 @@ export default function CampaignDetail() {
                   <Sword size={14} /> {combatActive ? 'Combat Live ⚔' : 'Start Combat'}
                 </button>
               )}
-              {import.meta.env.VITE_VTT_ENABLED === 'true' && (
+              {VTT_ENABLED && (
                 <Link
                   to={`/vtt/${id}`}
                   target="_blank"
@@ -330,7 +331,7 @@ export default function CampaignDetail() {
       <div className="h-px bg-codex-border" />
 
       {/* VTT Session Live Banner */}
-      {import.meta.env.VITE_VTT_ENABLED === 'true' && vttSessionActive && (
+      {VTT_ENABLED && vttSessionActive && (
         <div className="max-w-5xl mx-auto px-4 pt-4">
           {!isGM ? (
             <a
