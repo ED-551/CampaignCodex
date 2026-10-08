@@ -1,12 +1,18 @@
+# Dependencies are pure JS plus bcrypt's bundled prebuilds (one per platform),
+# so install them natively and copy them in. Running npm under QEMU for the
+# arm64 image crashes node on GitHub's runners ("Illegal instruction").
+FROM --platform=$BUILDPLATFORM docker.io/library/node:20-alpine AS deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+
 FROM docker.io/library/node:20-alpine
 
 ENV NODE_ENV=production \
     DOTENV_CONFIG_QUIET=true
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
-
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Uploads live on a volume mounted here. Creating it in the image with the
