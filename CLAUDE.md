@@ -200,7 +200,7 @@ Self-hosting guide is in `README.md`. What's in place:
 - Root `.env.example` with generation commands; no `container_name:` in compose
 - GHCR images built for amd64 + arm64 (`.github/workflows/publish.yml`)
 
-Still open: `GET /api/health` doesn't report a version yet.
+- `GET /api/health` → `{ ok: true, status: 'ok', version, timestamp }` (version from `backend/package.json`)
 
 ---
 

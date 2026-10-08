@@ -151,8 +151,9 @@ require('fs').mkdirSync(UPLOAD_DIR, { recursive: true })
 app.use('/uploads', require('express').static(UPLOAD_DIR))
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
+const { version: APP_VERSION } = require('../package.json')
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+  res.json({ ok: true, status: 'ok', version: APP_VERSION, timestamp: new Date().toISOString() })
 })
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────

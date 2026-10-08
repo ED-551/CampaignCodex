@@ -8,3 +8,4 @@ uploads
 src/db/seed-*.js
 Dockerfile
 .dockerignore
+.git
