@@ -1,8 +1,9 @@
 /**
  * migrate.js — apply all SQL migration files in order.
  *
- * All migrations use CREATE TABLE IF NOT EXISTS / ALTER TABLE ... ADD COLUMN IF NOT EXISTS,
- * so running them against an already-migrated database is safe and idempotent.
+ * Applied files are recorded in the schema_migrations table and skipped on later runs.
+ * Existing databases that predate tracking re-run every file once (all are idempotent),
+ * after which they are recorded. New migrations need not be idempotent.
  *
  * Usage:
  *   node scripts/migrate.js
@@ -25,6 +26,15 @@ const pool = new Pool({
 })
 
 async function migrate() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      filename   TEXT PRIMARY KEY,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `)
+  const { rows: appliedRows } = await pool.query('SELECT filename FROM schema_migrations')
+  const applied = new Set(appliedRows.map(r => r.filename))
+
   const migrationsDir = path.join(__dirname, '../src/db/migrations')
   const files = fs.readdirSync(migrationsDir)
     .filter(f => f.endsWith('.sql'))
@@ -36,12 +46,14 @@ async function migrate() {
     return
   }
 
-  console.log(`[migrate] Applying ${files.length} migration(s)…`)
+  console.log(`[migrate] Checking ${files.length} migration(s), ${applied.size} already applied…`)
 
   for (const file of files) {
+    if (applied.has(file)) continue
     const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8')
     try {
       await pool.query(sql)
+      await pool.query('INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING', [file])
       console.log(`[migrate] ✓ ${file}`)
     } catch (err) {
       console.error(`[migrate] ✗ ${file}: ${err.message}`)

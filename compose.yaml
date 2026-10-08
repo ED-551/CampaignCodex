@@ -14,7 +14,6 @@ services:
   # ── PostgreSQL 16 ────────────────────────────────────────────────────────────
   postgres:
     image: docker.io/library/postgres:16-alpine
-    container_name: campaigncodex-db
     restart: unless-stopped
     environment:
       POSTGRES_DB:       campaigncodex
@@ -37,7 +36,6 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     image: ${BACKEND_IMAGE:-ghcr.io/ed-551/campaigncodex-backend:latest}
-    container_name: campaigncodex-api
     restart: unless-stopped
     depends_on:
       postgres:
@@ -62,6 +60,12 @@ services:
       VTT_ENABLED:             ${VTT_ENABLED:-false}
     volumes:
       - uploads_data:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/api/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout:  5s
+      retries:  5
+      start_period: 30s
     # Port not exposed to host — nginx in the frontend container proxies to it
     expose:
       - "3001"
@@ -74,10 +78,10 @@ services:
       args:
         VITE_VTT_ENABLED: ${VTT_ENABLED:-false}
     image: ${FRONTEND_IMAGE:-ghcr.io/ed-551/campaigncodex-frontend:latest}
-    container_name: campaigncodex-web
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "${HTTP_PORT:-8080}:80"
 

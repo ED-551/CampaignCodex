@@ -149,7 +149,7 @@ app.use('/uploads', require('express').static(UPLOAD_DIR))
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+  res.json({ ok: true, status: 'ok', version: require('../package.json').version, timestamp: new Date().toISOString() })
 })
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────

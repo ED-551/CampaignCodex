@@ -8,7 +8,9 @@ RUN npm ci --omit=dev
 COPY . .
 
 # Create uploads directory
-RUN mkdir -p uploads/portraits
+RUN mkdir -p uploads/portraits && chown -R node:node /app/uploads
+
+USER node
 
 EXPOSE 3001
 
