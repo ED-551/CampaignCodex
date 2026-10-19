@@ -1,4 +1,4 @@
-import { useLocation, Navigate } from 'react-router-dom'
+import { useLocation, Navigate, Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { useAuth } from '../context/AuthContext'
 import LoginForm from '../components/auth/LoginForm'
@@ -99,6 +99,14 @@ export default function LandingPage() {
 
         {/* Footer */}
         <div className="px-8 pb-6 pt-1 text-center flex flex-col gap-1">
+          {pathname === '/' && (
+            <Link
+              to="/self-host"
+              className="text-xs text-codex-subtext hover:text-codex-gold transition-colors duration-150 mb-2 self-center"
+            >
+              Interested in self-hosting?
+            </Link>
+          )}
           <p className="text-xs text-codex-muted">
             Your TTRPG campaign hub · Shadowdark · Mörk Borg · Nimble RPG
           </p>
