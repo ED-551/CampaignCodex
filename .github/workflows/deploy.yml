@@ -1,34 +1,58 @@
 name: Deploy to Production
 
+# Production (Alma2) runs CampaignCodex as a rootless Podman stack in
+# ~/campaigncodex-stack. Deploy once the images for main have been published,
+# then pull them and recreate the containers.
 on:
-  push:
+  workflow_run:
+    workflows: [Publish Container Images]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   deploy:
-    name: Build & Deploy
+    name: Pull & Restart Stack
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: self-hosted
 
+    env:
+      STACK_DIR: /home/ragnarok1414/campaigncodex-stack
+      PODMAN_COMPOSE: /home/ragnarok1414/.local/bin/podman-compose
+
     steps:
-      - name: Pull latest code
-        run: |
-          cd /home/ragnarok1414/CampaignCodex
-          git pull origin main
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Install frontend deps
-        run: cd /home/ragnarok1414/CampaignCodex/frontend && npm ci
+      - name: Update compose file
+        run: cp compose.yaml "$STACK_DIR/compose.yaml"
 
-      - name: Build frontend
-        run: cd /home/ragnarok1414/CampaignCodex/frontend && npm run build
+      - name: Pull images
+        working-directory: ${{ env.STACK_DIR }}
+        run: $PODMAN_COMPOSE pull
 
-      - name: Install backend deps
-        run: cd /home/ragnarok1414/CampaignCodex/backend && npm ci --omit=dev
-
-      - name: Restart API
-        run: pm2 restart campaigncodex-api
+      - name: Restart stack
+        working-directory: ${{ env.STACK_DIR }}
+        # :latest keeps the same tag when its image changes, so recreate
+        # explicitly rather than rely on change detection.
+        run: $PODMAN_COMPOSE up -d --force-recreate
 
       - name: Health check
         run: |
-          sleep 3
-          curl -sf http://localhost:3001/api/health || (echo "Health check failed" && exit 1)
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8080/api/health && exit 0
+            sleep 3
+          done
+          echo "Health check failed"
+          podman logs --tail 50 campaigncodex-stack_backend_1 || true
+          exit 1
+
+      - name: Remove old images
+        if: success()
+        run: podman image prune -f
