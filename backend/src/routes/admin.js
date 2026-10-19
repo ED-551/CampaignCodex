@@ -109,7 +109,7 @@ router.get('/users', requireAdmin, async (req, res) => {
       db.query(
         `SELECT id, username, email, first_name, last_name,
                 supporter_tier, supporter_since, created_at,
-                is_admin, is_moderator, is_banned, ban_reason, banned_until,
+                is_admin, is_moderator, is_banned, ban_reason, banned_until, email_verified,
                 (SELECT COUNT(*)::int FROM characters c  WHERE c.user_id  = users.id) AS character_count,
                 (SELECT COUNT(*)::int FROM campaigns  ca WHERE ca.gm_user_id = users.id) AS campaign_count
          FROM users
@@ -246,6 +246,51 @@ router.patch('/users/:id/moderator', requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('[admin/moderator]', err)
     res.status(500).json({ error: 'Failed to update moderator status.' })
+  }
+})
+
+// ─── POST /api/admin/users/:id/verify ────────────────────────────────────────
+// Mark a user's email as verified by hand — for instances without email, or a
+// user whose link never arrived. Any outstanding verification links for the
+// user are marked used so they can't be replayed later.
+router.post('/users/:id/verify', requireAdmin, async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid user ID.' })
+  }
+
+  const client = await db.getClient()
+  try {
+    await client.query('BEGIN')
+    const result = await client.query(
+      `UPDATE users SET email_verified = true
+       WHERE id = $1
+       RETURNING id, username, email, first_name, last_name,
+                 supporter_tier, supporter_since, created_at,
+                 is_admin, is_moderator, is_banned, ban_reason, banned_until, email_verified`,
+      [req.params.id]
+    )
+    if (!result.rows[0]) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'User not found.' })
+    }
+    await client.query(
+      'UPDATE email_verification_tokens SET used = true WHERE user_id = $1 AND used = false',
+      [req.params.id]
+    )
+    await client.query('COMMIT')
+
+    const user = result.rows[0]
+    console.log(
+      `[admin/verify] Admin: "${req.user?.username ?? 'unknown'}" | ` +
+      `Verified user: "${user.username}" (${user.id})`
+    )
+    res.json({ user, message: `${user.username} is now verified.` })
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    console.error('[admin/verify]', err)
+    res.status(500).json({ error: 'Failed to verify user.' })
+  } finally {
+    client.release()
   }
 })
 
@@ -421,7 +466,7 @@ router.post('/broadcast-email', requireAdmin, async (req, res) => {
       ...stats,
       total: recipients.length,
       message: stats.stub
-        ? `Stubbed to console (no RESEND_API_KEY). Would have reached ${recipients.length} subscriber(s).`
+        ? `Stubbed to console (no email provider configured). Would have reached ${recipients.length} subscriber(s).`
         : `Broadcast complete — ${stats.sent} delivered, ${stats.failed} failed.`,
     })
   } catch (err) {
