@@ -38,6 +38,7 @@ const BestiarySharesPage = lazy(() => import('./pages/BestiarySharesPage'))
 const SecretPage         = lazy(() => import('./pages/SecretPage'))
 const SecretReviewPage   = lazy(() => import('./pages/SecretReviewPage'))
 const DonatePage         = lazy(() => import('./pages/DonatePage'))
+const SelfHostPage       = lazy(() => import('./pages/SelfHostPage'))
 const ProfilePage        = lazy(() => import('./pages/ProfilePage'))
 const ProfileEditPage    = lazy(() => import('./pages/ProfileEditPage'))
 const VTTPage            = lazy(() => import('./pages/VTTPage'))
@@ -79,6 +80,7 @@ export default function App() {
               {/* ── Public: legal / support ── */}
               <Route path="/terms"  element={<TermsPage />} />
               <Route path="/donate" element={<DonatePage />} />
+              <Route path="/self-host" element={<SelfHostPage />} />
 
               {/* ── Secret: easter egg (auth required) ── */}
               <Route path="/eds-eats" element={
