@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { api } from '../../utils/api'
+import { useServerInfo } from '../../hooks/useServerInfo'
 import Input from '../ui/Input'
 import PasswordInput from '../ui/PasswordInput'
 
@@ -25,6 +26,9 @@ export default function LoginForm() {
   const [resendLoading, setResendLoading]     = useState(false)
   const [resendMsg, setResendMsg]             = useState('')
   const [loading, setLoading]         = useState(false)
+  // With verification off the server sends no links, so the unverified screen
+  // points people at the admin instead of offering a resend.
+  const { emailVerificationRequired } = useServerInfo()
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -61,6 +65,28 @@ export default function LoginForm() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // ── Email not verified, on a server that doesn't send verification links ─────
+  if (unverifiedEmail && !emailVerificationRequired) {
+    return (
+      <div className="flex flex-col gap-5">
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 flex flex-col gap-2">
+          <p className="text-sm font-semibold text-amber-400">Account not verified yet</p>
+          <p className="text-xs text-codex-subtext leading-relaxed">
+            This server doesn't send verification emails. Ask the server's admin to
+            verify your account from the Admin dashboard, then sign in again.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setUnverifiedEmail('')}
+          className="text-xs text-codex-subtext hover:text-codex-text transition-colors text-center"
+        >
+          ← Back to sign in
+        </button>
+      </div>
+    )
   }
 
   // ── Email not verified screen ─────────────────────────────────────────────────

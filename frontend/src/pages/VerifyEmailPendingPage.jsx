@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { Mail } from 'lucide-react'
 import { api } from '../utils/api'
+import { useServerInfo } from '../hooks/useServerInfo'
 
 export default function VerifyEmailPendingPage() {
   const location = useLocation()
@@ -10,6 +11,11 @@ export default function VerifyEmailPendingPage() {
 
   const email    = location.state?.email    || ''
   const username = location.state?.username || ''
+
+  // With verification off this server sends no links, so an account that is
+  // still unverified (created before the switch) can only be verified by an
+  // admin. Show that instead of "check your inbox".
+  const { emailVerificationRequired } = useServerInfo()
 
   const [resendLoading, setResendLoading] = useState(false)
   const [resendMsg,     setResendMsg]     = useState('')
@@ -39,7 +45,22 @@ export default function VerifyEmailPendingPage() {
           <h1 className="text-2xl font-bold text-codex-gold tracking-wide">CampaignCodex</h1>
         </div>
 
+        {/* Verification off: nothing will arrive by email */}
+        {!emailVerificationRequired && (
+          <div className="rounded-xl border border-codex-border bg-codex-surface p-8 flex flex-col gap-4 text-center">
+            <div className="mx-auto w-14 h-14 rounded-full bg-codex-gold/10 border border-codex-gold/30 flex items-center justify-center">
+              <Mail className="w-7 h-7 text-codex-gold" />
+            </div>
+            <h2 className="text-lg font-semibold text-codex-text">Account not verified yet</h2>
+            <p className="text-sm text-codex-subtext leading-relaxed">
+              This server doesn't send verification emails. Ask the server's admin to
+              verify your account from the Admin dashboard, then sign in again.
+            </p>
+          </div>
+        )}
+
         {/* Main card */}
+        {emailVerificationRequired && (
         <div className="rounded-xl border border-codex-border bg-codex-surface p-8 flex flex-col gap-6">
 
           {/* Icon + heading */}
@@ -106,6 +127,7 @@ export default function VerifyEmailPendingPage() {
           </p>
 
         </div>
+        )}
 
         {/* Back link */}
         <button

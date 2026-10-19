@@ -167,9 +167,30 @@ app.use('/uploads', require('express').static(UPLOAD_DIR))
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 const { version: APP_VERSION } = require('../package.json')
-const { EMAIL_MODE, SMTP, EMAIL_VERIFICATION_REQUIRED, VERIFICATION_SETTING } = require('./config/email')
+const {
+  EMAIL_MODE, SMTP, EMAIL_CONFIGURED, EMAIL_VERIFICATION_REQUIRED, VERIFICATION_SETTING,
+} = require('./config/email')
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, status: 'ok', version: APP_VERSION, timestamp: new Date().toISOString() })
+})
+
+// ─── Server Info ──────────────────────────────────────────────────────────────
+// Public description of this instance for the web app and future clients
+// (e.g. an iOS companion app). Keep the shape stable: add keys, never rename
+// or remove them, and bump apiVersion only for breaking changes. No secrets
+// and no user data. camelCase on purpose — this shape was specified up front
+// for external clients.
+app.get('/api/server-info', (req, res) => {
+  res.json({
+    name:                      'CampaignCodex',
+    apiVersion:                1,
+    version:                   APP_VERSION,
+    emailVerificationRequired: EMAIL_VERIFICATION_REQUIRED,
+    emailConfigured:           EMAIL_CONFIGURED,
+    features: {
+      vtt: process.env.VTT_ENABLED === 'true',
+    },
+  })
 })
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────
