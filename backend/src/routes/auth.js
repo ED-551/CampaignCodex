@@ -10,6 +10,10 @@ const { requireAuth }            = require('../middleware/auth')
 // PRIMARY_ADMIN_USERNAME sourced from config.js (server-side only) so it never
 // reaches the client bundle — sanitizeUser now returns isPrimaryAdmin as a bool.
 const { PRIMARY_ADMIN_USERNAME } = require('../config')
+// Whether new accounts and changed addresses must be confirmed by email.
+// See config/email.js — with the default "auto" this is true whenever Resend
+// or SMTP is configured, so hosted instances keep the hard gate.
+const { EMAIL_VERIFICATION_REQUIRED } = require('../config/email')
 
 const router = express.Router()
 
@@ -112,15 +116,25 @@ router.post('/signup', authLimiter, signupLimiter, [
       `INSERT INTO users
          (username, email, first_name, last_name, middle_initial,
           password_hash, newsletter_opt_in, terms_accepted_at, email_verified)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),false)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),$8)
        RETURNING id, username, email, first_name, last_name,
-                 supporter_tier, is_admin, is_moderator, newsletter_opt_in, token_version, created_at`,
+                 supporter_tier, is_admin, is_moderator, newsletter_opt_in, token_version,
+                 email_verified, created_at`,
       [username, email, firstName, lastName, middleInitial || null,
        passwordHash,
-       newsletterOptIn === true || newsletterOptIn === 'true']
+       newsletterOptIn === true || newsletterOptIn === 'true',
+       !EMAIL_VERIFICATION_REQUIRED]
     )
 
     const user = result.rows[0]
+
+    // Verification off (e.g. a self-hosted instance with no mail set up):
+    // the account is already verified, so log the user straight in with the
+    // same { token, user } shape a normal login returns.
+    if (!EMAIL_VERIFICATION_REQUIRED) {
+      await client.query('COMMIT')
+      return res.status(201).json({ token: signToken(user), user: sanitizeUser(user) })
+    }
 
     // Generate a verification token and email it — no JWT issued until verified
     const rawToken  = crypto.randomBytes(32).toString('hex')
@@ -181,7 +195,9 @@ router.post('/login', authLimiter, [
       return res.status(401).json({ error: 'Invalid username or password.' })
     }
 
-    // Hard gate: unverified users cannot log in
+    // Hard gate: unverified users cannot log in. Accounts created while
+    // verification is off are stored as verified, so this only stops accounts
+    // that are actually unverified (an admin can verify them by hand).
     if (!user.email_verified) {
       return res.status(403).json({
         error:            'email_not_verified',
@@ -287,6 +303,39 @@ router.patch('/settings', requireAuth, [
       )
       if (existing.rows.length > 0) {
         return res.status(409).json({ error: 'That email address is already in use.' })
+      }
+
+      // Verification off: switch the address directly. email_verified is left
+      // as it is, and any link sent to the old address stops working.
+      if (!EMAIL_VERIFICATION_REQUIRED) {
+        const client = await db.getClient()
+        try {
+          await client.query('BEGIN')
+          const result = await client.query(
+            `UPDATE users SET
+               first_name        = COALESCE($1, first_name),
+               last_name         = COALESCE($2, last_name),
+               email             = $3,
+               newsletter_opt_in = COALESCE($4, newsletter_opt_in)
+             WHERE id = $5
+             RETURNING id, username, email, first_name, last_name, supporter_tier,
+                       supporter_since, is_admin, is_moderator, newsletter_opt_in,
+                       is_banned, banned_until, ban_reason, email_verified, created_at`,
+            [firstName ?? null, lastName ?? null, email,
+             newsletterOptIn !== undefined ? newsletterOptIn : null, userId]
+          )
+          await client.query(
+            'UPDATE email_verification_tokens SET used = true WHERE user_id = $1 AND used = false',
+            [userId]
+          )
+          await client.query('COMMIT')
+          return res.json({ user: sanitizeUser(result.rows[0]) })
+        } catch (txErr) {
+          await client.query('ROLLBACK')
+          throw txErr
+        } finally {
+          client.release()
+        }
       }
 
       // Email change requires re-verification — wrap in a transaction so a

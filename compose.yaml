@@ -56,6 +56,12 @@ services:
       PRIMARY_ADMIN_USERNAME:  ${PRIMARY_ADMIN_USERNAME:-${ADMIN_USERNAME:-}}
       RESEND_API_KEY:          ${RESEND_API_KEY:-}
       EMAIL_FROM:              ${EMAIL_FROM:-noreply@example.com}
+      SMTP_HOST:               ${SMTP_HOST:-}
+      SMTP_PORT:               ${SMTP_PORT:-587}
+      SMTP_USER:               ${SMTP_USER:-}
+      SMTP_PASS:               ${SMTP_PASS:-}
+      SMTP_SECURE:             ${SMTP_SECURE:-}
+      REQUIRE_EMAIL_VERIFICATION: ${REQUIRE_EMAIL_VERIFICATION:-auto}
       TRUST_PROXY:             ${TRUST_PROXY:-1}
       UPLOAD_DIR:              /app/uploads
       VTT_ENABLED:             ${VTT_ENABLED:-false}

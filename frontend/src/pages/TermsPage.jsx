@@ -64,6 +64,10 @@ export default function TermsPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const homeLink = user ? '/dashboard' : '/'
+  // Footer button. Terms usually opens in a new tab from signup, so there may
+  // be no history to go back to; link somewhere useful instead.
+  const backLink  = user ? '/dashboard' : '/signup'
+  const backLabel = user ? '← Back to Dashboard' : '← Back to sign up'
 
   return (
     <div className="min-h-screen bg-codex-bg">

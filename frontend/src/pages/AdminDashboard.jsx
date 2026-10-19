@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { Users, Scroll, Trophy, Swords, ArrowLeft, Shield, Trash2, X, Mail, Send, ShieldOff } from 'lucide-react'
+import { Users, Scroll, Trophy, Swords, ArrowLeft, Shield, Trash2, X, Mail, Send, ShieldOff, MailCheck } from 'lucide-react'
 import TopBar from '../components/layout/TopBar'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../utils/api'
@@ -194,6 +194,19 @@ export default function AdminDashboard() {
       await api.patch(`/admin/users/${userId}/ban`, { isBanned: false })
       setUsers(prev => prev.map(u =>
         u.id === userId ? { ...u, is_banned: false, ban_reason: null } : u
+      ))
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  // Mark an unverified account as verified (e.g. on a server without email).
+  async function handleVerify(userId, username) {
+    if (!window.confirm(`Mark ${username}'s email as verified? They will be able to log in right away.`)) return
+    try {
+      const res = await api.post(`/admin/users/${userId}/verify`)
+      setUsers(prev => prev.map(u =>
+        u.id === userId ? { ...u, email_verified: res.user?.email_verified ?? true } : u
       ))
     } catch (err) {
       alert(err.message)
@@ -514,6 +527,7 @@ export default function AdminDashboard() {
                                 {u.is_admin     && <span className="text-[9px] font-bold text-codex-gold   bg-codex-gold/10   border border-codex-gold/30   rounded px-1 py-0.5 uppercase tracking-wide">Admin</span>}
                                 {u.is_moderator && <span className="text-[9px] font-bold text-blue-400    bg-blue-400/10    border border-blue-400/30    rounded px-1 py-0.5 uppercase tracking-wide">Mod</span>}
                                 {u.is_banned    && <span className="text-[9px] font-bold text-red-400     bg-red-400/10     border border-red-400/30     rounded px-1 py-0.5 uppercase tracking-wide">Banned</span>}
+                                {u.email_verified === false && <span className="text-[9px] font-bold text-amber-400 bg-amber-400/10 border border-amber-400/30 rounded px-1 py-0.5 uppercase tracking-wide">Unverified</span>}
                               </div>
                               {fullName && (
                                 <p className="text-[10px] text-codex-muted mt-0.5">{fullName}</p>
@@ -585,6 +599,17 @@ export default function AdminDashboard() {
                                 className="text-[10px] px-2 py-1 rounded border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/60 transition-colors flex items-center gap-1"
                               >
                                 <ShieldOff size={10} /> Revoke
+                              </button>
+                            )}
+
+                            {/* Verify — only for accounts whose email isn't verified */}
+                            {u.email_verified === false && (
+                              <button
+                                onClick={() => handleVerify(u.id, u.username)}
+                                title="Mark this user's email as verified"
+                                className="text-[10px] px-2 py-1 rounded border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/60 transition-colors flex items-center gap-1"
+                              >
+                                <MailCheck size={10} /> Verify
                               </button>
                             )}
 

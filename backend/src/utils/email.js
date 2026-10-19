@@ -1,16 +1,85 @@
 /**
- * Email utility — stubs to console in development.
- * Wire up RESEND_API_KEY in .env to send real email.
+ * Email utility — sends through Resend, SMTP, or stubs to the console.
  *
- * All functions follow the same stub pattern: if RESEND_API_KEY is absent
- * (local dev / CI), they print the email content to stdout and return early
- * rather than hitting the Resend API. This means the full email flow can be
+ * The provider is picked once at startup (see config/email.js): Resend when
+ * RESEND_API_KEY is set, else SMTP when SMTP_HOST is set, else the console stub.
+ *
+ * All functions follow the same stub pattern: with no provider configured
+ * (local dev / CI / a self-hosted instance without mail), they print the email
+ * content to stdout and return early. This means the full email flow can be
  * exercised locally without real credentials or network access.
  */
 
+const nodemailer = require('nodemailer')
+const { EMAIL_MODE, RESEND_API_KEY: API_KEY, SMTP } = require('../config/email')
+
 const FROM    = process.env.EMAIL_FROM   || 'noreply@campaigncodex.com'
-const API_KEY = process.env.RESEND_API_KEY
 const CLIENT  = process.env.CLIENT_URL   || 'http://localhost:5173'
+const STUB    = EMAIL_MODE === 'console'
+
+// Pause between messages when a newsletter goes out over SMTP, so a small
+// mail server or a relay with per-second limits isn't flooded.
+const SMTP_BROADCAST_DELAY_MS = 250
+
+// Created on first use so a misconfigured SMTP server never blocks startup.
+let smtpTransport = null
+function getSmtpTransport() {
+  if (!smtpTransport) {
+    smtpTransport = nodemailer.createTransport({
+      host:   SMTP.host,
+      port:   SMTP.port,
+      secure: SMTP.secure,
+      auth:   SMTP.user ? { user: SMTP.user, pass: SMTP.pass } : undefined,
+      // Fail fast: signup waits on the verification email.
+      connectionTimeout: 15_000,
+      greetingTimeout:   15_000,
+      socketTimeout:     30_000,
+    })
+  }
+  return smtpTransport
+}
+
+/**
+ * Send one message through the configured provider (Resend or SMTP).
+ * Throws on delivery failure. Callers handle the console stub themselves.
+ */
+async function deliver(toEmail, subject, html) {
+  if (EMAIL_MODE === 'smtp') {
+    try {
+      await getSmtpTransport().sendMail({
+        from: `CampaignCodex <${FROM}>`,
+        to:   toEmail,
+        subject,
+        html,
+      })
+    } catch (err) {
+      // Re-throw a plain Error with only the message so nothing from the
+      // transport (connection details, auth state) ends up in the logs.
+      throw new Error(`SMTP error: ${err.message}`)
+    }
+    return
+  }
+
+  // Live: Resend API
+  const res = await fetch('https://api.resend.com/emails', {
+    method:  'POST',
+    headers: {
+      'Authorization': `Bearer ${API_KEY}`,
+      'Content-Type':  'application/json',
+    },
+    body: JSON.stringify({
+      from:    `CampaignCodex <${FROM}>`,
+      to:      [toEmail],
+      subject,
+      html,
+    }),
+  })
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(`Resend error: ${JSON.stringify(err)}`)
+  }
+}
 
 // Shared HTML shell for all outbound emails.
 // footer: optional override — defaults to the transactional account notice.
@@ -69,7 +138,7 @@ function wrapHtml(inner, footer = TRANSACTIONAL_FOOTER) {
 async function sendPasswordResetEmail(toEmail, resetToken) {
   const link = `${CLIENT}/reset-password?token=${resetToken}`
 
-  if (!API_KEY) {
+  if (STUB) {
     // Stub: log to console for homelab dev
     console.log('\n─── PASSWORD RESET EMAIL (stub) ───────────────────')
     console.log(`To:      ${toEmail}`)
@@ -93,33 +162,17 @@ async function sendPasswordResetEmail(toEmail, resetToken) {
     </p>
   `)
 
-  // Live: Resend API
-  const res = await fetch('https://api.resend.com/emails', {
-    method:  'POST',
-    headers: {
-      'Authorization': `Bearer ${API_KEY}`,
-      'Content-Type':  'application/json',
-    },
-    body: JSON.stringify({
-      from:    `CampaignCodex <${FROM}>`,
-      to:      [toEmail],
-      subject: 'Reset your CampaignCodex password',
-      html,
-    }),
-  })
-
-  if (!res.ok) {
-    const err = await res.json()
-    throw new Error(`Resend error: ${JSON.stringify(err)}`)
-  }
+  await deliver(toEmail, 'Reset your CampaignCodex password', html)
 
   return { ok: true }
 }
 
 /**
  * Send a broadcast email to a list of opted-in newsletter subscribers.
- * Uses Resend's batch API (up to 100 per request) for efficiency.
- * Falls back to console stub when RESEND_API_KEY is unset.
+ * Resend: uses the batch API (up to 100 per request) for efficiency.
+ * SMTP: one message per recipient, with a short pause between them, so no
+ * message ever lists more than one subscriber.
+ * Falls back to console stub when no email provider is configured.
  *
  * @param {Array<{email:string, username:string}>} recipients
  * @param {string} subject
@@ -142,7 +195,7 @@ async function sendBroadcastEmail(recipients, subject, plainBody) {
 
   const html = wrapHtml(htmlBody, NEWSLETTER_FOOTER)
 
-  if (!API_KEY) {
+  if (STUB) {
     console.log('\n─── BROADCAST EMAIL (stub) ─────────────────────────')
     console.log(`Subject:    ${subject}`)
     console.log(`Recipients: ${recipients.length}`)
@@ -150,6 +203,22 @@ async function sendBroadcastEmail(recipients, subject, plainBody) {
     if (recipients.length > 5) console.log(`  … and ${recipients.length - 5} more`)
     console.log('────────────────────────────────────────────────────\n')
     return { sent: recipients.length, failed: 0, stub: true }
+  }
+
+  if (EMAIL_MODE === 'smtp') {
+    let sent   = 0
+    let failed = 0
+    for (let i = 0; i < recipients.length; i++) {
+      if (i > 0) await new Promise(r => setTimeout(r, SMTP_BROADCAST_DELAY_MS))
+      try {
+        await deliver(recipients[i].email, subject, html)
+        sent++
+      } catch (err) {
+        console.error(`[broadcast] ${err.message} (recipient ${i + 1} of ${recipients.length})`)
+        failed++
+      }
+    }
+    return { sent, failed, stub: false }
   }
 
   // Chunk into groups of 100 (Resend batch API limit)
@@ -200,7 +269,7 @@ async function sendBroadcastEmail(recipients, subject, plainBody) {
  * @param {string} username
  */
 async function sendUsernameReminderEmail(toEmail, username) {
-  if (!API_KEY) {
+  if (STUB) {
     console.log('\n─── USERNAME REMINDER EMAIL (stub) ─────────────────')
     console.log(`To:       ${toEmail}`)
     console.log(`Username: ${username}`)
@@ -223,24 +292,7 @@ async function sendUsernameReminderEmail(toEmail, username) {
     </p>
   `)
 
-  const res = await fetch('https://api.resend.com/emails', {
-    method:  'POST',
-    headers: {
-      'Authorization': `Bearer ${API_KEY}`,
-      'Content-Type':  'application/json',
-    },
-    body: JSON.stringify({
-      from:    `CampaignCodex <${FROM}>`,
-      to:      [toEmail],
-      subject: 'Your CampaignCodex username',
-      html,
-    }),
-  })
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(`Resend error: ${JSON.stringify(err)}`)
-  }
+  await deliver(toEmail, 'Your CampaignCodex username', html)
 
   return { ok: true }
 }
@@ -256,7 +308,7 @@ async function sendUsernameReminderEmail(toEmail, username) {
 async function sendVerificationEmail(toEmail, verificationToken) {
   const link = `${CLIENT}/verify-email?token=${verificationToken}`
 
-  if (!API_KEY) {
+  if (STUB) {
     console.log('\n─── VERIFICATION EMAIL (stub) ───────────────────────')
     console.log(`To:   ${toEmail}`)
     console.log(`Link: ${link}`)
@@ -279,24 +331,7 @@ async function sendVerificationEmail(toEmail, verificationToken) {
     </p>
   `)
 
-  const res = await fetch('https://api.resend.com/emails', {
-    method:  'POST',
-    headers: {
-      'Authorization': `Bearer ${API_KEY}`,
-      'Content-Type':  'application/json',
-    },
-    body: JSON.stringify({
-      from:    `CampaignCodex <${FROM}>`,
-      to:      [toEmail],
-      subject: 'Verify your CampaignCodex email',
-      html,
-    }),
-  })
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(`Resend error: ${JSON.stringify(err)}`)
-  }
+  await deliver(toEmail, 'Verify your CampaignCodex email', html)
 
   return { ok: true }
 }

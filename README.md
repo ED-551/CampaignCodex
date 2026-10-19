@@ -59,10 +59,34 @@ updating is just pulling the new images.
 All optional settings are documented in `.env.example`. The most common:
 
 - **`VTT_ENABLED=true`** turns on the virtual tabletop.
-- **`RESEND_API_KEY`** sends real emails (password resets) through
-  [Resend](https://resend.com). Without it, emails are printed to the backend log.
+- **Email**: see [Email](#email) below.
 - **`HTTP_PORT`** changes the host port (default `8080`).
 - **Image uploads** are off by default. Turn them on in the Admin dashboard.
+
+### Email
+
+CampaignCodex sends sign-up verification links, password resets, username
+reminders and the newsletter. It picks one of three modes at startup (the
+backend log says which):
+
+| Mode | Set in `.env` | What happens |
+|---|---|---|
+| Resend | `RESEND_API_KEY` | Sends through [Resend](https://resend.com). |
+| SMTP | `SMTP_HOST`, plus `SMTP_PORT` (default 587; 465 switches on TLS), `SMTP_USER`, `SMTP_PASS` | Sends through any mail server or relay. Newsletters go out one message per person. |
+| None | neither | Nothing is sent. Emails, including their links, are printed to the backend log (`docker compose logs backend`). |
+
+If both are set, Resend is used. Set `EMAIL_FROM` to an address your provider
+allows you to send from.
+
+`REQUIRE_EMAIL_VERIFICATION` decides whether new accounts must click an
+emailed link before they can log in. The default, `auto`, requires it only when
+Resend or SMTP is set up; with no email, people are logged straight in after
+signing up. You can force it with `true` or `false`. Admins can also mark any
+account verified from the **Users** tab of the Admin dashboard.
+
+With no email set up, a forgotten password can still only be reset with the
+link from the backend log, which you have to pass on by hand. If your instance
+has real users, set up SMTP.
 
 ### Putting it on the internet (HTTPS)
 

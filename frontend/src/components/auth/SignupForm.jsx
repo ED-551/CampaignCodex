@@ -119,6 +119,10 @@ export default function SignupForm() {
         newsletterOptIn: form.newsletterOptIn,
         _hp:             form._hp,
       })
+      // The server answers `pending` only when it requires email verification
+      // (GET /api/server-info → emailVerificationRequired). With verification
+      // off it returns a token, AuthContext has already signed the user in,
+      // and they go straight to the dashboard.
       if (result.pending) {
         navigate('/verify-pending', {
           replace: true,

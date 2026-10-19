@@ -23,10 +23,25 @@ require('dotenv').config()
     warnings.push('ADMIN_USERNAME or ADMIN_PASSWORD not set — admin seeding will fail.')
   }
 
-  if (process.env.NODE_ENV === 'production') {
-    if (!process.env.RESEND_API_KEY) {
-      warnings.push('RESEND_API_KEY not set — all emails will stub to console in production.')
+  // ── Email ──
+  // Never print SMTP_USER / SMTP_PASS here; host and port are enough to debug.
+  const emailCfg = require('./config/email')
+  if (emailCfg.VERIFICATION_SETTING_INVALID) {
+    warnings.push(`REQUIRE_EMAIL_VERIFICATION="${process.env.REQUIRE_EMAIL_VERIFICATION}" is not true, false or auto — using auto.`)
+  }
+  if (emailCfg.EMAIL_MODE === 'resend' && process.env.SMTP_HOST) {
+    warnings.push('Both RESEND_API_KEY and SMTP_HOST are set — sending through Resend; SMTP settings are ignored.')
+  }
+  if (emailCfg.EMAIL_MODE === 'console') {
+    if (process.env.NODE_ENV === 'production') {
+      warnings.push('No email provider set (RESEND_API_KEY or SMTP_HOST) — emails, including password-reset links, are only printed to this log.')
     }
+    if (emailCfg.EMAIL_VERIFICATION_REQUIRED) {
+      warnings.push('REQUIRE_EMAIL_VERIFICATION=true but no email provider is set — new users cannot log in until you verify them in the Admin dashboard or copy their link from this log.')
+    }
+  }
+
+  if (process.env.NODE_ENV === 'production') {
     if (!process.env.CLIENT_URL || process.env.CLIENT_URL.includes('localhost')) {
       errors.push('CLIENT_URL must be set to a non-localhost URL in production — CORS will be misconfigured otherwise.')
     }
@@ -152,8 +167,30 @@ app.use('/uploads', require('express').static(UPLOAD_DIR))
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 const { version: APP_VERSION } = require('../package.json')
+const {
+  EMAIL_MODE, SMTP, EMAIL_CONFIGURED, EMAIL_VERIFICATION_REQUIRED, VERIFICATION_SETTING,
+} = require('./config/email')
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, status: 'ok', version: APP_VERSION, timestamp: new Date().toISOString() })
+})
+
+// ─── Server Info ──────────────────────────────────────────────────────────────
+// Public description of this instance for the web app and future clients
+// (e.g. an iOS companion app). Keep the shape stable: add keys, never rename
+// or remove them, and bump apiVersion only for breaking changes. No secrets
+// and no user data. camelCase on purpose — this shape was specified up front
+// for external clients.
+app.get('/api/server-info', (req, res) => {
+  res.json({
+    name:                      'CampaignCodex',
+    apiVersion:                1,
+    version:                   APP_VERSION,
+    emailVerificationRequired: EMAIL_VERIFICATION_REQUIRED,
+    emailConfigured:           EMAIL_CONFIGURED,
+    features: {
+      vtt: process.env.VTT_ENABLED === 'true',
+    },
+  })
 })
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────
@@ -173,11 +210,19 @@ const io = createSocketServer(httpServer)
 createVTTNamespace(io)
 
 // ─── Start ────────────────────────────────────────────────────────────────────
+function describeEmailMode() {
+  if (EMAIL_MODE === 'resend') return 'Resend'
+  if (EMAIL_MODE === 'smtp')   return `SMTP (${SMTP.host}:${SMTP.port}${SMTP.secure ? ', TLS' : ''})`
+  return 'none — emails are printed to this log'
+}
+
 httpServer.listen(PORT, () => {
   console.log(`\n🐉 CampaignCodex API running on port ${PORT}`)
   console.log(`   Environment : ${process.env.NODE_ENV || 'development'}`)
   console.log(`   DB host     : ${process.env.DB_HOST || 'localhost'}`)
   console.log(`   Client URL  : ${process.env.CLIENT_URL || 'http://localhost:5173'}`)
+  console.log(`   Email       : ${describeEmailMode()}`)
+  console.log(`   Email verify: ${EMAIL_VERIFICATION_REQUIRED ? 'required' : 'off'} (REQUIRE_EMAIL_VERIFICATION=${VERIFICATION_SETTING})`)
   console.log(`   WebSocket   : enabled (Socket.io)\n`)
 })
 
