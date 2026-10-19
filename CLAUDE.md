@@ -57,7 +57,7 @@ Logs: `tail -f /tmp/cc-backend.log` and `tail -f /tmp/cc-frontend.log`
 | Backend | Node.js, Express 5, Socket.io |
 | Database | PostgreSQL 16, port 5432 |
 | Auth | JWT (24h), stored in localStorage as `cc_token` |
-| Email | Resend API (stubs to console.log if key missing) |
+| Email | Resend API if `RESEND_API_KEY`, else SMTP (nodemailer) if `SMTP_HOST`, else stubs to console.log — see `backend/src/config/email.js` |
 
 ### Tailwind design tokens
 ```
@@ -74,6 +74,9 @@ codex-muted:                very muted text
 ---
 
 ## Auth & Roles
+
+- Email verification: `REQUIRE_EMAIL_VERIFICATION` = true | false | auto (default auto = required only when Resend or SMTP is configured). When off, signup returns `{ token, user }` and creates the user verified; login still blocks accounts with `email_verified = false`. Admins can verify a user from the Admin dashboard (`POST /api/admin/users/:id/verify`).
+- `GET /api/server-info` (public) → `{ name, apiVersion, version, emailVerificationRequired, emailConfigured, features: { vtt } }`. Read by the frontend (`hooks/useServerInfo.js`) and planned iOS app — keep the shape stable (camelCase by design, add keys only).
 
 - JWT decoded in `requireAuth` middleware; `token_version` re-checked in DB on every request
 - `user.isAdmin` → re-queried from DB on each admin call (not trusted from JWT)
