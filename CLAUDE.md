@@ -40,7 +40,8 @@ Logs: `tail -f /tmp/cc-backend.log` and `tail -f /tmp/cc-frontend.log`
 │       └── db/
 │           ├── schema.sql                 full schema (run once on fresh DB)
 │           └── migrations/               001–004 applied; next is 005_vtt_scenes.sql
-├── docker-compose.yml
+├── compose.yaml       self-host stack (pulls GHCR images); compose.build.yaml builds locally
+├── .env.example       settings for compose.yaml
 └── CLAUDE.md          ← you are here
 ```
 
@@ -187,16 +188,19 @@ Steps:
 
 Final TopBar order: `CampaignCodex | Chatrooms | Ravens | VTT | 💬 DMs | username ▾`
 
-### 6. Phase 0 — Containerization Hardening (before public launch)
-See Obsidian note: `CampaignCodex — Containerization & VTT Roadmap.md`
+### 6. Phase 0 — Containerization Hardening ✅
+Self-hosting guide is in `README.md`. What's in place:
 
-- `scripts/migrate.js` — reads `db/migrations/*.sql`, tracks in `schema_migrations` table
-- Update backend CMD: `node scripts/migrate.js && node src/index.js`
-- `GET /api/health` → `{ ok: true, version: '...' }` (used by Docker healthcheck)
-- Fix WebSocket proxy in `frontend/nginx.conf` (add `/socket.io/` upgrade block)
-- Add backend healthcheck to `docker-compose.yml`
-- Rewrite `.env.example` with inline generation commands for self-hosters
-- Remove hardcoded `container_name:` values from `docker-compose.yml`
+- `backend/scripts/migrate.js` — applies `schema.sql` on an empty DB, then pending migrations, tracked in `schema_migrations`
+- Backend entrypoint (`scripts/docker-entrypoint.sh`): migrate → seed admin (if `ADMIN_*` set) → `node src/index.js`
+- Backend image runs as `node`, has a healthcheck on `/api/health`; compose waits on it
+- `frontend/nginx.conf`: `/socket.io/` upgrade block, 12 MB body limit, `^~ /uploads/`
+- VTT flag is read at runtime from `/config.js` (written by the frontend container from `VTT_ENABLED`), so one image serves every instance
+- `TRUST_PROXY` env var = number of proxies in front of the API (default 1)
+- Root `.env.example` with generation commands; no `container_name:` in compose
+- GHCR images built for amd64 + arm64 (`.github/workflows/publish.yml`)
+
+- `GET /api/health` → `{ ok: true, status: 'ok', version, timestamp }` (version from `backend/package.json`)
 
 ---
 

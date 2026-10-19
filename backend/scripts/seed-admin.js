@@ -3,8 +3,8 @@
  * Reads credentials from .env (ADMIN_USERNAME, ADMIN_PASSWORD).
  * Usage: npm run seed:admin
  *
- * ⚠️  Run ONCE after first database init.
- * ⚠️  Credentials are stored in your Obsidian vault — do not hardcode here.
+ * Safe to re-run: does nothing once any admin account exists. The container
+ * entrypoint runs it on every start when both variables are set.
  */
 require('dotenv').config()
 const bcrypt    = require('bcrypt')
@@ -49,8 +49,8 @@ async function seedAdmin() {
     )
 
     console.log(`✅ Admin account created: ${ADMIN_USERNAME}`)
-    console.log('   Tier: Platinum (full access)')
-    console.log('   ⚠️  Store these credentials only in your Obsidian vault.\n')
+    console.log('   Tier: Black (full access)')
+    console.log('   ⚠️  Log in and change this password, then keep it somewhere safe.\n')
   } catch (err) {
     console.error('❌ Failed to seed admin:', err.message)
     process.exit(1)

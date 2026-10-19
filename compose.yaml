@@ -1,31 +1,31 @@
-# CampaignCodex — Podman / Docker Compose
+# CampaignCodex — Docker / Podman Compose
 #
-# Quick start:
-#   1. Copy .env.example to .env and fill in values
-#   2. podman-compose up -d        (Podman)
-#      docker compose up -d        (Docker)
+# Run your own instance with prebuilt images (no source checkout needed —
+# just this file and a .env next to it):
 #
-# For Podman on RHEL/Alma Linux the :Z volume suffix is used on bind-mounts
-# to apply the correct SELinux context. Named volumes (postgres_data,
-# uploads_data) handle their own context automatically.
+#   1. cp .env.example .env   and fill in the required values
+#   2. docker compose up -d   (or: podman-compose up -d)
+#   3. open http://localhost:8080 and log in with ADMIN_USERNAME / ADMIN_PASSWORD
+#
+# To build the images from source instead of pulling them:
+#   docker compose -f compose.yaml -f compose.build.yaml up -d --build
+#
+# The API applies the database schema and migrations automatically on start.
 
 services:
 
   # ── PostgreSQL 16 ────────────────────────────────────────────────────────────
   postgres:
     image: docker.io/library/postgres:16-alpine
-    container_name: campaigncodex-db
     restart: unless-stopped
     environment:
       POSTGRES_DB:       campaigncodex
       POSTGRES_USER:     campaigncodex
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required — see .env.example}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # schema.sql initialises a fresh DB — runs only once on first start
-      - ./backend/src/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro,Z
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U campaigncodex"]
+      test: ["CMD-SHELL", "pg_isready -U campaigncodex -d campaigncodex"]
       interval: 10s
       timeout:  5s
       retries:  5
@@ -33,11 +33,7 @@ services:
 
   # ── Backend API (Node 20 / Express 5) ────────────────────────────────────────
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
     image: ${BACKEND_IMAGE:-ghcr.io/ed-551/campaigncodex-backend:latest}
-    container_name: campaigncodex-api
     restart: unless-stopped
     depends_on:
       postgres:
@@ -49,35 +45,43 @@ services:
       DB_PORT:                 5432
       DB_NAME:                 campaigncodex
       DB_USER:                 campaigncodex
-      DB_PASSWORD:             ${DB_PASSWORD:?DB_PASSWORD is required}
-      JWT_SECRET:              ${JWT_SECRET:?JWT_SECRET is required}
+      DB_PASSWORD:             ${DB_PASSWORD:?DB_PASSWORD is required — see .env.example}
+      JWT_SECRET:              ${JWT_SECRET:?JWT_SECRET is required — see .env.example}
       JWT_EXPIRES_IN:          ${JWT_EXPIRES_IN:-24h}
-      CLIENT_URL:              ${CLIENT_URL:?CLIENT_URL is required}
+      CLIENT_URL:              ${CLIENT_URL:?CLIENT_URL is required — see .env.example}
       ADMIN_USERNAME:          ${ADMIN_USERNAME:-}
       ADMIN_PASSWORD:          ${ADMIN_PASSWORD:-}
-      PRIMARY_ADMIN_USERNAME:  ${PRIMARY_ADMIN_USERNAME:-}
+      # The account allowed to grant admin/moderator roles. Defaults to the
+      # seeded admin so a fresh install can manage roles out of the box.
+      PRIMARY_ADMIN_USERNAME:  ${PRIMARY_ADMIN_USERNAME:-${ADMIN_USERNAME:-}}
       RESEND_API_KEY:          ${RESEND_API_KEY:-}
       EMAIL_FROM:              ${EMAIL_FROM:-noreply@example.com}
+      TRUST_PROXY:             ${TRUST_PROXY:-1}
       UPLOAD_DIR:              /app/uploads
       VTT_ENABLED:             ${VTT_ENABLED:-false}
     volumes:
       - uploads_data:/app/uploads
-    # Port not exposed to host — nginx in the frontend container proxies to it
+    # Not published to the host — nginx in the frontend container proxies to it
     expose:
       - "3001"
+    # Also declared in the Dockerfile; repeated here because Podman ignores
+    # Dockerfile HEALTHCHECKs in OCI-format images.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/api/health > /dev/null || exit 1"]
+      interval: 15s
+      timeout:  5s
+      retries:  3
+      start_period: 30s
 
   # ── Frontend (Vite build served by nginx) ────────────────────────────────────
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        VITE_VTT_ENABLED: ${VTT_ENABLED:-false}
     image: ${FRONTEND_IMAGE:-ghcr.io/ed-551/campaigncodex-frontend:latest}
-    container_name: campaigncodex-web
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    environment:
+      VTT_ENABLED: ${VTT_ENABLED:-false}
     ports:
       - "${HTTP_PORT:-8080}:80"
 

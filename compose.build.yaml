@@ -1,0 +1,14 @@
+# Build the images from this checkout instead of pulling them from GHCR.
+#
+#   docker compose -f compose.yaml -f compose.build.yaml up -d --build
+
+services:
+  backend:
+    image: campaigncodex-backend:local
+    build:
+      context: ./backend
+
+  frontend:
+    image: campaigncodex-frontend:local
+    build:
+      context: ./frontend
