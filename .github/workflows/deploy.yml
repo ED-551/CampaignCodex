@@ -39,9 +39,13 @@ jobs:
 
       - name: Restart stack
         working-directory: ${{ env.STACK_DIR }}
-        # :latest keeps the same tag when its image changes, so recreate
-        # explicitly rather than rely on change detection.
-        run: $PODMAN_COMPOSE up -d --force-recreate
+        # :latest keeps the same tag when its image changes, so remove the
+        # containers and let campaigncodex.service create them again. Starting
+        # them through systemd matters: the runner kills every process a job
+        # leaves behind, which would include the containers' conmon monitors.
+        run: |
+          $PODMAN_COMPOSE down
+          systemctl --user restart campaigncodex.service
 
       - name: Health check
         run: |
